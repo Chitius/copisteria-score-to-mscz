@@ -204,14 +204,14 @@ class RestorePageSlurs(PageRestoreMixin):
                             key=(staff, number),
                             position=(global_measure, round(onset, 4)),
                             kind=kind,
-                            payload=(staff, global_measure, onset, pitch),
+                            payload=(staff, _voice, global_measure, onset, pitch),
                         )
                     )
-        pairing = pair_endpoints(endpoints, max_span=MAX_SLUR_BARS)
+        pairing = pair_endpoints(endpoints, max_span=MAX_SLUR_BARS, score=_slur_score)
         pairs: list[dict] = []
         for start, stop in pairing.pairs:
-            staff, start_measure, start_onset, start_pitch = start.payload
-            _staff, stop_measure, stop_onset, stop_pitch = stop.payload
+            staff, _voice, start_measure, start_onset, start_pitch = start.payload
+            _staff, _stop_voice, stop_measure, stop_onset, stop_pitch = stop.payload
             if start_pitch is None or stop_pitch is None:
                 continue
             start_note = index.get((start_measure, staff, start_onset, start_pitch))
@@ -557,6 +557,18 @@ def _add_tie(note, kind: str) -> bool:
     if not any(tied.get("type") == kind for tied in notations.findall("tied")):
         ElementTree.SubElement(notations, "tied", {"type": kind})
     return True
+
+
+def _slur_score(start, stop) -> float:
+    """Prefer a start with the same pitch, then the same voice, for a reused slur number."""
+    _staff, start_voice, _measure, _onset, start_pitch = start.payload
+    _staff, stop_voice, _measure, _onset, stop_pitch = stop.payload
+    score = 0.0
+    if start_pitch is not None and start_pitch == stop_pitch:
+        score += 100.0
+    if start_voice == stop_voice:
+        score += 10.0
+    return score
 
 
 def _assign_slur_numbers(pairs: list[dict]) -> dict:

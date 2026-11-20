@@ -195,11 +195,12 @@ scorepipe score.musicxml --mscz-out score.mscz
 
 Slurs and ties are written as separate start/stop marks, and OMR files reuse numbers. A plain stack
 pairs the oldest open start with a much later stop (the laputa m7→m10 three-bar slur). 
-[`scorepipe/core/pairing.py`](scorepipe/core/pairing.py) keeps **one open start per key**, marks the
-key *ambiguous* as soon as a second start arrives before its stop, and drops that colliding cluster
-instead of guessing; a clean start/stop after the stop pairs normally. `max_span` rejects a pair
-longer than N measures. It is shared by `restore_page_slurs`, `restore_page_ties`, `sanitize_slurs`
-and the MusicXML→mscx tie export.
+[`scorepipe/core/pairing.py`](scorepipe/core/pairing.py) keeps **all open starts per key** and, when a
+stop arrives, chooses the best valid one: an optional scorer prefers the same pitch/voice, otherwise
+the shortest span wins, with the latest start as tie-break. A start that is after the stop, or a pair
+longer than `max_span`, is rejected; unpaired endpoints become orphans instead of deleting a whole
+cluster. This restores laputa m8 C5→m10 D5 while still refusing the old m7→m10 arc. It is shared by
+`restore_page_slurs`, `restore_page_ties`, `sanitize_slurs` and the MusicXML→mscx tie export.
 
 ## Facts
 

@@ -20,21 +20,21 @@ class PairEndpointsTest(unittest.TestCase):
         self.assertEqual(pairing.pairs, [])
         self.assertEqual(len(pairing.orphans), 2)
 
-    def test_duplicate_start_blocks_the_key_until_a_stop(self):
+    def test_multiple_starts_are_paired_by_time(self):
         pairing = pair_endpoints(
             [
                 endpoint(("1", "1"), 7, 0, "start"),
-                endpoint(("1", "1"), 8, 3, "start"),  # same number, still open
+                endpoint(("1", "1"), 8, 3, "start"),
                 endpoint(("1", "1"), 8, 0, "stop"),
                 endpoint(("1", "1"), 10, 0, "stop"),
                 endpoint(("1", "1"), 10, 3, "start"),
                 endpoint(("1", "1"), 12, 0, "stop"),
             ]
         )
-        self.assertEqual(len(pairing.pairs), 1)
-        start, stop = pairing.pairs[0]
-        self.assertEqual(start.position, (10, 3))
-        self.assertEqual(stop.position, (12, 0))
+        self.assertEqual(
+            [(start.position, stop.position) for start, stop in pairing.pairs],
+            [((7, 0), (8, 0)), ((8, 3), (10, 0)), ((10, 3), (12, 0))],
+        )
         self.assertIn(("1", "1"), pairing.ambiguous_keys)
 
     def test_max_span_rejects_both_endpoints(self):

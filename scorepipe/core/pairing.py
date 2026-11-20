@@ -1,17 +1,22 @@
-"""Pair slur/tie endpoints by key without guessing across ambiguous numbering.
+"""Pair slur/tie endpoints by key without letting a reused number swallow a later phrase.
 
 Endpoint pairs (slurs, ties) are written as separate start/stop marks.  When an OMR file reuses a
-number for several simultaneous marks, a plain stack pairs the *oldest* open start with a much later
-stop, which is how a 3-bar slur appears.  Rather than guess, this pairer works on one open start per
-key and marks a key **ambiguous** as soon as a second start arrives before the previous one closed:
-the colliding cluster is dropped until a stop clears it.  A clean start/stop after that pairs again.
+number for several marks, a single-slot stack either pairs the oldest start with the wrong stop or
+drops the whole cluster.  This pairer keeps **all** open starts per key and, when a stop arrives,
+picks the best *valid* one:
 
-Positions are ``(measure, onset)`` tuples; ``max_span`` rejects pairs longer than N measures.
+- the start must be earlier than the stop;
+- the pair must not exceed ``max_span``;
+- an optional scorer can prefer the same pitch/voice, otherwise the shortest span wins
+  (ties are broken towards the latest start).
+
+Endpoints that cannot be paired are returned as orphans; no cluster is deleted wholesale.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Callable
 
 
 @dataclass
@@ -29,42 +34,52 @@ class Pairing:
     ambiguous_keys: set[tuple] = field(default_factory=set)
 
 
-def pair_endpoints(endpoints: list[Endpoint], *, max_span: int | None = None) -> Pairing:
-    open_starts: dict[tuple, Endpoint] = {}
-    blocked: set[tuple] = set()
+Score = Callable[[Endpoint, Endpoint], float]
+
+
+def pair_endpoints(
+    endpoints: list[Endpoint], *, max_span: int | None = None, score: Score | None = None
+) -> Pairing:
+    open_starts: dict[tuple, list[Endpoint]] = {}
     result = Pairing()
 
     for endpoint in endpoints:
         key = endpoint.key
         if endpoint.kind == "start":
-            if key in blocked:
-                result.orphans.append(endpoint)
-                continue
-            if key in open_starts:
-                # two starts before a stop: the numbers collide and we cannot know which stop
-                # belongs to which start. Drop the earlier one and block the key until a stop.
-                result.orphans.append(open_starts.pop(key))
-                blocked.add(key)
+            open_starts.setdefault(key, []).append(endpoint)
+            if len(open_starts[key]) > 1:
                 result.ambiguous_keys.add(key)
-                result.orphans.append(endpoint)
-                continue
-            open_starts[key] = endpoint
-        else:  # stop
-            if key in blocked:
-                result.orphans.append(endpoint)
-                blocked.discard(key)
-                continue
-            start = open_starts.pop(key, None)
-            if start is None:
-                result.orphans.append(endpoint)
-                continue
-            if endpoint.position <= start.position:
-                result.orphans.extend((start, endpoint))
-                continue
-            if max_span is not None and endpoint.position[0] - start.position[0] > max_span:
-                result.orphans.extend((start, endpoint))
-                continue
-            result.pairs.append((start, endpoint))
+            continue
 
-    result.orphans.extend(open_starts.values())
+        candidates = [
+            start
+            for start in open_starts.get(key, [])
+            if start.position < endpoint.position
+            and (max_span is None or endpoint.position[0] - start.position[0] <= max_span)
+        ]
+        if not candidates:
+            result.orphans.append(endpoint)
+            continue
+        if score is not None:
+            best = max(
+                candidates,
+                key=lambda start: (
+                    score(start, endpoint),
+                    -(endpoint.position[0] - start.position[0]),
+                    start.position,
+                ),
+            )
+        else:
+            best = max(
+                candidates,
+                key=lambda start: (
+                    -(endpoint.position[0] - start.position[0]),
+                    start.position,
+                ),
+            )
+        open_starts[key].remove(best)
+        result.pairs.append((best, endpoint))
+
+    for starts in open_starts.values():
+        result.orphans.extend(starts)
     return result

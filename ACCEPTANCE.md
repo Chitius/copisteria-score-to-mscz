@@ -114,9 +114,10 @@ scorepipe laputa.musicxml --check --report laputa.json
   their original duration. This is the rule the old `fill_conflict` was trying to express.
 - **Reused slur numbers** (laputa m7–m10): the page writes four starts numbered 1–4 at m7 and reuses
   number 1 at m8/m10. A stack paired m7 G4 with m10 D5, producing a three-bar arc. The shared
-  endpoint pairer (`scorepipe/core/pairing.py`) now keeps one open start per key, marks a colliding
-  key ambiguous and drops that cluster; the mscz keeps only `m7→m8` and `m10→m12` slurs, and a
-  regression page asserts the same shape (`test_pairing.py`, `test_page_restore.py`).
+  endpoint pairer (`scorepipe/core/pairing.py`) keeps every open start and picks the best valid stop
+  match (same pitch/voice first, then shortest span); the mscz now has `m7→m8` (same-pitch G4),
+  `m8 C5→m10 D5` (the legitimate phrase), and `m10→m12`, with no m7→m10 arc. Regression pages cover
+  both the restored pair and the refused arc (`test_pairing.py`, `test_page_restore.py`).
 - **MuseScore's incomplete-measure warnings** (mscx `measure_lengths` verifier): the laputa mscz
   now reports **0** flagged measures. It started at 12: eleven were text-only/empty voice slots
   (moved into the chord voice or removed) and the last was m33's overlapping rests, which the

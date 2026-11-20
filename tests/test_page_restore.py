@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import unittest
 from pathlib import Path
@@ -104,11 +104,11 @@ class PageRestoreTest(unittest.TestCase):
             '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
             "<part-list><score-part id=\"P1\"><part-name>t</part-name></score-part></part-list>"
             '<part id="P1">'
-            + measure.format(number=1, body=note.format(step="C", slur=start))
-            + measure.format(number=2, body=note.format(step="D", slur=start) + note.format(step="E", slur=stop))
+            + measure.format(number=1, body=note.format(step="G", slur=start))
+            + measure.format(number=2, body=note.format(step="C", slur=start) + note.format(step="G", slur=stop))
             + measure.format(number=3, body=note.format(step="F", slur=""))
-            + measure.format(number=4, body=note.format(step="G", slur=stop) + note.format(step="A", slur=start))
-            + measure.format(number=5, body=note.format(step="B", slur=stop))
+            + measure.format(number=4, body=note.format(step="D", slur=stop) + note.format(step="E", slur=start))
+            + measure.format(number=5, body=note.format(step="F", slur=stop))
             + "</part></score-partwise>",
             encoding="utf-8",
         )
@@ -121,7 +121,7 @@ class PageRestoreTest(unittest.TestCase):
                 for slur in event.element.findall("notations/slur"):
                     if slur.get("type") == "start":
                         starts.append((number, event.element.findtext("pitch/step")))
-        self.assertEqual(starts, [(4, "A")])
+        self.assertEqual(starts, [(1, "G"), (2, "C"), (4, "E")])
 
 
 if __name__ == "__main__":
