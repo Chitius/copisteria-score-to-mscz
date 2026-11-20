@@ -6,8 +6,11 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 102 tests
+Ran 103 tests
 OK
+
+python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
+75 passed
 ```
 
 Coverage:
@@ -39,6 +42,7 @@ Coverage:
 | chord/cursor semantics verifier | `test_semantics.py` |
 | empty staff measure rests | `test_empty_staves.py` |
 | golden-score comparison | `test_compare.py` |
+| pass sanity framework (74 pytest cases) | `test_sanity.py`, `test_pass_sanity.py` |
 | multi-voice staff retiming / fill conflict | `test_voice_merge.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
@@ -109,6 +113,13 @@ same problems the old ad-hoc pipeline found, with stable codes.
 
 ## Known gaps (documented, not hidden)
 
+- `SANITY.md` lists the contract violations that are still open, with file:line and repro shapes:
+  `rebase_measures` does not shrink the closing backup and can give two overflow groups the same
+  voice; `merge_staff_voices` drops `<forward>` gaps and note attributes on other staves;
+  `drop_overflow_duplicates` can delete a chord base without its members;
+  `drop_trailing_duplicate_measure` can delete more than one measure; `pad_empty_staves` is wrong in
+  3/4 and on pickups; `split_chord_fragments` hard-codes 4/4. The sanity matrix's fixtures do not
+  all trigger these yet; adding those adversarial fixtures is the next step.
 - Voice merging beyond exact alignment is not ported; the pass refuses anything that needs a
   retiming decision.
 - Credits cover title/subtitle/composer/lyricist styles and are moved into the mscx title frame;

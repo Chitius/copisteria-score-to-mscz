@@ -677,3 +677,11 @@ def test_run_contract_uses_three_fresh_documents():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))
+
+def test_pitch_set_preserved_flags_a_lost_chord_member():
+    from scorepipe.sanity import check_pitch_set_preserved
+
+    before = document(measure(1, note("C") + note("E", chord=True)))
+    after = document(measure(1, note("C")))
+    messages = check_pitch_set_preserved(before, after)
+    assert messages and "E" in messages[0]

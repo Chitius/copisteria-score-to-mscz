@@ -120,6 +120,25 @@ voices and voice order. On the MusicXML side `VERIFIERS` checks duplicate ties, 
 signatures, hidden rests, chord/cursor semantics (an orphan `<chord/>` or a negative cursor is an
 error an XSD cannot see) and per-voice measure lengths.
 
+## Sanity contracts for passes
+
+A pass is not trusted because it was migrated; it is trusted when it obeys a declared contract.
+[`scorepipe/sanity.py`](scorepipe/sanity.py) snapshots a document (measure, staff, voice, rest, pitch,
+onset, duration, chord, ties, time signature) and diffs two snapshots. `PassContract` declares which
+effects are allowed (add/remove notes, move onsets, retime, change pitch, add/remove measures, change
+voices); everything else is a violation. Every run also checks idempotence, chord/cursor structure,
+"a healthy measure stays healthy", "no new verifier violations" and "no unique sounding pitch
+disappears".
+
+[`tests/test_pass_sanity.py`](tests/test_pass_sanity.py) parameterises every registered mechanical
+pass over a synthetic fixture and its contract, and a coverage test fails when a new pass is added
+without a fixture and contract. [`SANITY.md`](SANITY.md) is the full 39-pass audit: category,
+contract, adversarial fixtures and the currently known violations.
+
+```
+python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
+```
+
 ## Comparing against a golden score
 
 `scorepipe.compare.compare(golden, candidate)` reduces both files to (measure, staff, onset, duration,

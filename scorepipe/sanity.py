@@ -627,6 +627,27 @@ def check_onsets_preserved(before: Snapshot | Document, after: Snapshot | Docume
     return [change.describe() for change in diff.moved_onsets if change.pitched]
 
 
+def check_pitch_set_preserved(before: Snapshot | Document, after: Snapshot | Document) -> list[str]:
+    """No unique (measure, staff, pitch) may disappear, whatever the note-level contract says.
+
+    Removing a duplicated pitch is fine; deleting the only occurrence of a sounding pitch is not.
+    This catches a rebuild that drops a sustained chord while a permissive "may remove notes"
+    contract would otherwise let it pass.
+    """
+    before_snapshot = _as_snapshot(before)
+    after_snapshot = _as_snapshot(after)
+    before_pitches = {
+        (note.measure, note.staff, note.pitch) for note in before_snapshot.notes if note.pitched
+    }
+    after_pitches = {
+        (note.measure, note.staff, note.pitch) for note in after_snapshot.notes if note.pitched
+    }
+    return [
+        f"pitch disappeared: m{measure} staff {staff} {pitch}"
+        for measure, staff, pitch in sorted(before_pitches - after_pitches)
+    ]
+
+
 def check_idempotent(pass_obj, doc: Document, ctx: Context) -> list[str]:
     """Run a pass twice on the same document; the second run must be a no-op."""
     name = _pass_name(pass_obj)
@@ -694,6 +715,9 @@ def run_contract(
     checker_violations.extend(check_measure_health_preserved(before_doc, after_doc, context))
     checker_violations.extend(
         check_no_new_verifier_violations(before_doc, after_doc, context)
+    )
+    checker_violations.extend(
+        check_pitch_set_preserved(before_snapshot, after_snapshot)
     )
 
     idempotence_doc = doc_factory()
