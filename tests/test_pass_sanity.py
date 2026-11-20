@@ -110,6 +110,13 @@ def two_voices():
     )
 
 
+def redundant_voices():
+    return build(
+        measure(1, note("C") + "<backup><duration>16</duration></backup>" + note("C", duration=16, voice="2"))
+        + measure(2, note("D"))
+    )
+
+
 def overflow():
     return build(
         measure(1, note("C", duration=20))
@@ -178,6 +185,7 @@ FACTORIES = {
     "pad_empty_staves": empty_staff,
     "rebuild_voice_layers": fragmented,
     "merge_staff_voices": two_voices,
+    "drop_redundant_voices": redundant_voices,
     "rebase_measures": overflow,
     "merge_aligned_voices": aligned,
     "normalize_voice_numbers": odd_voices,
@@ -222,6 +230,9 @@ CONTRACTS = {
         allows_move_onsets=True,
         allows_retime=True,
         allows_voice_changes=True,
+    ),
+    "drop_redundant_voices": PassContract(
+        "drop_redundant_voices", allows_remove_notes=True, allows_voice_changes=True
     ),
     "rebase_measures": PassContract(
         "rebase_measures",

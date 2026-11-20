@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 131 tests
+Ran 133 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -41,6 +41,7 @@ Coverage:
 | fragmented measures rebuilt as voice layers | `test_layers.py` |
 | short-voice padding keeps the next staff aligned | `test_fill.py` |
 | chord/cursor semantics verifier | `test_semantics.py` |
+| redundant secondary voice removal | `test_redundant_voices.py` |
 | empty staff measure rests | `test_empty_staves.py` |
 | golden-score comparison | `test_compare.py` |
 | pass sanity framework (74 pytest cases) | `test_sanity.py`, `test_pass_sanity.py` |
@@ -60,7 +61,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-39 entries: 24 structural (23 mechanical + 1 analysis), 2 inject, 13 display. Every mechanical pass
+40 entries: 25 structural (24 mechanical + 1 analysis), 2 inject, 13 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -98,11 +99,13 @@ scorepipe laputa.musicxml --check --report laputa.json
   7 tie spanners and m2 6, F6 is a filled dotted quarter, and the big chords are tied across the
   barline.
 - **Fidelity against the old skill** (laputa, normalised pitch/onset/duration multiset, voice
-  ignored): the symbol mismatch is **2.04%** (9 missing + 15 extra), down from 18.35% at the start
+  ignored): the symbol mismatch is **1.20%** (9 missing + 5 extra), down from 18.35% at the start
   of this review. `merge_staff_voices` rebuilds a multi-voice staff as one retimed line (each chord
   lasts until the next onset, fill conflicts still skipped) and now preserves the other staff's
-  `<forward>` gaps, so laputa m31's sustained chord survives at beat 0. Remaining differences are
-  concentrated in m30–m32 and isolated single symbols in m43/m45.
+  `<forward>` gaps, so laputa m31's sustained chord survives at beat 0. `drop_redundant_voices`
+  removes the duplicate bass voice that MuseScore stored as cross-staff notes on the treble staff
+  (m27), which was most of the previous 15 extra symbols. Remaining differences are concentrated in
+  m30–m32 and isolated single symbols in m43/m45.
 - **Reused slur numbers** (laputa m7–m10): the page writes four starts numbered 1–4 at m7 and reuses
   number 1 at m8/m10. A stack paired m7 G4 with m10 D5, producing a three-bar arc. The shared
   endpoint pairer (`scorepipe/core/pairing.py`) now keeps one open start per key, marks a colliding
