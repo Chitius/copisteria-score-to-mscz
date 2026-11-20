@@ -58,6 +58,7 @@ Implemented passes:
 | `drop_redundant_clefs` | structural | `clefs` | repeated clefs per staff |
 | `drop_redundant_key_signatures` | structural | `key-signatures` | repeated key signatures |
 | `mark_pickup` | structural | `pickup-marking` | short opening bar that is an anacrusis |
+| `rebuild_voice_layers` | structural | `voice-layers` | fragmented same-voice blocks MuseScore would coerce |
 | `unhide_rests` | structural | `rest-visibility` | hidden rests |
 | `sanitize_slurs` | structural | `slur-endpoints` | unmatched / >N-bar endpoints |
 | `normalize_voice_numbers` | structural | `voice-numbers` | voice labels not 1..n by density |

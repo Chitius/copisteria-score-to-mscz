@@ -36,6 +36,7 @@ from .xml_clefs import DROP_REDUNDANT_CLEFS, DROP_REDUNDANT_KEYS, DropRedundantC
 from .xml_duplicates import DROP_DUPLICATE_NOTES, DropDuplicateNotes
 from .xml_credits import INJECT_CREDITS, ApplyCreditsFacts
 from .xml_facts import ApplyMarksFacts, INJECT_PASSES
+from .xml_layers import REBUILD_VOICE_LAYERS, RebuildVoiceLayers
 from .xml_measures import FILL_PASS, FillShortMeasures
 from .xml_merge import MERGE_ALIGNED_VOICES, MergeAlignedVoices
 from .xml_overflow import DROP_OVERFLOW_DUPLICATES, DropOverflowDuplicates
@@ -55,6 +56,7 @@ STRUCTURAL_PASSES = (
         DROP_DUPLICATE_TAIL,
         DROP_OVERFLOW_DUPLICATES,
         MARK_PICKUP,
+        REBUILD_VOICE_LAYERS,
         REBASE_MEASURES,
         MERGE_ALIGNED_VOICES,
         NORMALIZE_VOICES_PASS,
@@ -87,6 +89,7 @@ __all__ = [
     "DropTrailingDuplicateMeasure",
     "DropOverflowDuplicates",
     "MarkPickup",
+    "RebuildVoiceLayers",
     "RebaseMeasures",
     "MergeAlignedVoices",
     "RestorePageTies",

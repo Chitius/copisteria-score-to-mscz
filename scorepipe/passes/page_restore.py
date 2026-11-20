@@ -122,6 +122,10 @@ class RestorePageTies(PageRestoreMixin):
         restored = 0
         for page_index, path in enumerate(model.pages):
             root = ElementTree.parse(str(path)).getroot()
+            page_chords: dict[tuple, set] = {}
+            for local_measure, staff, _voice, onset, _duration, pitch, _element in _page_events(root):
+                if pitch is not None:
+                    page_chords.setdefault((local_measure, staff, round(onset, 4)), set()).add(pitch)
             open_ties: dict[tuple, list] = {}
             for measure_index, staff, voice, onset, _duration, pitch, _element in _page_events(root):
                 for tie in _note_ties(_element):
@@ -130,15 +134,31 @@ class RestorePageTies(PageRestoreMixin):
                     key = (staff, voice, pitch)
                     global_measure = offsets[page_index] + measure_index
                     if tie == "start":
-                        open_ties.setdefault(key, []).append((global_measure, onset))
+                        open_ties.setdefault(key, []).append((global_measure, measure_index, onset))
                     elif open_ties.get(key):
-                        start = open_ties[key].pop(0)
-                        start_note = index.get((start[0], staff, start[1], pitch))
+                        start_measure, start_local, start_onset = open_ties[key].pop(0)
+                        start_note = index.get((start_measure, staff, start_onset, pitch))
                         stop_note = index.get((global_measure, staff, onset, pitch))
                         if start_note is None or stop_note is None:
                             continue
-                        if _add_tie(start_note, "start") | _add_tie(stop_note, "stop"):
-                            restored += 1
+                        # a tie between two printed chords applies to every pitch they share
+                        start_set = page_chords.get((start_local, staff, round(start_onset, 4)))
+                        stop_set = page_chords.get((measure_index, staff, round(onset, 4)))
+                        common = {pitch}
+                        if start_set and stop_set:
+                            common = start_set & stop_set or {pitch}
+                        applied = 0
+                        for member in sorted(common):
+                            member_start = index.get((start_measure, staff, start_onset, member))
+                            member_stop = index.get((global_measure, staff, onset, member))
+                            if member_start is None or member_stop is None:
+                                continue
+                            added_start = _add_tie(member_start, "start")
+                            added_stop = _add_tie(member_stop, "stop")
+                            if added_start or added_stop:
+                                applied += 1
+                        if applied:
+                            restored += applied
         return PassResult(changed=restored)
 
 

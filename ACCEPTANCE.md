@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 89 tests
+Ran 92 tests
 OK
 ```
 
@@ -34,6 +34,7 @@ Coverage:
 | credits injection and idempotence | `test_credits.py`, `test_credits_display.py` |
 | mscx tie spanner restoration | `test_mscx_ties.py` |
 | chord member duration conflicts | `test_mscx_fragments.py` |
+| fragmented measures rebuilt as voice layers | `test_layers.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -49,7 +50,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-34 entries: 21 structural (20 mechanical + 1 analysis), 2 inject, 11 display. Every mechanical pass
+35 entries: 22 structural (21 mechanical + 1 analysis), 2 inject, 11 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -77,11 +78,15 @@ scorepipe laputa.musicxml --check --report laputa.json
 - **Whole chain**: `scorepipe laputa.musicxml --mscz-out laputa_pipeline.mscz` produced a 68 KB
   mscz; the display phase converged in 2 rounds (72 changes) and the mscx verifier was clean. This
   is the `structural -> MuseScore conversion -> display` chain end to end on a real score.
-- **Chord ties and duration conflicts** (laputa, after the showcase review): MuseScore drops ties
-  written on chord members, so `restore_mscx_ties` re-creates them as Spanner/Tie pairs from the
-  MusicXML tie anchors (80 tie spanners in the laputa mscz); `split_chord_fragments` moves a chord
-  member whose duration differs from the chord base into its own voice (m1 F6, a dotted quarter,
-  had been coerced to a whole note).
+- **Chord ties and duration conflicts** (laputa, after the showcase review): the root cause was
+  the OMR layout, not the converter. copisteria wrote m2's chord as three same-voice blocks
+  separated by backups and put F6 (a dotted quarter) at the same onset as a whole-note chord;
+  MuseScore merges such blocks into one chord, which loses ties and coerces durations.
+  `rebuild_voice_layers` now rebuilds such measures as non-overlapping voices (chord whole +
+  F6 dotted quarter in its own voice + the eighth/half run), and `restore_page_ties` propagates a
+  page tie between two chords to every shared pitch, as the old skill did. Result: mscx m1 has
+  7 tie spanners and m2 6, F6 is a filled dotted quarter, and the big chords are tied across the
+  barline.
 
 These are baseline reports, not failures of the pipeline: they show the verifiers catching the
 same problems the old ad-hoc pipeline found, with stable codes.
