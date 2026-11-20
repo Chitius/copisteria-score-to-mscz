@@ -70,6 +70,7 @@ Implemented passes:
 | `drop_duplicate_notes` | structural | `duplicate-notes` | duplicate notes at one position |
 | `drop_overflow_duplicates` | structural | `overflow-notes` | overflow notes repeating the next barline |
 | `rebase_measures` | structural | `measure-content` | overflow beats beyond the barline |
+| `merge_aligned_voices` | structural | `voice-merge` | mergeable secondary voices |
 | `upgrade_tempo_texts` | display | `tempo-objects` | tempo words still plain staff text |
 | `upgrade_gradual_texts` | display | `gradual-spanners` | rit./rall./accel. words needing a paired spanner |
 

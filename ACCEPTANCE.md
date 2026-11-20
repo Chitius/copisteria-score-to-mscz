@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 56 tests
+Ran 59 tests
 OK
 ```
 
@@ -22,6 +22,7 @@ Coverage:
 | overflow notes repeating the next barline | `test_overflow.py` |
 | trailing duplicate measure | `test_tail.py` |
 | overflow notes and barline-crossing splits | `test_overflow.py`, `test_rebase.py` |
+| aligned voice merging | `test_merge.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -37,7 +38,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-20 entries: 13 structural (12 mechanical + 1 analysis), 1 inject, 6 display. Every mechanical pass
+21 entries: 14 structural (13 mechanical + 1 analysis), 1 inject, 6 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
