@@ -37,8 +37,11 @@ def padding_voices(doc: MsxcDocument, ctx: Context) -> list[Violation]:
         if not any(voice.findall("Chord") for voice in voices):
             continue
         for voice in voices:
-            if not voice.findall("Chord") and not has_text(voice):
-                out.append(Violation("padding-voice", index, "rest-only voice next to chords"))
+            if voice.findall("Chord") or has_text(voice):
+                continue
+            if any(child.tag not in ("Rest", "location") for child in voice):
+                continue
+            out.append(Violation("padding-voice", index, "rest-only voice next to chords"))
     return out
 
 
@@ -80,10 +83,10 @@ DURATIONS = {
 }
 
 
-def _beats(element) -> float:
+def _beats(element, meter: float = 4.0) -> float:
     name = element.findtext("durationType") or "quarter"
     if name == "measure":
-        return 4.0
+        return meter
     base = DURATIONS.get(name, 1.0)
     dots = int(element.findtext("dots") or 0)
     return base * sum(0.5**index for index in range(dots + 1))
@@ -114,7 +117,7 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
                 total = 0.0
                 for child in voice:
                     if child.tag in ("Chord", "Rest"):
-                        total += _beats(child)
+                        total += _beats(child, meter)
                 if total <= 0:
                     continue
                 if abs(total - meter) > 1e-6:

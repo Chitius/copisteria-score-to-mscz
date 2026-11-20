@@ -568,7 +568,11 @@ Pinned by tests and fixed:
   survives (`tests/test_voice_merge.py`); laputa fidelity is 2.04% against the old output.
 - `restore_page_slurs`: global 1..16 numbering and dropped reversed pairs remove the m29-m30
   cross-staff slur (`tests/test_page_restore.py`).
+- Display passes: `merge_text_voices` keeps Spanners/Dynamics and inserts text after the clef;
+  `drop_empty_voices`/`drop_padding_voices` relocate a BarLine instead of deleting it and leave
+  spanner-only voices alone; `upgrade_tempo_texts` counts glyph-only Tempo removals
+  (`tests/test_display_dedupe.py`, `tests/test_display.py`, `tests/test_display_facts.py`).
 
 Still open (see sections above): notation loss in `merge_staff_voices`/`split_chord_fragments`,
-display spanner/BarLine deletions, `upgrade_tempo_texts` change accounting, `drop_duplicate_notes`
-duration-blind key, `merge_aligned_voices` duplicate chord member, and the design/doc drift.
+`drop_duplicate_notes` duration-blind key, `merge_aligned_voices` duplicate chord member, and the
+design/doc drift.

@@ -91,3 +91,25 @@ class DisplayPassesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class PaddingVoiceContentTest(unittest.TestCase):
+    def test_spanner_only_voice_is_not_padding(self):
+        doc = MsxcDocument(ElementTree.fromstring('''
+          <museScore><Score><Staff id="1"><Measure>
+            <voice><Chord><durationType>whole</durationType><Note><pitch>60</pitch></Note></Chord></voice>
+            <voice><Spanner type="Pedal"><Pedal><beginText>Ped.</beginText></Pedal>
+              <next><location><measures>1</measures></location></next></Spanner></voice>
+          </Measure></Staff></Score></museScore>'''))
+        run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        self.assertEqual(len(list(doc.root.iter('Spanner'))), 1)
+
+    def test_barline_only_voice_keeps_its_barline(self):
+        doc = MsxcDocument(ElementTree.fromstring('''
+          <museScore><Score><Staff id="1"><Measure>
+            <voice><Chord><durationType>whole</durationType><Note><pitch>60</pitch></Note></Chord></voice>
+            <voice><BarLine><subtype>end</subtype></BarLine></voice>
+          </Measure></Staff></Score></museScore>'''))
+        run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        measure = doc.root.find('Score/Staff/Measure')
+        self.assertEqual(len(measure.findall('voice')), 1)
+        self.assertEqual(len(list(measure.iter('BarLine'))), 1)

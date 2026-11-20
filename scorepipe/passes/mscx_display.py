@@ -72,6 +72,20 @@ class DropPaddingVoices:
             for voice in list(doc.voices(measure)):
                 if voice.findall("Chord") or has_text(voice):
                     continue
+                # a spanner, dynamic or barline is real content: only pure padding (rests /
+                # locations) may disappear. A barline is handed to the chord voice first.
+                if any(child.tag not in ("Rest", "BarLine", "location") for child in voice):
+                    continue
+                barline = voice.find("BarLine")
+                if barline is not None:
+                    owner = next(
+                        (candidate for candidate in doc.voices(measure) if candidate.findall("Chord")),
+                        None,
+                    )
+                    if owner is not None:
+                        owner.append(barline)
+                    else:
+                        continue
                 measure.remove(voice)
                 changed += 1
         return PassResult(changed=changed)
