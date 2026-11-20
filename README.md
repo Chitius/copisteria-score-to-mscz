@@ -46,5 +46,33 @@ changes is the fixed point.
 
 ## Status
 
-Skeleton + first mechanical passes + verifiers + tests. The port of the old skill's passes happens
+Skeleton + mechanical passes + verifiers + tests. The port of the old skill's passes happens
 incrementally, one pass per commit, each with a regression fixture.
+
+Implemented passes:
+
+| pass | phase | owns | monotone measure |
+|---|---|---|---|
+| `dedupe_ties` | structural | `tie-elements` | duplicate tie elements |
+| `drop_redundant_time_signatures` | structural | `time-signatures` | repeated time signatures |
+| `unhide_rests` | structural | `rest-visibility` | hidden rests |
+| `sanitize_slurs` | structural | `slur-endpoints` | unmatched / >N-bar endpoints |
+| `fill_short_measures` | structural | `rest-padding` | voices ending before the barline |
+
+Run:
+
+```
+python -m scorepipe.cli score.musicxml --trace -o out.musicxml
+python -m unittest discover -s tests
+```
+
+Round 1 output on the fixture:
+
+```
+structural r1 dedupe_ties                        2
+structural r1 drop_redundant_time_signatures     1
+structural r1 unhide_rests                       1
+structural: rounds=2 changes=4 stable=True
+verifier: clean
+```
+

@@ -54,6 +54,17 @@ class PipelineTest(unittest.TestCase):
         violations = measure_lengths(doc, ctx)
         self.assertTrue(any(v.code == "measure-length" for v in violations))
 
+    def test_each_owned_property_has_one_writer(self):
+        owner: dict[str, str] = {}
+        for one_pass in STRUCTURAL_PASSES:
+            for property_name in one_pass.spec.owns:
+                self.assertNotIn(
+                    property_name,
+                    owner,
+                    f"{property_name} owned by {owner.get(property_name)} and {one_pass.spec.name}",
+                )
+                owner[property_name] = one_pass.spec.name
+
 
 if __name__ == "__main__":
     unittest.main()
