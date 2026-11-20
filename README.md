@@ -100,6 +100,14 @@ every other entry (styles, settings). Display passes run on that document throug
 fixed-point runner; `MSCX_VERIFIERS` checks hidden non-measure rests, text-voice rests, padding
 voices and voice order.
 
+## Loaders
+
+`scorepipe.loader.merge_pages(paths)` concatenates per-page MusicXML (with per-page measure
+numbering) into one score, renumbers measures globally and keeps `measure_counts` so later passes
+can map a measure back to its page (`MergedPages.page_of_measure`). `load_pages(dir)` sorts the
+directory. The CLI accepts a directory as input and runs the structural pipeline on the merged
+score; page-join duplicates (time signatures, clefs, keys) are cleaned by the normal passes.
+
 ## Facts
 
 `scorepipe.facts.load_facts` reads a JSON file produced by the text layer or by the agent.
@@ -112,6 +120,7 @@ the score directly; they are data.
 ```
 python -m scorepipe.cli score.musicxml --facts marks.json --trace -o out.musicxml
 python -m scorepipe.cli score.mscz --trace -o out.mscz     # display pipeline
+python -m scorepipe.cli pages_dir/ --check                 # merge per-page MusicXML first
 python -m scorepipe.cli score.musicxml --report run.json   # machine-readable trace
 ```
 

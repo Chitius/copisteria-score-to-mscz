@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 59 tests
+Ran 62 tests
 OK
 ```
 
@@ -23,6 +23,7 @@ Coverage:
 | trailing duplicate measure | `test_tail.py` |
 | overflow notes and barline-crossing splits | `test_overflow.py`, `test_rebase.py` |
 | aligned voice merging | `test_merge.py` |
+| page merging and page-directory CLI | `test_loader.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -54,6 +55,9 @@ scorepipe laputa.musicxml --check --report laputa.json
 - `summer` (55 measures): **verifier clean**. The former m36–m40 block (4.25–5.5 beats in 4/4) was
   repaired: notes starting past the barline moved into the next bar as a new voice, and notes
   crossing the barline were split with a tie.
+- `laputa` **page directory** (copisteria output: 3 files, 26 / 23 / 14 measures): merged to one
+  63-measure score by `merge_pages`, then verifier clean — the loader works on real per-page OMR
+  output, not only on already-merged MusicXML.
 - `laputa.mscz`: display pipeline runs to a fixed point with **0 changes** and a clean mscx
   verifier — the display invariants hold on a real MuseScore file.
 

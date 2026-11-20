@@ -15,6 +15,7 @@ from .core.pass_base import Context, Phase
 from .core.pipeline import RunReport, run_display, run_pipeline
 from .core.registry import validate_all
 from .facts import validate_facts
+from .loader import load_pages
 from .passes import DISPLAY_PASSES, INJECT_PASSES, STRUCTURAL_PASSES
 from .producers import resolve as resolve_producer
 
@@ -60,7 +61,13 @@ def main(argv: list[str] | None = None) -> int:
         facts = {"marks": producer.produce(path).marks}
     for problem in validate_facts(facts):
         print(f"facts: {problem}")
-    doc = Document.load(path)
+
+    if path.is_dir():
+        merged = load_pages(path)
+        print(f"pages: {len(merged.pages)} files, measures per page {merged.measure_counts}")
+        doc = merged.document
+    else:
+        doc = Document.load(path)
     ctx = Context(facts=facts)
     report = run_pipeline(
         doc,
