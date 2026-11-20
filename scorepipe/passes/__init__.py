@@ -16,9 +16,10 @@ from .xml_basic import (
 from .xml_facts import ApplyMarksFacts, INJECT_PASSES
 from .xml_measures import FILL_PASS, FillShortMeasures
 from .xml_slurs import SLUR_PASS, SanitizeSlurs
+from .xml_voices import NORMALIZE_VOICES_PASS, NormalizeVoiceNumbers
 
 # order matters only inside a phase; keep the cheap, local rewrites first
-STRUCTURAL_PASSES = STRUCTURAL_PASSES + [SLUR_PASS, FILL_PASS]
+STRUCTURAL_PASSES = STRUCTURAL_PASSES + [NORMALIZE_VOICES_PASS, SLUR_PASS, FILL_PASS]
 
 __all__ = [
     "STRUCTURAL_PASSES",
@@ -29,6 +30,7 @@ __all__ = [
     "UnhideRests",
     "SanitizeSlurs",
     "FillShortMeasures",
+    "NormalizeVoiceNumbers",
     "ApplyMarksFacts",
     "DropTextVoiceRests",
     "UnhideRealRests",

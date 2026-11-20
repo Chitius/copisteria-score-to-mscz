@@ -80,6 +80,21 @@ def run_phase(
     return report
 
 
+def run_display(
+    doc,
+    ctx: Context,
+    passes: list[Pass],
+    verifiers: list | None = None,
+    max_rounds: int = 8,
+) -> RunReport:
+    """Display IR: one fixed-point loop, then read-only checks."""
+    report = RunReport()
+    report.phases.append(run_phase(doc, passes, ctx, Phase.DISPLAY, max_rounds, report.trace))
+    if verifiers:
+        report.verifier = [violation for verifier in verifiers for violation in verifier(doc, ctx)]
+    return report
+
+
 def run_pipeline(
     doc: Document,
     ctx: Context,

@@ -57,6 +57,7 @@ Implemented passes:
 | `drop_redundant_time_signatures` | structural | `time-signatures` | repeated time signatures |
 | `unhide_rests` | structural | `rest-visibility` | hidden rests |
 | `sanitize_slurs` | structural | `slur-endpoints` | unmatched / >N-bar endpoints |
+| `normalize_voice_numbers` | structural | `voice-numbers` | voice labels not 1..n by density |
 | `fill_short_measures` | structural | `rest-padding` | voices ending before the barline |
 | `drop_text_voice_rests` | display | `text-voice-rests` | rests inside text-only voices |
 | `unhide_real_rests` | display | `rest-visibility` | hidden non-measure rests |
@@ -98,6 +99,7 @@ directly; they are data.
 
 ```
 python -m scorepipe.cli score.musicxml --facts marks.json --trace -o out.musicxml
+python -m scorepipe.cli score.mscz --trace -o out.mscz     # display pipeline
 ```
 
 
