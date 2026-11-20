@@ -112,7 +112,9 @@ verifier: clean
 `META-INF/container.xml`, exposes it as an `MsxcDocument`, and writes it back while preserving
 every other entry (styles, settings). Display passes run on that document through the same
 fixed-point runner; `MSCX_VERIFIERS` checks hidden non-measure rests, text-voice rests, padding
-voices and voice order.
+voices and voice order. On the MusicXML side `VERIFIERS` checks duplicate ties, redundant time
+signatures, hidden rests, chord/cursor semantics (an orphan `<chord/>` or a negative cursor is an
+error an XSD cannot see) and per-voice measure lengths.
 
 ## Loaders
 

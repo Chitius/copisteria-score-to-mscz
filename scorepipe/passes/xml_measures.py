@@ -62,8 +62,19 @@ class FillShortMeasures:
                     ElementTree.SubElement(rest, "type").text = note_type
                 ElementTree.SubElement(rest, "staff").text = staff
                 measure.insert(insert_at, rest)
+                _extend_following_backup(measure, insert_at + 1, int(round(missing * divisions)))
                 changed += 1
         return PassResult(changed=changed)
+
+
+def _extend_following_backup(measure, index: int, ticks: int) -> None:
+    """A longer voice needs a longer backup to put the next voice back at the barline."""
+    for child in list(measure)[index:]:
+        if child.tag == "backup":
+            text = child.findtext("duration")
+            if text is not None:
+                child.find("duration").text = str(int(text) + ticks)
+            return
 
 
 def _insert_index(measure, staff: str, voice: str):

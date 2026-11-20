@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 92 tests
+Ran 95 tests
 OK
 ```
 
@@ -35,6 +35,8 @@ Coverage:
 | mscx tie spanner restoration | `test_mscx_ties.py` |
 | chord member duration conflicts | `test_mscx_fragments.py` |
 | fragmented measures rebuilt as voice layers | `test_layers.py` |
+| short-voice padding keeps the next staff aligned | `test_fill.py` |
+| chord/cursor semantics verifier | `test_semantics.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -87,6 +89,12 @@ scorepipe laputa.musicxml --check --report laputa.json
   page tie between two chords to every shared pitch, as the old skill did. Result: mscx m1 has
   7 tie spanners and m2 6, F6 is a filled dotted quarter, and the big chords are tied across the
   barline.
+- **Fidelity against the old skill** (laputa, normalised pitch/onset/duration multiset, voice
+  ignored): after the `fill_short_measures` backup fix the symbol mismatch went from 18.35% to
+  8.89% (43 missing + 63 extra of 1192 symbols). The remaining clusters are m25–m32 and m50–m54:
+  empty-staff measure rests and short staff-2 notes that the old skill leaves unpadded. The fix:
+  padding a voice must lengthen the following `<backup>` too, otherwise the next staff starts one
+  beat late (this is what shifted laputa m8's G3 from beat 0 to beat 1).
 
 These are baseline reports, not failures of the pipeline: they show the verifiers catching the
 same problems the old ad-hoc pipeline found, with stable codes.
