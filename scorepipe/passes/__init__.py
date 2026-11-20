@@ -36,6 +36,7 @@ from .xml_facts import ApplyMarksFacts, INJECT_PASSES
 from .xml_measures import FILL_PASS, FillShortMeasures
 from .xml_merge import MERGE_ALIGNED_VOICES, MergeAlignedVoices
 from .xml_overflow import DROP_OVERFLOW_DUPLICATES, DropOverflowDuplicates
+from .xml_pickup import MARK_PICKUP, MarkPickup
 from .xml_rebase import REBASE_MEASURES, RebaseMeasures
 from .xml_slurs import SLUR_PASS, SanitizeSlurs
 from .xml_tail import DROP_DUPLICATE_TAIL, DropTrailingDuplicateMeasure
@@ -50,6 +51,7 @@ STRUCTURAL_PASSES = (
         DROP_DUPLICATE_NOTES,
         DROP_DUPLICATE_TAIL,
         DROP_OVERFLOW_DUPLICATES,
+        MARK_PICKUP,
         REBASE_MEASURES,
         MERGE_ALIGNED_VOICES,
         NORMALIZE_VOICES_PASS,
@@ -80,6 +82,7 @@ __all__ = [
     "NormalizeVoiceNumbers",
     "DropTrailingDuplicateMeasure",
     "DropOverflowDuplicates",
+    "MarkPickup",
     "RebaseMeasures",
     "MergeAlignedVoices",
     "RestorePageTies",

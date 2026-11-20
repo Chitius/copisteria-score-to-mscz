@@ -61,6 +61,8 @@ def measure_lengths(doc: Document, ctx: Context) -> list[Violation]:
         if declared is not None:
             meter = declared
         bar = meter[0] * 4.0 / meter[1]
+        if measure.get("implicit") == "yes":
+            continue  # anacrusis: short by design
         ends: dict[tuple[str, str], float] = {}
         for event in doc.events(measure):
             key = (event.staff, event.voice)

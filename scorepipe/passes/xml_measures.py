@@ -38,6 +38,8 @@ class FillShortMeasures:
             if declared is not None:
                 meter = declared
             bar = meter[0] * 4.0 / meter[1]
+            if measure.get("implicit") == "yes":
+                continue  # an anacrusis is short by design
             if not pad_last and index == len(measures) - 1:
                 continue
             ends: dict[tuple[str, str], float] = {}

@@ -28,9 +28,13 @@ class ReportTest(unittest.TestCase):
         source.write_text(
             """<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0"><part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>
-<part id="P1"><measure number="1"><attributes><divisions>4</divisions>
+<part id="P1">
+<measure number="1"><attributes><divisions>4</divisions>
 <time><beats>4</beats><beat-type>4</beat-type></time></attributes>
-<note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>
+<note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration><voice>1</voice></note>
+</measure>
+<measure number="2">
+<note><pitch><step>D</step><octave>4</octave></pitch><duration>20</duration><voice>1</voice></note>
 </measure></part></score-partwise>""",
             encoding="utf-8",
         )
@@ -38,7 +42,7 @@ class ReportTest(unittest.TestCase):
         main([str(source), "--report", str(report_path)])
         payload = json.loads(report_path.read_text(encoding="utf-8"))
         notes = [note for entry in payload["analysis"] for note in entry["notes"]]
-        self.assertTrue(any("m1" in note for note in notes), notes)
+        self.assertTrue(any("m2" in note for note in notes), notes)
 
 
 if __name__ == "__main__":
