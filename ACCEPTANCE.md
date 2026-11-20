@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 85 tests
+Ran 89 tests
 OK
 ```
 
@@ -32,6 +32,8 @@ Coverage:
 | display text and pedal dedupe | `test_display_dedupe.py` |
 | anacrusis (pickup) detection | `test_pickup.py` |
 | credits injection and idempotence | `test_credits.py`, `test_credits_display.py` |
+| mscx tie spanner restoration | `test_mscx_ties.py` |
+| chord member duration conflicts | `test_mscx_fragments.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -47,7 +49,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-32 entries: 21 structural (20 mechanical + 1 analysis), 2 inject, 9 display. Every mechanical pass
+34 entries: 21 structural (20 mechanical + 1 analysis), 2 inject, 11 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -75,6 +77,11 @@ scorepipe laputa.musicxml --check --report laputa.json
 - **Whole chain**: `scorepipe laputa.musicxml --mscz-out laputa_pipeline.mscz` produced a 68 KB
   mscz; the display phase converged in 2 rounds (72 changes) and the mscx verifier was clean. This
   is the `structural -> MuseScore conversion -> display` chain end to end on a real score.
+- **Chord ties and duration conflicts** (laputa, after the showcase review): MuseScore drops ties
+  written on chord members, so `restore_mscx_ties` re-creates them as Spanner/Tie pairs from the
+  MusicXML tie anchors (80 tie spanners in the laputa mscz); `split_chord_fragments` moves a chord
+  member whose duration differs from the chord base into its own voice (m1 F6, a dotted quarter,
+  had been coerced to a whole note).
 
 These are baseline reports, not failures of the pipeline: they show the verifiers catching the
 same problems the old ad-hoc pipeline found, with stable codes.

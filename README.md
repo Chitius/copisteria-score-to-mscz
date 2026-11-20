@@ -69,6 +69,8 @@ Implemented passes:
 | `dedupe_pedal_spanners` | display | `pedal-spanners` | duplicate pedal spanners |
 | `dedupe_text_objects` | display | `display-text-duplicates` | duplicate text objects in a measure |
 | `apply_credits_display` | display | `display-credits` | title/composer missing from the mscx title frame |
+| `restore_mscx_ties` | display | `mscx-ties` | ties the MuseScore importer dropped |
+| `split_chord_fragments` | display | `mscx-chord-fragments` | chord members whose duration the importer coerced |
 | `measure_length_report` | structural | – | analysis only (notes, never mutates) |
 | `drop_trailing_duplicate_measure` | structural | `measure-list` | trailing duplicate final bars |
 | `drop_duplicate_notes` | structural | `duplicate-notes` | duplicate notes at one position |

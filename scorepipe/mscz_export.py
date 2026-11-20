@@ -70,10 +70,84 @@ def export_and_display(
     try:
         convert(intermediate, destination, musescore)
         archive = MsczArchive.open(destination)
-        display_ctx = Context(facts=dict(ctx.facts), options=dict(ctx.options))
+        options = dict(ctx.options)
+        options.setdefault("ties", extract_ties(document))
+        options.setdefault("chord_fragments", extract_chord_fragments(document))
+        display_ctx = Context(facts=dict(ctx.facts), options=options)
         report = run_display(archive.document, display_ctx, DISPLAY_PASSES, MSCX_VERIFIERS)
         archive.save(destination)
         return report
     finally:
         if work_musicxml is None and intermediate.exists():
             intermediate.unlink()
+
+
+def extract_ties(document: Document) -> list[dict]:
+    """Tie pairs as (measure, staff, pitch, onset); the importer can lose these on chords."""
+    stacks: dict[tuple, list] = {}
+    pairs: list[dict] = []
+    divisions = document.divisions()
+    for number, measure in document.iter_measures():
+        for event in document.events(measure):
+            if event.rest:
+                continue
+            pitch = _midi(event.element)
+            if pitch is None:
+                continue
+            for tie in event.element.findall("tie"):
+                kind = tie.get("type")
+                key = (event.staff, event.voice, pitch)
+                if kind == "start":
+                    stacks.setdefault(key, []).append((number, event.onset))
+                elif kind == "stop" and stacks.get(key):
+                    start = stacks[key].pop(0)
+                    pairs.append(
+                        {
+                            "start_measure": start[0],
+                            "start_onset": start[1],
+                            "stop_measure": number,
+                            "stop_onset": event.onset,
+                            "staff": event.staff,
+                            "pitch": pitch,
+                        }
+                    )
+    return pairs
+
+
+def _midi(note) -> int | None:
+    step = note.findtext("pitch/step")
+    octave = note.findtext("pitch/octave")
+    if step is None or octave is None:
+        return None
+    semitones = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+    alter = note.findtext("pitch/alter") or "0"
+    return (int(octave) + 1) * 12 + semitones[step] + int(float(alter))
+
+
+def extract_chord_fragments(document: Document) -> list[dict]:
+    """Chord members whose duration differs from the chord base (MuseScore would coerce them)."""
+    fragments: list[dict] = []
+    for number, measure in document.iter_measures():
+        groups: dict[tuple, list] = {}
+        for event in document.events(measure):
+            if event.rest:
+                continue
+            groups.setdefault((event.staff, event.voice, round(event.onset, 4)), []).append(event)
+        for (staff, _voice, onset), events in groups.items():
+            base_duration = max(event.duration for event in events)
+            for event in events:
+                if abs(event.duration - base_duration) < 1e-6:
+                    continue
+                pitch = _midi(event.element)
+                if pitch is None:
+                    continue
+                fragments.append(
+                    {
+                        "measure": number,
+                        "staff": staff,
+                        "pitch": pitch,
+                        "onset": onset,
+                        "duration": event.duration,
+                    }
+                )
+    return fragments

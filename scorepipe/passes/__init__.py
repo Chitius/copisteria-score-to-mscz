@@ -10,6 +10,8 @@ from .mscx_display import (
     DropTextVoiceRests,
     UnhideRealRests,
 )
+from .mscx_fragments import FRAGMENTS, SplitChordFragments
+from .mscx_ties import MSXC_TIES, RestoreMscxTies
 from .page_restore import (
     RESTORE_PAGE_ARPEGGIOS,
     RESTORE_PAGE_ARTICULATIONS,
@@ -67,7 +69,7 @@ STRUCTURAL_PASSES = (
     ]
     + ANALYSIS_PASSES
 )
-DISPLAY_PASSES = DISPLAY_PASSES + DISPLAY_DEDUPE_PASSES + DISPLAY_FACT_PASSES
+DISPLAY_PASSES = DISPLAY_PASSES + [FRAGMENTS, MSXC_TIES] + DISPLAY_DEDUPE_PASSES + DISPLAY_FACT_PASSES
 INJECT_PASSES = INJECT_PASSES + [INJECT_CREDITS]
 
 __all__ = [
@@ -98,6 +100,8 @@ __all__ = [
     "UpgradeGradualTexts",
     "DedupePedalSpanners",
     "DedupeTextObjects",
+    "RestoreMscxTies",
+    "SplitChordFragments",
     "ApplyMarksFacts",
     "ApplyCreditsFacts",
     "DropTextVoiceRests",
