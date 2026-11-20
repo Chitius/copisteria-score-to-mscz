@@ -16,6 +16,7 @@ from .core.pipeline import RunReport, run_display, run_pipeline
 from .core.registry import validate_all
 from .facts import validate_facts
 from .loader import load_pages, merge_pages
+from .mscz_export import export_and_display
 from .omr import run_omr
 from .passes import DISPLAY_PASSES, INJECT_PASSES, STRUCTURAL_PASSES
 from .producers import resolve as resolve_producer
@@ -36,6 +37,8 @@ def main(argv: list[str] | None = None) -> int:
         help="external OMR command with {pdf} and {outdir} placeholders; its page MusicXML is merged first",
     )
     parser.add_argument("--omr-dir", help="directory for the OMR page output (default: <pdf>_omr)")
+    parser.add_argument("--mscz-out", help="also convert to .mscz and run the display phase")
+    parser.add_argument("--musescore", help="MuseScore executable (default: MSCORE or common paths)")
     parser.add_argument("--max-rounds", type=int, default=8)
     args = parser.parse_args(argv)
 
@@ -102,7 +105,16 @@ def main(argv: list[str] | None = None) -> int:
     _write_report(report, args.report)
     if args.output and not args.check:
         doc.save(args.output)
-    return 0 if not report.verifier else 1
+    status = 0 if not report.verifier else 1
+    if args.mscz_out and not args.check:
+        display_report = export_and_display(
+            doc, args.mscz_out, ctx, args.musescore, work_musicxml=args.output
+        )
+        print(f"mscz: {args.mscz_out}")
+        _print_report(display_report, args.trace)
+        if display_report.verifier:
+            status = 1
+    return status
 
 
 def _run_mscz(path: Path, args) -> int:

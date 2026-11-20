@@ -129,6 +129,16 @@ scorepipe scan.pdf --omr 'python -m copisteria.cli {pdf} {outdir}' --omr-dir out
 the directory is merged exactly like `--omr` pages / a page directory, and the page model is
 available to the restoration passes.
 
+## Combined driver
+
+`--mscz-out` runs the whole chain in one command: structural fixpoint on MusicXML, MuseScore
+conversion, then the display fixpoint on the resulting `.mscz`. The conversion is a boundary, not a
+pass; `mscz_export.export_and_display` owns it and re-saves the archive.
+
+```
+scorepipe score.musicxml --mscz-out score.mscz
+```
+
 ## Facts
 
 `scorepipe.facts.load_facts` reads a JSON file produced by the text layer or by the agent.
@@ -153,6 +163,7 @@ is the agent/vision path, not this producer.
 python -m scorepipe.cli score.musicxml --facts marks.json --trace -o out.musicxml
 python -m scorepipe.cli score.mscz --trace -o out.mscz     # display pipeline
 python -m scorepipe.cli pages_dir/ --check                 # merge per-page MusicXML first
+python -m scorepipe.cli score.musicxml --mscz-out out.mscz # + MuseScore conversion + display phase
 python -m scorepipe.cli score.musicxml --report run.json   # machine-readable trace
 ```
 

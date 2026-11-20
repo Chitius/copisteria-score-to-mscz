@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 71 tests
+Ran 72 tests
 OK
 ```
 
@@ -27,6 +27,7 @@ Coverage:
 | page-level tie/slur/pedal restoration | `test_page_restore.py` |
 | external OMR command front-end | `test_omr.py` |
 | PDF text layer, measure-box assignment | `test_pdf_producer.py` |
+| MusicXML -> mscz -> display combined driver | `test_mscz_export.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -65,6 +66,9 @@ scorepipe laputa.musicxml --check --report laputa.json
   file already carried them.
 - `laputa.mscz`: display pipeline runs to a fixed point with **0 changes** and a clean mscx
   verifier — the display invariants hold on a real MuseScore file.
+- **Whole chain**: `scorepipe laputa.musicxml --mscz-out laputa_pipeline.mscz` produced a 68 KB
+  mscz; the display phase converged in 2 rounds (72 changes) and the mscx verifier was clean. This
+  is the `structural -> MuseScore conversion -> display` chain end to end on a real score.
 
 These are baseline reports, not failures of the pipeline: they show the verifiers catching the
 same problems the old ad-hoc pipeline found, with stable codes.
@@ -75,8 +79,8 @@ same problems the old ad-hoc pipeline found, with stable codes.
   ported yet.
 - The OMR front-end runs an external command; a ready-made copisteria command line and its
   environment setup are not bundled in this project.
-- The display layer runs after MuseScore conversion of a `.mscz`; a combined
-  `musicxml -> mscz -> display` driver is not wired into the CLI yet.
+- The display phase only runs through the `--mscz-out` chain (or on an existing `.mscz`); it is not
+  a pass phase inside the MusicXML-only run.
 - The PDF producer handles digital PDFs (text layer + layout); the laputa scan has no text layer
   and yields zero words, which is why scanned scores still need the agent/vision path for marks.
 - `rebase_measures` refuses to push an overflow that would itself land past the next barline; such
