@@ -65,6 +65,7 @@ Implemented passes:
 | `canonical_voice_order` | display | `voice-order` | voice slots out of canonical order |
 | `measure_length_report` | structural | – | analysis only (notes, never mutates) |
 | `drop_trailing_duplicate_measure` | structural | `measure-list` | trailing duplicate final bars |
+| `drop_duplicate_notes` | structural | `duplicate-notes` | duplicate notes at one position |
 | `upgrade_tempo_texts` | display | `tempo-objects` | tempo words still plain staff text |
 | `upgrade_gradual_texts` | display | `gradual-spanners` | rit./rall./accel. words needing a paired spanner |
 
@@ -110,5 +111,14 @@ python -m scorepipe.cli score.musicxml --report run.json   # machine-readable tr
 Analysis passes (`kind=ANALYSIS`) run once after the mechanical loop; their notes land in the
 report. If an analysis pass mutates the score, the report marks it `mutated` — a programming
 error, not a feature.
+
+Registry checks run on every invocation: duplicate pass names, a pass registered under the wrong
+phase, a mechanical pass without a monotone measure, or two passes claiming the same property are
+reported and the run exits with code 2. `--list-passes` prints the registry:
+
+```
+python -m scorepipe.cli --list-passes
+python -m scorepipe.cli score.mscz --check          # verify without writing
+```
 
 

@@ -11,21 +11,43 @@ from .core.document import Document
 from .core.invariants import VERIFIERS, Violation
 from .core.mscz import MsczArchive
 from .core.mscx_invariants import MSCX_VERIFIERS
-from .core.pass_base import Context
+from .core.pass_base import Context, Phase
 from .core.pipeline import RunReport, run_display, run_pipeline
+from .core.registry import validate_all
 from .facts import load_facts, validate_facts
 from .passes import DISPLAY_PASSES, INJECT_PASSES, STRUCTURAL_PASSES
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="scorepipe")
-    parser.add_argument("input", help="MusicXML file or MuseScore .mscz")
+    parser.add_argument("input", nargs="?", help="MusicXML file or MuseScore .mscz")
     parser.add_argument("-o", "--output", help="write the repaired score here")
     parser.add_argument("--facts", help="marks facts JSON produced by the text layer or the agent")
     parser.add_argument("--trace", action="store_true", help="print every pass that changed something")
     parser.add_argument("--report", help="write the run report (phases, trace, verifier, analysis) as JSON")
+    parser.add_argument("--check", action="store_true", help="verify only: never write the score")
+    parser.add_argument("--list-passes", action="store_true", help="print the registered passes and exit")
     parser.add_argument("--max-rounds", type=int, default=8)
     args = parser.parse_args(argv)
+
+    groups = {
+        Phase.STRUCTURAL: STRUCTURAL_PASSES,
+        Phase.INJECT: INJECT_PASSES,
+        Phase.DISPLAY: DISPLAY_PASSES,
+    }
+    if args.list_passes:
+        for phase, passes in groups.items():
+            for one_pass in passes:
+                owns = ",".join(one_pass.spec.owns) or "-"
+                print(f"{phase.value:10s} {one_pass.spec.kind.value:10s} {one_pass.spec.name:32s} {owns}")
+        return 0
+    if not args.input:
+        parser.error("input is required unless --list-passes is used")
+    problems = validate_all(groups)
+    if problems:
+        for problem in problems:
+            print(f"registry: {problem}")
+        return 2
 
     path = Path(args.input)
     if path.suffix.lower() == ".mscz":
@@ -46,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     _print_report(report, args.trace)
     _write_report(report, args.report)
-    if args.output:
+    if args.output and not args.check:
         doc.save(args.output)
     return 0 if not report.verifier else 1
 
@@ -57,6 +79,8 @@ def _run_mscz(path: Path, args) -> int:
     report = run_display(archive.document, ctx, DISPLAY_PASSES, MSCX_VERIFIERS, args.max_rounds)
     _print_report(report, args.trace)
     _write_report(report, args.report)
+    if args.check:
+        return 0 if not report.verifier else 1
     if args.output:
         archive.save(args.output)
     else:
