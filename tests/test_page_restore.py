@@ -6,7 +6,7 @@ from pathlib import Path
 from scorepipe.core.invariants import measure_lengths
 from scorepipe.core.pass_base import Context
 from scorepipe.core.pipeline import run_pipeline
-from scorepipe.loader import load_pages
+from scorepipe.loader import load_pages, merge_pages
 from scorepipe.passes import STRUCTURAL_PASSES
 
 PAGES = Path(__file__).parent / "fixtures" / "pages_restore"
@@ -47,6 +47,43 @@ class PageRestoreTest(unittest.TestCase):
         again = run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, verifiers=[])
         self.assertEqual(again.changes, 0)
         self.assertEqual(measure_lengths(doc, Context()), [])
+
+    def test_slur_numbers_are_global_not_per_staff(self):
+        work = Path(__file__).parent / ".runs" / "slur_numbers"
+        work.mkdir(parents=True, exist_ok=True)
+        page = work / "page1.musicxml"
+        page.write_text(
+            """<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0"><part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>
+<part id="P1">
+<measure number="1"><attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+<note><pitch><step>C</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><staff>1</staff>
+<notations><slur type="start" number="1"/></notations></note>
+<backup><duration>16</duration></backup>
+<note><pitch><step>E</step><octave>3</octave></pitch><duration>16</duration><voice>1</voice><staff>2</staff>
+<notations><slur type="start" number="1"/></notations></note>
+</measure>
+<measure number="2">
+<note><pitch><step>D</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><staff>1</staff>
+<notations><slur type="stop" number="1"/></notations></note>
+<backup><duration>16</duration></backup>
+<note><pitch><step>F</step><octave>3</octave></pitch><duration>16</duration><voice>1</voice><staff>2</staff>
+<notations><slur type="stop" number="1"/></notations></note>
+</measure>
+</part></score-partwise>""",
+            encoding="utf-8",
+        )
+        merged = merge_pages([page])
+        ctx = Context(pages=merged)
+        run_pipeline(merged.document, ctx, structural=STRUCTURAL_PASSES, verifiers=[])
+        numbers = {}
+        for _number, measure in merged.document.iter_measures():
+            for note in measure.iter("note"):
+                for slur in note.findall("notations/slur"):
+                    if slur.get("type") == "start":
+                        numbers[note.findtext("staff")] = slur.get("number")
+        self.assertEqual(set(numbers), {"1", "2"})
+        self.assertNotEqual(numbers["1"], numbers["2"])
 
 
 if __name__ == "__main__":

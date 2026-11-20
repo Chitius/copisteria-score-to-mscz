@@ -178,12 +178,11 @@ class RestorePageSlurs(PageRestoreMixin):
             return PassResult()
         index = _merged_index(doc)
         offsets = _offsets(model)
-        restored = 0
+        pairs: list[dict] = []
+        open_slurs: dict[tuple, list] = {}
         for page_index, path in enumerate(model.pages):
             root = ElementTree.parse(str(path)).getroot()
-            open_slurs: dict[tuple, list] = {}
             for measure_index, staff, _voice, onset, _duration, pitch, element in _page_events(root):
-                key = (staff,)
                 global_measure = offsets[page_index] + measure_index
                 for slur in element.findall("notations/slur"):
                     number = slur.get("number") or "1"
@@ -198,15 +197,34 @@ class RestorePageSlurs(PageRestoreMixin):
                         start = stack.pop()
                         if start[2] is None or pitch is None:
                             continue
+                        if (global_measure, onset) <= (start[0], start[1]):
+                            continue  # a slur cannot stop before it starts
                         if global_measure - start[0] > MAX_SLUR_BARS:
                             continue
                         start_note = index.get((start[0], staff, start[1], start[2]))
                         stop_note = index.get((global_measure, staff, onset, pitch))
                         if start_note is None or stop_note is None:
                             continue
-                        if _add_slur(start_note, "start", number) | _add_slur(stop_note, "stop", number):
-                            restored += 1
-        return PassResult(changed=restored)
+                        pairs.append(
+                            {
+                                "start": start_note,
+                                "stop": stop_note,
+                                "start_key": (start[0], round(start[1], 4)),
+                                "stop_measure": global_measure,
+                            }
+                        )
+        # MuseScore resolves slur numbers document-wide, not per staff. Page numbers are only
+        # unique within a staff, so they must be reassigned globally; otherwise the treble slur 1
+        # pairs with the bass stop 1 and jumps staves (laputa m29-m30).
+        desired = _assign_slur_numbers(pairs)
+        if not pairs or _slur_signature(doc) == desired["signature"]:
+            return PassResult()
+        _clear_slurs(doc)
+        changed = 0
+        for note, kind, number in desired["entries"]:
+            _add_slur(note, kind, number)
+            changed += 1
+        return PassResult(changed=changed)
 
 
 class RestorePagePedals(PageRestoreMixin):
@@ -526,6 +544,55 @@ def _add_tie(note, kind: str) -> bool:
     if not any(tied.get("type") == kind for tied in notations.findall("tied")):
         ElementTree.SubElement(notations, "tied", {"type": kind})
     return True
+
+
+def _assign_slur_numbers(pairs: list[dict]) -> dict:
+    """Global 1..16 numbering, reused as soon as a slur has ended (the old skill's scheme)."""
+    ordered = sorted(pairs, key=lambda pair: (pair["start_key"], pair["stop_measure"]))
+    active: dict[int, int] = {}
+    entries: list[tuple] = []
+    seen: set[tuple] = set()
+    for pair in ordered:
+        identity = (id(pair["start"]), id(pair["stop"]))
+        if identity in seen:
+            continue  # the same page slur recorded twice must not become two arcs
+        seen.add(identity)
+        start_measure = pair["start_key"][0]
+        for number in [key for key, end in active.items() if end < start_measure]:
+            active.pop(number)
+        free = next((number for number in range(1, 17) if number not in active), None)
+        if free is None:
+            continue
+        active[free] = pair["stop_measure"]
+        entries.append((pair["start"], "start", str(free)))
+        entries.append((pair["stop"], "stop", str(free)))
+    signature: dict[int, set] = {}
+    for note, kind, number in entries:
+        signature.setdefault(id(note), set()).add((kind, number))
+    return {"entries": entries, "signature": {key: frozenset(value) for key, value in signature.items()}}
+
+
+def _slur_signature(doc: Document) -> dict[int, frozenset]:
+    signature: dict[int, set] = {}
+    for _number, measure in doc.iter_measures():
+        for note in measure.iter("note"):
+            for slur in note.findall("notations/slur"):
+                signature.setdefault(id(note), set()).add(
+                    (slur.get("type") or "", slur.get("number") or "1")
+                )
+    return {key: frozenset(value) for key, value in signature.items()}
+
+
+def _clear_slurs(doc: Document) -> None:
+    for _number, measure in doc.iter_measures():
+        for note in measure.iter("note"):
+            notations = note.find("notations")
+            if notations is None:
+                continue
+            for slur in list(notations.findall("slur")):
+                notations.remove(slur)
+            if not list(notations):
+                note.remove(notations)
 
 
 def _add_slur(note, kind: str, number: str) -> bool:
