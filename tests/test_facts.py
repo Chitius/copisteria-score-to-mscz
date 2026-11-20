@@ -38,6 +38,14 @@ class ApplyFactsTest(unittest.TestCase):
         second = run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, inject=INJECT_PASSES, verifiers=[])
         self.assertEqual(second.changes, 0)
 
+    def test_rehearsal_without_words_is_idempotent(self):
+        doc = Document.load(FIXTURE)
+        ctx = Context(facts={"marks": [{"measure": 1, "rehearsal": "C"}]})
+        run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, inject=INJECT_PASSES, verifiers=[])
+        again = run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, inject=INJECT_PASSES, verifiers=[])
+        self.assertEqual(again.changes, 0)
+        self.assertEqual(len(list(doc.root.iter("rehearsal"))), 1)
+
     def test_offset_comes_after_direction_type(self):
         doc = Document.load(FIXTURE)
         ctx = Context(facts={"marks": [{"measure": 1, "beat": 2, "text": "rit."}]})

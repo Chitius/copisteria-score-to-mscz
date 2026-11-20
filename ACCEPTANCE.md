@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 82 tests
+Ran 85 tests
 OK
 ```
 
@@ -31,7 +31,7 @@ Coverage:
 | MusicXML -> mscz -> display combined driver | `test_mscz_export.py` |
 | display text and pedal dedupe | `test_display_dedupe.py` |
 | anacrusis (pickup) detection | `test_pickup.py` |
-| credits injection and idempotence | `test_credits.py` |
+| credits injection and idempotence | `test_credits.py`, `test_credits_display.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -47,7 +47,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-31 entries: 21 structural (20 mechanical + 1 analysis), 2 inject, 8 display. Every mechanical pass
+32 entries: 21 structural (20 mechanical + 1 analysis), 2 inject, 9 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -83,8 +83,8 @@ same problems the old ad-hoc pipeline found, with stable codes.
 
 - Voice merging beyond exact alignment is not ported; the pass refuses anything that needs a
   retiming decision.
-- Credits are injected as MusicXML `<credit>`; the old skill's `.mscz` title-frame restyling
-  (inside MuseScore's own Text objects) is not ported.
+- Credits cover title/subtitle/composer/lyricist styles and are moved into the mscx title frame;
+  finer title-frame layout (font size, spacing) is left to MuseScore's own styles.
 - The old review-sheet / diagnostics HTML generator is not ported; the JSON run report is the
   machine-readable equivalent.
 - The OMR front-end runs an external command; a ready-made copisteria command line and its

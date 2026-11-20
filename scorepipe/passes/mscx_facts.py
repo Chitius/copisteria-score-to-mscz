@@ -45,6 +45,13 @@ class UpgradeTempoTexts:
             measure = measures[number - 1]
             if any(_tempo_text(node).strip() == text for node in measure.iter("Tempo")):
                 continue
+            # the metronome direction imported from MusicXML becomes its own Tempo with just the
+            # glyph and a number; drop it, the real Tempo below carries the words and the glyph
+            for voice in measure.findall("voice"):
+                for node in list(voice.findall("Tempo")):
+                    plain = _plain_text(node).strip()
+                    if plain and not any(character.isalpha() for character in plain):
+                        voice.remove(node)
             for voice in measure.findall("voice"):
                 replaced = False
                 for node in list(voice):
@@ -73,11 +80,117 @@ class UpgradeTempoTexts:
         return PassResult(changed=changed)
 
 
+class ApplyCreditsDisplay:
+    spec = PassSpec(
+        name="apply_credits_display",
+        phase=Phase.DISPLAY,
+        kind=Kind.MECHANICAL,
+        owns=("display-credits",),
+        description="put title/subtitle/composer facts into the MuseScore title frame",
+        measure="credits missing from the mscx title frame",
+    )
+
+    STYLES = {
+        "title": "title",
+        "subtitle": "subtitle",
+        "composer": "composer",
+        "lyricist": "lyricist",
+    }
+
+    def run(self, doc: MsxcDocument, ctx: Context) -> PassResult:
+        credits = (ctx.facts or {}).get("credits") or []
+        score = doc.root.find("Score")
+        if score is None:
+            return PassResult()
+        added = 0
+        target = next((child for child in score if child.tag == "Staff"), score)
+        position = 0
+        created: set[int] = set()
+        credit_texts = [(credit.get("text") or "").strip() for credit in credits]
+        for credit in credits:
+            text = (credit.get("text") or "").strip()
+            if not text:
+                continue
+            style_name = self.STYLES.get((credit.get("type") or "title").strip(), "title")
+            existing = [
+                node
+                for node in doc.root.iter("Text")
+                if (node.findtext("text") or "").strip() == text
+            ]
+            if existing:
+                # MuseScore already imported the MusicXML credit as a Text; give it the style
+                for node in existing:
+                    style = node.find("style")
+                    if style is None:
+                        style = ElementTree.Element("style")
+                        text_element = node.find("text")
+                        index = list(node).index(text_element) if text_element is not None else 0
+                        node.insert(index, style)
+                    if (style.text or "") != style_name:
+                        style.text = style_name
+                        added += 1
+                continue
+            vbox = ElementTree.Element("VBox")
+            ElementTree.SubElement(vbox, "height").text = "10"
+            text_element = ElementTree.SubElement(vbox, "Text")
+            ElementTree.SubElement(text_element, "style").text = style_name
+            ElementTree.SubElement(text_element, "text").text = text
+            target.insert(position, vbox)
+            created.add(id(vbox))
+            position += 1
+            added += 1
+        # MuseScore imports MusicXML credits as a VBox at the *end* of the first staff; only a
+        # frame before the measures is drawn as a title
+        for vbox in list(doc.root.iter("VBox")):
+            if id(vbox) in created:
+                continue
+            texts = [(node.findtext("text") or "").strip() for node in vbox.iter("Text")]
+            ranks = [credit_texts.index(text) for text in texts if text in credit_texts]
+            if not ranks:
+                continue
+            rank = min(ranks)
+            parent = _parent_of(doc.root, vbox)
+            if parent is target and list(target).index(vbox) == rank:
+                continue
+            if parent is not None:
+                parent.remove(vbox)
+            target.insert(min(rank, len(target)), vbox)
+            added += 1
+        return PassResult(changed=added)
+
+
+def _before_first_staff(score) -> int:
+    for index, child in enumerate(list(score)):
+        if child.tag == "Staff":
+            return index
+    return len(score)
+
+
+def _parent_of(root, target):
+    for parent in root.iter():
+        if target in list(parent):
+            return parent
+    return None
+
+
 def _tempo_text(tempo_element) -> str:
     text = tempo_element.find("text")
     if text is None:
         return ""
     return "".join(text.itertext())
+
+
+def _plain_text(tempo_element) -> str:
+    """The words of a Tempo, ignoring <sym> glyph names (which are not visible text)."""
+    text = tempo_element.find("text")
+    if text is None:
+        return ""
+    parts = [text.text or ""]
+    for child in text:
+        if child.tag != "sym":
+            parts.append(child.text or "")
+        parts.append(child.tail or "")
+    return "".join(parts)
 
 
 _LENGTHS = {
@@ -229,4 +342,4 @@ def _fraction_quarters(fraction: str) -> float:
     return 0.0
 
 
-DISPLAY_FACT_PASSES = [UpgradeTempoTexts(), UpgradeGradualTexts()]
+DISPLAY_FACT_PASSES = [UpgradeTempoTexts(), UpgradeGradualTexts(), ApplyCreditsDisplay()]

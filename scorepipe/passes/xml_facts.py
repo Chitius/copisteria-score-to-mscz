@@ -33,27 +33,25 @@ class ApplyMarksFacts:
                 continue
             measure = measures[number - 1]
             text = (mark.get("text") or "").strip()
-            if text and _has_words(measure, text):
-                continue
             beat_ticks = float(mark.get("beat") or 0) * divisions
             placement = mark.get("placement") or "above"
             rehearsal = (mark.get("rehearsal") or "").strip()
             metronome = mark.get("tempo") or mark.get("metronome")
-            if rehearsal:
+            if rehearsal and not _has_rehearsal(measure, rehearsal):
                 direction = _direction(placement)
                 direction_type = ElementTree.SubElement(direction, "direction-type")
                 ElementTree.SubElement(direction_type, "rehearsal").text = rehearsal
                 _stamp(direction, beat_ticks)
                 _insert(measure, direction)
                 changed += 1
-            if text:
+            if text and not _has_words(measure, text):
                 direction = _direction(placement)
                 direction_type = ElementTree.SubElement(direction, "direction-type")
                 ElementTree.SubElement(direction_type, "words").text = text
                 _stamp(direction, beat_ticks)
                 _insert(measure, direction)
                 changed += 1
-            if metronome:
+            if metronome and not _has_metronome(measure, metronome):
                 direction = _direction(placement)
                 direction_type = ElementTree.SubElement(direction, "direction-type")
                 metronome_element = ElementTree.SubElement(direction_type, "metronome")
@@ -70,6 +68,20 @@ class ApplyMarksFacts:
 
 def _has_words(measure: ElementTree.Element, text: str) -> bool:
     return any((words.text or "").strip() == text for words in measure.iter("words"))
+
+
+def _has_rehearsal(measure: ElementTree.Element, text: str) -> bool:
+    return any((rehearsal.text or "").strip() == text for rehearsal in measure.iter("rehearsal"))
+
+
+def _has_metronome(measure: ElementTree.Element, per_minute) -> bool:
+    for metronome in measure.iter("metronome"):
+        if (metronome.findtext("per-minute") or "").strip() == str(per_minute):
+            return True
+    for sound in measure.iter("sound"):
+        if (sound.get("tempo") or "").strip() == str(per_minute):
+            return True
+    return False
 
 
 def _direction(placement: str) -> ElementTree.Element:
