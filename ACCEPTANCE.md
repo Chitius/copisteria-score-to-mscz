@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 134 tests
+Ran 135 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -118,6 +118,13 @@ scorepipe laputa.musicxml --check --report laputa.json
   match (same pitch/voice first, then shortest span); the mscz now has `m7→m8` (same-pitch G4),
   `m8 C5→m10 D5` (the legitimate phrase), and `m10→m12`, with no m7→m10 arc. Regression pages cover
   both the restored pair and the refused arc (`test_pairing.py`, `test_page_restore.py`).
+- **Arpeggios belong to a chord**: `restore_page_arpeggios` used to copy the page mark to every
+  note; after `merge_staff_voices` split F6 out of laputa m1's big chord, MuseScore promoted the
+  mark on that single note and left the chord without an `Arpeggio`. The pass now collapses page
+  marks per `(measure, staff, onset)`, chooses the merged chord with at least two notes, writes one
+  mark on its base note, and removes marks from single-note fragments. The m1 mscx now has
+  `Arpeggio = True` on the 7-note chord and none on F6 (`test_page_restore.py`,
+  `test_page_notation.py`).
 - **MuseScore's incomplete-measure warnings** (mscx `measure_lengths` verifier): the laputa mscz
   now reports **0** flagged measures. It started at 12: eleven were text-only/empty voice slots
   (moved into the chord voice or removed) and the last was m33's overlapping rests, which the

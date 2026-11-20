@@ -162,11 +162,12 @@ directory. The CLI accepts a directory as input and runs the structural pipeline
 score; page-join duplicates (time signatures, clefs, keys) are cleaned by the normal passes.
 
 When the input is a page directory, the loader model is put on `Context.pages`, which enables the
-page-restoration passes: `restore_page_ties`, `restore_page_slurs` (paired per staff and number,
-ignoring voice, with a 6-bar span guard), `restore_page_pedals` and `restore_page_wedges`
-(page-accurate onsets, existing directions replaced only when they differ),
-`restore_page_arpeggios` and `restore_page_articulations` (marks attached to the merged note by
-position).
+page-restoration passes: `restore_page_ties`, `restore_page_slurs` (all open starts per staff/number
+are kept and a stop picks the best same-pitch/voice, shortest-span candidate, with a 6-bar guard),
+`restore_page_pedals` and `restore_page_wedges` (page-accurate onsets, existing directions replaced
+only when they differ), `restore_page_arpeggios` (page marks are collapsed per chord and written once
+on the chord's base note; a single split note no longer carries an arpeggio) and
+`restore_page_articulations` (marks attached to the merged note by position).
 
 ## OMR front-end
 

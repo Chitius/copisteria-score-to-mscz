@@ -352,23 +352,76 @@ class RestorePageArpeggios(PageRestoreMixin):
         model = self._model(ctx)
         if model is None:
             return PassResult()
-        index = _merged_index(doc)
-        onset_index = _merged_onset_index(doc)
         offsets = _offsets(model)
-        restored = 0
+        # An arpeggio belongs to a chord, not to one note. Page marks are collapsed per position,
+        # then written once on the merged chord's base note; a single-note fragment that inherited
+        # the mark (laputa m1 F6 after voice protection) loses it.
+        page_marks: dict[tuple, tuple[ElementTree.Element, set[str]]] = {}
         for page_index, path in enumerate(model.pages):
             root = ElementTree.parse(str(path)).getroot()
             for measure_index, staff, _voice, onset, _duration, pitch, element in _page_events(root):
-                global_measure = offsets[page_index] + measure_index
-                marks = element.findall("notations/arpeggiate") + element.findall("notations/non-arpeggiate")
-                for mark in marks:
-                    note = index.get((global_measure, staff, onset, pitch)) if pitch else None
-                    if note is None:
-                        note = onset_index.get((global_measure, staff, onset))
-                    if note is None:
-                        continue
-                    if _add_notation(note, mark):
-                        restored += 1
+                marks = element.findall("notations/arpeggiate") + element.findall(
+                    "notations/non-arpeggiate"
+                )
+                if not marks:
+                    continue
+                key = (offsets[page_index] + measure_index, staff, round(onset, 4))
+                entry = page_marks.get(key)
+                if entry is None:
+                    page_marks[key] = (marks[0], {pitch} if pitch else set())
+                elif pitch:
+                    entry[1].add(pitch)
+
+        notes_at: dict[tuple, list] = {}
+        for number, measure in doc.iter_measures():
+            for event in doc.events(measure):
+                if event.rest:
+                    continue
+                notes_at.setdefault((number, event.staff, round(event.onset, 4)), []).append(event)
+
+        restored = 0
+        for key, (mark, marked_pitches) in page_marks.items():
+            events = notes_at.get(key)
+            if not events:
+                continue
+            groups: dict[str, list] = {}
+            for event in events:
+                groups.setdefault(event.voice, []).append(event)
+            chord_groups = [group for group in groups.values() if len(group) >= 2]
+            target = None
+            if chord_groups:
+                target = max(
+                    chord_groups,
+                    key=lambda group: (
+                        len(group),
+                        len({_pitch_name(event.element.find("pitch")) for event in group} & marked_pitches),
+                    ),
+                )
+            if target is None:
+                affected = events
+                desired: list[tuple] = []
+            else:
+                base = next((event for event in target if event.element.find("chord") is None), target[0])
+                # single-note voices at this onset are split chord fragments, not independent chords
+                affected = list(target) + [
+                    event for event in events if event.voice not in groups or len(groups[event.voice]) < 2
+                ]
+                desired = [(id(base.element), mark.tag, _mark_attributes(mark))]
+
+            current = [
+                (id(event.element), child.tag, tuple(sorted(child.attrib.items())))
+                for event in affected
+                for notations in event.element.findall("notations")
+                for child in notations
+                if child.tag in ("arpeggiate", "non-arpeggiate")
+            ]
+            if sorted(current) == sorted(desired):
+                continue
+            for event in affected:
+                _remove_arpeggio_marks(event.element)
+            if target is not None:
+                _add_notation(base.element, mark)
+            restored += 1
         return PassResult(changed=restored)
 
 
@@ -511,6 +564,21 @@ def _merged_onset_index(doc: Document) -> dict[tuple, ElementTree.Element]:
                 continue
             index.setdefault((number, event.staff, round(event.onset, 4)), event.element)
     return index
+
+
+def _mark_attributes(mark) -> tuple:
+    return tuple(sorted(mark.attrib.items()))
+
+
+def _remove_arpeggio_marks(note) -> None:
+    notations = note.find("notations")
+    if notations is None:
+        return
+    for child in list(notations):
+        if child.tag in ("arpeggiate", "non-arpeggiate"):
+            notations.remove(child)
+    if len(notations) == 0:
+        note.remove(notations)
 
 
 def _add_notation(note, mark) -> bool:

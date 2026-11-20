@@ -17,6 +17,20 @@
           <articulations><staccato/></articulations>
         </notations>
       </note>
+      <note>
+        <chord/>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>16</duration>
+        <voice>1</voice>
+        <notations><arpeggiate number="1" direction="up"/></notations>
+      </note>
+      <note>
+        <chord/>
+        <pitch><step>B</step><octave>4</octave></pitch>
+        <duration>16</duration>
+        <voice>1</voice>
+        <notations><arpeggiate number="1" direction="up"/></notations>
+      </note>
     </measure>
   </part>
 </score-partwise>

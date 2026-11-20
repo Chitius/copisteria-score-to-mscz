@@ -124,6 +124,41 @@ class PageRestoreTest(unittest.TestCase):
         self.assertEqual(starts, [(1, "G"), (2, "C"), (4, "E")])
 
 
+    def test_arpeggio_is_one_mark_on_the_chord_not_on_a_split_note(self):
+        work = Path(__file__).parent / ".runs" / "arpeggio_chord"
+        work.mkdir(parents=True, exist_ok=True)
+        measure = (
+            '<measure number="1"><attributes><divisions>4</divisions>'
+            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>{body}</measure>"
+        )
+        note = (
+            '<note>{chord}<pitch><step>{step}</step><octave>{octave}</octave></pitch>'
+            '<duration>{duration}</duration><voice>{voice}</voice>'
+            '<notations><arpeggiate/></notations></note>'
+        )
+        body = (
+            note.format(chord="", step="D", octave=4, duration=16, voice=1)
+            + note.format(chord="<chord/>", step="F", octave=4, duration=16, voice=1)
+            + note.format(chord="<chord/>", step="A", octave=4, duration=16, voice=1)
+            + "<backup><duration>16</duration></backup>"
+            + note.format(chord="", step="C", octave=6, duration=4, voice=2)
+        )
+        page = work / "page1.musicxml"
+        page.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+            "<part-list><score-part id=\"P1\"><part-name>t</part-name></score-part></part-list>"
+            '<part id="P1">' + measure.format(body=body) + "</part></score-partwise>",
+            encoding="utf-8",
+        )
+        merged = merge_pages([page])
+        run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
+        marked = []
+        for measure_element in merged.document.measures():
+            for note_element in measure_element.iter("note"):
+                if note_element.find("notations/arpeggiate") is not None:
+                    marked.append((note_element.findtext("pitch/step"), note_element.findtext("voice")))
+        self.assertEqual(marked, [("D", "1")])
+
+
 if __name__ == "__main__":
     unittest.main()
-
