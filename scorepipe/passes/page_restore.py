@@ -10,6 +10,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 from ..core.document import Document
+from ..core.pairing import Endpoint, pair_endpoints
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
 
 MAX_SLUR_BARS = 6
@@ -119,46 +120,56 @@ class RestorePageTies(PageRestoreMixin):
             return PassResult()
         index = _merged_index(doc)
         offsets = _offsets(model)
-        restored = 0
+        page_chords: dict[tuple, set] = {}
+        endpoints: list[Endpoint] = []
         for page_index, path in enumerate(model.pages):
             root = ElementTree.parse(str(path)).getroot()
-            page_chords: dict[tuple, set] = {}
-            for local_measure, staff, _voice, onset, _duration, pitch, _element in _page_events(root):
+            for measure_index, staff, _voice, onset, _duration, pitch, _element in _page_events(root):
                 if pitch is not None:
-                    page_chords.setdefault((local_measure, staff, round(onset, 4)), set()).add(pitch)
-            open_ties: dict[tuple, list] = {}
-            for measure_index, staff, voice, onset, _duration, pitch, _element in _page_events(root):
-                for tie in _note_ties(_element):
-                    if pitch is None:
-                        continue
-                    key = (staff, voice, pitch)
                     global_measure = offsets[page_index] + measure_index
-                    if tie == "start":
-                        open_ties.setdefault(key, []).append((global_measure, measure_index, onset))
-                    elif open_ties.get(key):
-                        start_measure, start_local, start_onset = open_ties[key].pop(0)
-                        start_note = index.get((start_measure, staff, start_onset, pitch))
-                        stop_note = index.get((global_measure, staff, onset, pitch))
-                        if start_note is None or stop_note is None:
-                            continue
-                        # a tie between two printed chords applies to every pitch they share
-                        start_set = page_chords.get((start_local, staff, round(start_onset, 4)))
-                        stop_set = page_chords.get((measure_index, staff, round(onset, 4)))
-                        common = {pitch}
-                        if start_set and stop_set:
-                            common = start_set & stop_set or {pitch}
-                        applied = 0
-                        for member in sorted(common):
-                            member_start = index.get((start_measure, staff, start_onset, member))
-                            member_stop = index.get((global_measure, staff, onset, member))
-                            if member_start is None or member_stop is None:
-                                continue
-                            added_start = _add_tie(member_start, "start")
-                            added_stop = _add_tie(member_stop, "stop")
-                            if added_start or added_stop:
-                                applied += 1
-                        if applied:
-                            restored += applied
+                    page_chords.setdefault((global_measure, staff, round(onset, 4)), set()).add(pitch)
+            for measure_index, staff, voice, onset, _duration, pitch, element in _page_events(root):
+                if pitch is None:
+                    continue
+                global_measure = offsets[page_index] + measure_index
+                for tie in _note_ties(element):
+                    if tie not in ("start", "stop"):
+                        continue
+                    endpoints.append(
+                        Endpoint(
+                            key=(staff, voice, pitch),
+                            position=(global_measure, round(onset, 4)),
+                            kind=tie,
+                            payload=(staff, global_measure, onset, pitch),
+                        )
+                    )
+        pairing = pair_endpoints(endpoints)
+        restored = 0
+        for start_endpoint, stop_endpoint in pairing.pairs:
+            staff, start_measure, start_onset, pitch = start_endpoint.payload
+            _staff, stop_measure, stop_onset, stop_pitch = stop_endpoint.payload
+            start_note = index.get((start_measure, staff, start_onset, pitch))
+            stop_note = index.get((stop_measure, staff, stop_onset, stop_pitch))
+            if start_note is None or stop_note is None:
+                continue
+            # a tie between two printed chords applies to every pitch they share
+            start_set = page_chords.get((start_measure, staff, round(start_onset, 4)))
+            stop_set = page_chords.get((stop_measure, staff, round(stop_onset, 4)))
+            common = {pitch}
+            if start_set and stop_set:
+                common = start_set & stop_set or {pitch}
+            applied = 0
+            for member in sorted(common):
+                member_start = index.get((start_measure, staff, start_onset, member))
+                member_stop = index.get((stop_measure, staff, stop_onset, member))
+                if member_start is None or member_stop is None:
+                    continue
+                added_start = _add_tie(member_start, "start")
+                added_stop = _add_tie(member_stop, "stop")
+                if added_start or added_stop:
+                    applied += 1
+            if applied:
+                restored += applied
         return PassResult(changed=restored)
 
 
@@ -178,8 +189,7 @@ class RestorePageSlurs(PageRestoreMixin):
             return PassResult()
         index = _merged_index(doc)
         offsets = _offsets(model)
-        pairs: list[dict] = []
-        open_slurs: dict[tuple, list] = {}
+        endpoints: list[Endpoint] = []
         for page_index, path in enumerate(model.pages):
             root = ElementTree.parse(str(path)).getroot()
             for measure_index, staff, _voice, onset, _duration, pitch, element in _page_events(root):
@@ -187,32 +197,35 @@ class RestorePageSlurs(PageRestoreMixin):
                 for slur in element.findall("notations/slur"):
                     number = slur.get("number") or "1"
                     kind = slur.get("type")
-                    pair_key = (staff, number)
-                    if kind == "start":
-                        open_slurs.setdefault(pair_key, []).append((global_measure, onset, pitch))
-                    elif kind == "stop":
-                        stack = open_slurs.get(pair_key) or []
-                        if not stack:
-                            continue
-                        start = stack.pop()
-                        if start[2] is None or pitch is None:
-                            continue
-                        if (global_measure, onset) <= (start[0], start[1]):
-                            continue  # a slur cannot stop before it starts
-                        if global_measure - start[0] > MAX_SLUR_BARS:
-                            continue
-                        start_note = index.get((start[0], staff, start[1], start[2]))
-                        stop_note = index.get((global_measure, staff, onset, pitch))
-                        if start_note is None or stop_note is None:
-                            continue
-                        pairs.append(
-                            {
-                                "start": start_note,
-                                "stop": stop_note,
-                                "start_key": (start[0], round(start[1], 4)),
-                                "stop_measure": global_measure,
-                            }
+                    if kind not in ("start", "stop"):
+                        continue
+                    endpoints.append(
+                        Endpoint(
+                            key=(staff, number),
+                            position=(global_measure, round(onset, 4)),
+                            kind=kind,
+                            payload=(staff, global_measure, onset, pitch),
                         )
+                    )
+        pairing = pair_endpoints(endpoints, max_span=MAX_SLUR_BARS)
+        pairs: list[dict] = []
+        for start, stop in pairing.pairs:
+            staff, start_measure, start_onset, start_pitch = start.payload
+            _staff, stop_measure, stop_onset, stop_pitch = stop.payload
+            if start_pitch is None or stop_pitch is None:
+                continue
+            start_note = index.get((start_measure, staff, start_onset, start_pitch))
+            stop_note = index.get((stop_measure, staff, stop_onset, stop_pitch))
+            if start_note is None or stop_note is None:
+                continue
+            pairs.append(
+                {
+                    "start": start_note,
+                    "stop": stop_note,
+                    "start_key": (start_measure, round(start_onset, 4)),
+                    "stop_measure": stop_measure,
+                }
+            )
         # MuseScore resolves slur numbers document-wide, not per staff. Page numbers are only
         # unique within a staff, so they must be reassigned globally; otherwise the treble slur 1
         # pairs with the bass stop 1 and jumps staves (laputa m29-m30).

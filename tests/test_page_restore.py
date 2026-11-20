@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import unittest
 from pathlib import Path
@@ -86,5 +86,44 @@ class PageRestoreTest(unittest.TestCase):
         self.assertNotEqual(numbers["1"], numbers["2"])
 
 
+    def test_reused_slur_number_does_not_create_a_long_arc(self):
+        work = Path(__file__).parent / ".runs" / "slur_collision"
+        work.mkdir(parents=True, exist_ok=True)
+        measure = (
+            '<measure number="{number}"><attributes><divisions>4</divisions>'
+            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>{body}</measure>"
+        )
+        note = (
+            '<note><pitch><step>{step}</step><octave>5</octave></pitch>'
+            '<duration>8</duration><voice>1</voice>{slur}</note>'
+        )
+        start = '<notations><slur type="start" number="1"/></notations>'
+        stop = '<notations><slur type="stop" number="1"/></notations>'
+        page = work / "page1.musicxml"
+        page.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+            "<part-list><score-part id=\"P1\"><part-name>t</part-name></score-part></part-list>"
+            '<part id="P1">'
+            + measure.format(number=1, body=note.format(step="C", slur=start))
+            + measure.format(number=2, body=note.format(step="D", slur=start) + note.format(step="E", slur=stop))
+            + measure.format(number=3, body=note.format(step="F", slur=""))
+            + measure.format(number=4, body=note.format(step="G", slur=stop) + note.format(step="A", slur=start))
+            + measure.format(number=5, body=note.format(step="B", slur=stop))
+            + "</part></score-partwise>",
+            encoding="utf-8",
+        )
+        merged = merge_pages([page])
+        ctx = Context(pages=merged)
+        run_pipeline(merged.document, ctx, structural=STRUCTURAL_PASSES, verifiers=[])
+        starts = []
+        for number, measure_element in merged.document.iter_measures():
+            for event in merged.document.events(measure_element):
+                for slur in event.element.findall("notations/slur"):
+                    if slur.get("type") == "start":
+                        starts.append((number, event.element.findtext("pitch/step")))
+        self.assertEqual(starts, [(4, "A")])
+
+
 if __name__ == "__main__":
     unittest.main()
+

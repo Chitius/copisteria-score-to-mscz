@@ -84,9 +84,9 @@ def export_and_display(
 
 def extract_ties(document: Document) -> list[dict]:
     """Tie pairs as (measure, staff, pitch, onset); the importer can lose these on chords."""
-    stacks: dict[tuple, list] = {}
-    pairs: list[dict] = []
-    divisions = document.divisions()
+    from .core.pairing import Endpoint, pair_endpoints
+
+    endpoints: list[Endpoint] = []
     for number, measure in document.iter_measures():
         for event in document.events(measure):
             if event.rest:
@@ -96,21 +96,30 @@ def extract_ties(document: Document) -> list[dict]:
                 continue
             for tie in event.element.findall("tie"):
                 kind = tie.get("type")
-                key = (event.staff, event.voice, pitch)
-                if kind == "start":
-                    stacks.setdefault(key, []).append((number, event.onset))
-                elif kind == "stop" and stacks.get(key):
-                    start = stacks[key].pop(0)
-                    pairs.append(
-                        {
-                            "start_measure": start[0],
-                            "start_onset": start[1],
-                            "stop_measure": number,
-                            "stop_onset": event.onset,
-                            "staff": event.staff,
-                            "pitch": pitch,
-                        }
+                if kind not in ("start", "stop"):
+                    continue
+                endpoints.append(
+                    Endpoint(
+                        key=(event.staff, event.voice, pitch),
+                        position=(number, round(event.onset, 4)),
+                        kind=kind,
+                        payload=(number, event.onset, pitch, event.staff),
                     )
+                )
+    pairs: list[dict] = []
+    for start, stop in pair_endpoints(endpoints).pairs:
+        start_measure, start_onset, _start_pitch, staff = start.payload
+        stop_measure, stop_onset, pitch, _staff = stop.payload
+        pairs.append(
+            {
+                "start_measure": start_measure,
+                "start_onset": start_onset,
+                "stop_measure": stop_measure,
+                "stop_onset": stop_onset,
+                "staff": staff,
+                "pitch": pitch,
+            }
+        )
     return pairs
 
 

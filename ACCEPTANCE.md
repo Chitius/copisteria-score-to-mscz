@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 125 tests
+Ran 130 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -28,6 +28,7 @@ Coverage:
 | aligned voice merging | `test_merge.py` |
 | page merging and page-directory CLI | `test_loader.py` |
 | page-level tie/slur/pedal restoration | `test_page_restore.py` |
+| endpoint pairing with reused slur numbers | `test_pairing.py`, `test_page_restore.py` |
 | page-level arpeggio/articulation/wedge restoration | `test_page_notation.py` |
 | external OMR command front-end | `test_omr.py` |
 | PDF text layer, measure-box assignment | `test_pdf_producer.py` |
@@ -102,6 +103,11 @@ scorepipe laputa.musicxml --check --report laputa.json
   lasts until the next onset, fill conflicts still skipped) and now preserves the other staff's
   `<forward>` gaps, so laputa m31's sustained chord survives at beat 0. Remaining differences are
   concentrated in m30–m32 and isolated single symbols in m43/m45.
+- **Reused slur numbers** (laputa m7–m10): the page writes four starts numbered 1–4 at m7 and reuses
+  number 1 at m8/m10. A stack paired m7 G4 with m10 D5, producing a three-bar arc. The shared
+  endpoint pairer (`scorepipe/core/pairing.py`) now keeps one open start per key, marks a colliding
+  key ambiguous and drops that cluster; the mscz keeps only `m7→m8` and `m10→m12` slurs, and a
+  regression page asserts the same shape (`test_pairing.py`, `test_page_restore.py`).
 - **MuseScore's incomplete-measure warnings** (mscx `measure_lengths` verifier): the laputa mscz
   now reports **0** flagged measures. It started at 12: eleven were text-only/empty voice slots
   (moved into the chord voice or removed) and the last was m33's overlapping rests, which the
