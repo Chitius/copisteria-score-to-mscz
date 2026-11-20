@@ -58,6 +58,10 @@ Implemented passes:
 | `unhide_rests` | structural | `rest-visibility` | hidden rests |
 | `sanitize_slurs` | structural | `slur-endpoints` | unmatched / >N-bar endpoints |
 | `fill_short_measures` | structural | `rest-padding` | voices ending before the barline |
+| `drop_text_voice_rests` | display | `text-voice-rests` | rests inside text-only voices |
+| `unhide_real_rests` | display | `rest-visibility` | hidden non-measure rests |
+| `drop_padding_voices` | display | `padding-voices` | rest-only voices next to a chord voice |
+| `canonical_voice_order` | display | `voice-order` | voice slots out of canonical order |
 
 Run:
 
