@@ -287,6 +287,206 @@ class RestorePagePedals(PageRestoreMixin):
         return PassResult(changed=changed)
 
 
+class RestorePageArpeggios(PageRestoreMixin):
+    spec = PassSpec(
+        name="restore_page_arpeggios",
+        phase=Phase.STRUCTURAL,
+        kind=Kind.MECHANICAL,
+        owns=("page-arpeggios",),
+        description="re-attach arpeggiate / non-arpeggiate marks written on the pages",
+        measure="page arpeggio marks missing from the merged score",
+    )
+
+    def run(self, doc: Document, ctx: Context) -> PassResult:
+        model = self._model(ctx)
+        if model is None:
+            return PassResult()
+        index = _merged_index(doc)
+        onset_index = _merged_onset_index(doc)
+        offsets = _offsets(model)
+        restored = 0
+        for page_index, path in enumerate(model.pages):
+            root = ElementTree.parse(str(path)).getroot()
+            for measure_index, staff, _voice, onset, _duration, pitch, element in _page_events(root):
+                global_measure = offsets[page_index] + measure_index
+                marks = element.findall("notations/arpeggiate") + element.findall("notations/non-arpeggiate")
+                for mark in marks:
+                    note = index.get((global_measure, staff, onset, pitch)) if pitch else None
+                    if note is None:
+                        note = onset_index.get((global_measure, staff, onset))
+                    if note is None:
+                        continue
+                    if _add_notation(note, mark):
+                        restored += 1
+        return PassResult(changed=restored)
+
+
+class RestorePageArticulations(PageRestoreMixin):
+    spec = PassSpec(
+        name="restore_page_articulations",
+        phase=Phase.STRUCTURAL,
+        kind=Kind.MECHANICAL,
+        owns=("page-articulations",),
+        description="re-attach staccato/accent/tenuto and other page articulations",
+        measure="page articulations missing from the merged score",
+    )
+
+    def run(self, doc: Document, ctx: Context) -> PassResult:
+        model = self._model(ctx)
+        if model is None:
+            return PassResult()
+        index = _merged_index(doc)
+        onset_index = _merged_onset_index(doc)
+        offsets = _offsets(model)
+        restored = 0
+        for page_index, path in enumerate(model.pages):
+            root = ElementTree.parse(str(path)).getroot()
+            for measure_index, staff, _voice, onset, _duration, pitch, element in _page_events(root):
+                global_measure = offsets[page_index] + measure_index
+                for mark in element.findall("notations/articulations/*"):
+                    note = index.get((global_measure, staff, onset, pitch)) if pitch else None
+                    if note is None:
+                        note = onset_index.get((global_measure, staff, onset))
+                    if note is None:
+                        continue
+                    if _add_articulation(note, mark):
+                        restored += 1
+        return PassResult(changed=restored)
+
+
+class RestorePageWedges(PageRestoreMixin):
+    spec = PassSpec(
+        name="restore_page_wedges",
+        phase=Phase.STRUCTURAL,
+        kind=Kind.MECHANICAL,
+        owns=("page-wedges",),
+        description="replace wedge (crescendo/diminuendo) directions with the page-accurate ones",
+        measure="wedge directions that differ from the page",
+    )
+
+    def run(self, doc: Document, ctx: Context) -> PassResult:
+        model = self._model(ctx)
+        if model is None:
+            return PassResult()
+        offsets = _offsets(model)
+        measures = doc.measures()
+        desired: list[dict] = []
+        for page_index, path in enumerate(model.pages):
+            root = ElementTree.parse(str(path)).getroot()
+            divisions = float(root.findtext(".//divisions") or 10080)
+            part = root.find("part")
+            if part is None:
+                continue
+            for measure_index, measure in enumerate(part.findall("measure"), start=1):
+                cursor = 0
+                for item in measure:
+                    if item.tag in ("backup", "forward"):
+                        text = item.findtext("duration")
+                        if text is None:
+                            continue
+                        value = int(text)
+                        cursor += -value if item.tag == "backup" else value
+                        continue
+                    if item.tag != "direction":
+                        continue
+                    wedge = item.find("direction-type/wedge")
+                    if wedge is None:
+                        continue
+                    offset = item.findtext("offset")
+                    onset = cursor + (int(offset) if offset else 0)
+                    desired.append(
+                        {
+                            "measure": offsets[page_index] + measure_index,
+                            "staff": item.findtext("staff") or "1",
+                            "onset": onset / divisions,
+                            "type": wedge.get("type"),
+                            "number": wedge.get("number") or "1",
+                            "placement": item.get("placement") or "below",
+                        }
+                    )
+        changed = 0
+        by_measure: dict[int, list[dict]] = {}
+        for entry in desired:
+            by_measure.setdefault(entry["measure"], []).append(entry)
+        for measure_number, entries in by_measure.items():
+            if not 0 < measure_number <= len(measures):
+                continue
+            measure = measures[measure_number - 1]
+            wanted = sorted(
+                (entry["type"], entry["staff"], round(entry["onset"], 4), entry["number"])
+                for entry in entries
+            )
+            existing = sorted(
+                (
+                    direction.find("direction-type/wedge").get("type"),
+                    direction.findtext("staff") or "1",
+                    round(float(direction.findtext("offset") or 0) / doc.divisions(), 4),
+                    direction.find("direction-type/wedge").get("number") or "1",
+                )
+                for direction in measure.findall("direction")
+                if direction.find("direction-type/wedge") is not None
+            )
+            if wanted == existing:
+                continue
+            for direction in list(measure.findall("direction")):
+                if direction.find("direction-type/wedge") is not None:
+                    measure.remove(direction)
+                    changed += 1
+            for entry in entries:
+                direction = ElementTree.Element("direction", {"placement": entry["placement"]})
+                direction_type = ElementTree.SubElement(direction, "direction-type")
+                ElementTree.SubElement(
+                    direction_type, "wedge", {"type": entry["type"], "number": entry["number"]}
+                )
+                if entry["onset"]:
+                    ElementTree.SubElement(direction, "offset").text = str(
+                        int(round(entry["onset"] * doc.divisions()))
+                    )
+                ElementTree.SubElement(direction, "staff").text = entry["staff"]
+                index = next(
+                    (position for position, child in enumerate(measure) if child.tag == "note"),
+                    len(measure),
+                )
+                measure.insert(index, direction)
+                changed += 1
+        return PassResult(changed=changed)
+
+
+def _merged_onset_index(doc: Document) -> dict[tuple, ElementTree.Element]:
+    index = {}
+    for number, measure in doc.iter_measures():
+        for event in doc.events(measure):
+            if event.rest:
+                continue
+            index.setdefault((number, event.staff, round(event.onset, 4)), event.element)
+    return index
+
+
+def _add_notation(note, mark) -> bool:
+    notations = note.find("notations")
+    if notations is None:
+        notations = ElementTree.SubElement(note, "notations")
+    for existing in notations:
+        if existing.tag == mark.tag and dict(existing.attrib) == dict(mark.attrib):
+            return False
+    notations.append(ElementTree.fromstring(ElementTree.tostring(mark)))
+    return True
+
+
+def _add_articulation(note, mark) -> bool:
+    notations = note.find("notations")
+    if notations is None:
+        notations = ElementTree.SubElement(note, "notations")
+    articulations = notations.find("articulations")
+    if articulations is None:
+        articulations = ElementTree.SubElement(notations, "articulations")
+    for existing in articulations:
+        if existing.tag == mark.tag and dict(existing.attrib) == dict(mark.attrib):
+            return False
+    articulations.append(ElementTree.fromstring(ElementTree.tostring(mark)))
+    return True
+
+
 def _note_ties(note) -> list[str]:
     kinds = [tie.get("type") for tie in note.findall("tie") if tie.get("type")]
     if kinds:
@@ -322,3 +522,6 @@ def _add_slur(note, kind: str, number: str) -> bool:
 RESTORE_PAGE_TIES = RestorePageTies()
 RESTORE_PAGE_SLURS = RestorePageSlurs()
 RESTORE_PAGE_PEDALS = RestorePagePedals()
+RESTORE_PAGE_ARPEGGIOS = RestorePageArpeggios()
+RESTORE_PAGE_ARTICULATIONS = RestorePageArticulations()
+RESTORE_PAGE_WEDGES = RestorePageWedges()

@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 72 tests
+Ran 75 tests
 OK
 ```
 
@@ -25,6 +25,7 @@ Coverage:
 | aligned voice merging | `test_merge.py` |
 | page merging and page-directory CLI | `test_loader.py` |
 | page-level tie/slur/pedal restoration | `test_page_restore.py` |
+| page-level arpeggio/articulation/wedge restoration | `test_page_notation.py` |
 | external OMR command front-end | `test_omr.py` |
 | PDF text layer, measure-box assignment | `test_pdf_producer.py` |
 | MusicXML -> mscz -> display combined driver | `test_mscz_export.py` |
@@ -43,7 +44,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-24 entries: 17 structural (16 mechanical + 1 analysis), 1 inject, 6 display. Every mechanical pass
+27 entries: 20 structural (19 mechanical + 1 analysis), 1 inject, 6 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -61,9 +62,9 @@ scorepipe laputa.musicxml --check --report laputa.json
   crossing the barline were split with a tie.
 - `laputa` **page directory** (copisteria output: 3 files, 26 / 23 / 14 measures): merged to one
   63-measure score by `merge_pages`, then verifier clean. On this run `restore_page_pedals`
-  reported 36 adjustments (replacing page-less pedal directions with page-accurate ones) and the
-  structural phase converged in 3 rounds; ties and slurs needed no restoration because the merged
-  file already carried them.
+  reported 36 adjustments and `restore_page_wedges` 20; the structural phase converged in 3 rounds.
+  Ties, slurs, arpeggios and articulations needed no restoration because the merged file already
+  carried them.
 - `laputa.mscz`: display pipeline runs to a fixed point with **0 changes** and a clean mscx
   verifier — the display invariants hold on a real MuseScore file.
 - **Whole chain**: `scorepipe laputa.musicxml --mscz-out laputa_pipeline.mscz` produced a 68 KB

@@ -74,6 +74,9 @@ Implemented passes:
 | `restore_page_ties` | structural | `page-ties` | page ties missing from the merged score |
 | `restore_page_slurs` | structural | `page-slurs` | page slurs missing from the merged score |
 | `restore_page_pedals` | structural | `page-pedals` | pedal directions that differ from the page |
+| `restore_page_arpeggios` | structural | `page-arpeggios` | page arpeggio marks missing from the merged score |
+| `restore_page_articulations` | structural | `page-articulations` | page articulations missing from the merged score |
+| `restore_page_wedges` | structural | `page-wedges` | wedge directions that differ from the page |
 | `upgrade_tempo_texts` | display | `tempo-objects` | tempo words still plain staff text |
 | `upgrade_gradual_texts` | display | `gradual-spanners` | rit./rall./accel. words needing a paired spanner |
 
@@ -113,8 +116,10 @@ score; page-join duplicates (time signatures, clefs, keys) are cleaned by the no
 
 When the input is a page directory, the loader model is put on `Context.pages`, which enables the
 page-restoration passes: `restore_page_ties`, `restore_page_slurs` (paired per staff and number,
-ignoring voice, with a 6-bar span guard) and `restore_page_pedals` (page-accurate pedal onsets,
-existing pedal directions replaced only when they differ).
+ignoring voice, with a 6-bar span guard), `restore_page_pedals` and `restore_page_wedges`
+(page-accurate onsets, existing directions replaced only when they differ),
+`restore_page_arpeggios` and `restore_page_articulations` (marks attached to the merged note by
+position).
 
 ## OMR front-end
 

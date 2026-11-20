@@ -10,12 +10,18 @@ from .mscx_display import (
     UnhideRealRests,
 )
 from .page_restore import (
+    RESTORE_PAGE_ARPEGGIOS,
+    RESTORE_PAGE_ARTICULATIONS,
     RESTORE_PAGE_PEDALS,
     RESTORE_PAGE_SLURS,
     RESTORE_PAGE_TIES,
+    RESTORE_PAGE_WEDGES,
+    RestorePageArpeggios,
+    RestorePageArticulations,
     RestorePagePedals,
     RestorePageSlurs,
     RestorePageTies,
+    RestorePageWedges,
 )
 from .xml_basic import (
     STRUCTURAL_PASSES,
@@ -51,6 +57,9 @@ STRUCTURAL_PASSES = (
         RESTORE_PAGE_TIES,
         RESTORE_PAGE_SLURS,
         RESTORE_PAGE_PEDALS,
+        RESTORE_PAGE_ARPEGGIOS,
+        RESTORE_PAGE_ARTICULATIONS,
+        RESTORE_PAGE_WEDGES,
     ]
     + ANALYSIS_PASSES
 )
@@ -75,6 +84,9 @@ __all__ = [
     "RestorePageTies",
     "RestorePageSlurs",
     "RestorePagePedals",
+    "RestorePageArpeggios",
+    "RestorePageArticulations",
+    "RestorePageWedges",
     "DropDuplicateNotes",
     "UpgradeTempoTexts",
     "UpgradeGradualTexts",
