@@ -1,1 +1,1 @@
-"""Core IR, pass contract, runner and verifiers."""
+"""RunReport and the phase/trace manager."""

@@ -31,6 +31,7 @@ class RunReport:
     phases: list[PhaseReport] = field(default_factory=list)
     trace: list[TraceEntry] = field(default_factory=list)
     verifier: list = field(default_factory=list)
+    analysis: list[dict] = field(default_factory=list)
 
     @property
     def changes(self) -> int:
@@ -44,6 +45,7 @@ def run_phase(
     phase: Phase,
     max_rounds: int = 8,
     trace: list[TraceEntry] | None = None,
+    analysis: list[dict] | None = None,
 ) -> PhaseReport:
     """Run a pass set to a fixed point: a full round with no change and no hash move."""
     report = PhaseReport(phase=phase.value)
@@ -77,6 +79,21 @@ def run_phase(
         if round_changes == 0 and doc.state_hash() == before:
             report.stable = True
             break
+    # analysis passes run once, after the mechanical loop, and are never allowed to mutate
+    for one_pass in passes:
+        if one_pass.spec.kind is not Kind.ANALYSIS or one_pass.spec.phase != phase:
+            continue
+        before = doc.state_hash()
+        result = one_pass.run(doc, ctx)
+        entry = {
+            "phase": phase.value,
+            "pass": one_pass.spec.name,
+            "notes": result.notes,
+        }
+        if doc.state_hash() != before:
+            entry["mutated"] = True
+        if analysis is not None:
+            analysis.append(entry)
     return report
 
 
@@ -89,7 +106,9 @@ def run_display(
 ) -> RunReport:
     """Display IR: one fixed-point loop, then read-only checks."""
     report = RunReport()
-    report.phases.append(run_phase(doc, passes, ctx, Phase.DISPLAY, max_rounds, report.trace))
+    report.phases.append(
+        run_phase(doc, passes, ctx, Phase.DISPLAY, max_rounds, report.trace, report.analysis)
+    )
     if verifiers:
         report.verifier = [violation for verifier in verifiers for violation in verifier(doc, ctx)]
     return report
@@ -115,8 +134,12 @@ def run_pipeline(
     display = display or []
     repairable = set(ctx.options.get("repairable") or [])
     for outer in range(1, max_outer_rounds + 1):
-        report.phases.append(run_phase(doc, structural, ctx, Phase.STRUCTURAL, max_rounds, report.trace))
-        report.phases.append(run_phase(doc, inject, ctx, Phase.INJECT, max_rounds, report.trace))
+        report.phases.append(
+            run_phase(doc, structural, ctx, Phase.STRUCTURAL, max_rounds, report.trace, report.analysis)
+        )
+        report.phases.append(
+            run_phase(doc, inject, ctx, Phase.INJECT, max_rounds, report.trace, report.analysis)
+        )
         if not verifiers:
             report.verifier = []
             break
@@ -127,5 +150,7 @@ def run_pipeline(
         if outer == max_outer_rounds:
             break
     if display:
-        report.phases.append(run_phase(doc, display, ctx, Phase.DISPLAY, max_rounds, report.trace))
+        report.phases.append(
+            run_phase(doc, display, ctx, Phase.DISPLAY, max_rounds, report.trace, report.analysis)
+        )
     return report

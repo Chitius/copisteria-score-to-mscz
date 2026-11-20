@@ -5,6 +5,7 @@ import zipfile
 from pathlib import Path
 
 from scorepipe.core.mscz import MsczArchive
+from scorepipe.core.mscx_invariants import MSCX_VERIFIERS
 from scorepipe.core.pass_base import Context, Phase
 from scorepipe.core.pipeline import run_phase
 from scorepipe.passes import DISPLAY_PASSES
@@ -58,6 +59,12 @@ class MsczArchiveTest(unittest.TestCase):
 
         reopened = MsczArchive.open(destination)
         self.assertEqual(len(reopened.document.staves()[0].findall("Measure")[0].findall("voice")), 1)
+
+        # re-running the display passes on the reopened archive must be a no-op
+        again = run_phase(reopened.document, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        self.assertEqual(again.changes, 0)
+        for verifier in MSCX_VERIFIERS:
+            self.assertEqual(verifier(reopened.document, Context()), [], verifier.__name__)
 
 
 if __name__ == "__main__":

@@ -63,6 +63,7 @@ Implemented passes:
 | `unhide_real_rests` | display | `rest-visibility` | hidden non-measure rests |
 | `drop_padding_voices` | display | `padding-voices` | rest-only voices next to a chord voice |
 | `canonical_voice_order` | display | `voice-order` | voice slots out of canonical order |
+| `measure_length_report` | structural | – | analysis only (notes, never mutates) |
 
 Run:
 
@@ -100,6 +101,11 @@ directly; they are data.
 ```
 python -m scorepipe.cli score.musicxml --facts marks.json --trace -o out.musicxml
 python -m scorepipe.cli score.mscz --trace -o out.mscz     # display pipeline
+python -m scorepipe.cli score.musicxml --report run.json   # machine-readable trace
 ```
+
+Analysis passes (`kind=ANALYSIS`) run once after the mechanical loop; their notes land in the
+report. If an analysis pass mutates the score, the report marks it `mutated` — a programming
+error, not a feature.
 
 
