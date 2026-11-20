@@ -81,8 +81,12 @@ same problems the old ad-hoc pipeline found, with stable codes.
 
 ## Known gaps (documented, not hidden)
 
-- Voice merging beyond exact alignment, and display-layer pedal-line deduplication, are not
-  ported yet.
+- Voice merging beyond exact alignment is not ported; the pass refuses anything that needs a
+  retiming decision.
+- Credits are injected as MusicXML `<credit>`; the old skill's `.mscz` title-frame restyling
+  (inside MuseScore's own Text objects) is not ported.
+- The old review-sheet / diagnostics HTML generator is not ported; the JSON run report is the
+  machine-readable equivalent.
 - The OMR front-end runs an external command; a ready-made copisteria command line and its
   environment setup are not bundled in this project.
 - The display phase only runs through the `--mscz-out` chain (or on an existing `.mscz`); it is not
