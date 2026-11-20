@@ -14,8 +14,9 @@ from .core.mscx_invariants import MSCX_VERIFIERS
 from .core.pass_base import Context, Phase
 from .core.pipeline import RunReport, run_display, run_pipeline
 from .core.registry import validate_all
-from .facts import load_facts, validate_facts
+from .facts import validate_facts
 from .passes import DISPLAY_PASSES, INJECT_PASSES, STRUCTURAL_PASSES
+from .producers import resolve as resolve_producer
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -53,7 +54,10 @@ def main(argv: list[str] | None = None) -> int:
     if path.suffix.lower() == ".mscz":
         return _run_mscz(path, args)
 
-    facts = load_facts(args.facts)
+    facts = {}
+    producer = resolve_producer(args.facts)
+    if producer is not None:
+        facts = {"marks": producer.produce(path).marks}
     for problem in validate_facts(facts):
         print(f"facts: {problem}")
     doc = Document.load(path)

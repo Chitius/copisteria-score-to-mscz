@@ -101,3 +101,31 @@ violation as:
 3. Port display passes onto `.mscx`, with a re-save idempotence test.
 4. Port fact producers (text layer, agent JSON).
 5. Only then port the OMR conversion front-end (copisteria invocation) as the loader.
+
+## Pass lifecycle and failure policy
+
+Before a run the registry is validated: duplicate names, a pass registered under the wrong phase,
+a mechanical pass without a declared monotone measure, or two passes claiming one property abort
+the run with exit code 2. A broken registry is a programming error, not a score problem.
+
+During a run:
+
+| event | behaviour |
+|---|---|
+| mechanical pass throws | the run aborts; the trace shows the last pass that ran |
+| analysis pass mutates | the report marks it `mutated`; this is a bug |
+| fixpoint not reached in `max_rounds` | the phase is reported `stable=false`; the verifier still runs |
+| verifier violation with a repairable code | one more outer round, bounded by `max_outer_rounds` |
+| verifier violation without a repair | reported; the CLI exits 1 |
+| display pass cannot parse the mscx | the archive is left untouched and the error is reported |
+
+Facts producers are outside this lifecycle: they read the outside world and return data. A
+producing step may be an OCR pass, a PDF text layer, or the agent; none of them can mutate the
+score, so none of them can cause an oscillation.
+
+## Producers
+
+`scorepipe.producers` defines the `Producer` protocol and three implementations: `JsonProducer`
+(agent or text layer wrote JSON), `TextLayerProducer` (tab-separated sidecar a text-layer step can
+emit) and `CompositeProducer`. `resolve()` picks one by file suffix, so the CLI never needs to know
+which shape the facts came in.

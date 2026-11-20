@@ -97,10 +97,12 @@ voices and voice order.
 
 ## Facts
 
-`scorepipe.facts.load_facts` reads a JSON file produced by the text layer or by the agent. The
-`apply_marks_facts` inject pass turns marks into words / rehearsal / metronome directions and is
-idempotent (a text already present in the measure is skipped). Facts never edit the score
-directly; they are data.
+`scorepipe.facts.load_facts` reads a JSON file produced by the text layer or by the agent.
+`scorepipe.producers` adds a `Producer` protocol: `JsonProducer`, `TextLayerProducer` (tab-separated
+`measure<TAB>beat<TAB>placement<TAB>text` sidecar) and `CompositeProducer`; the CLI picks one by
+file suffix. The `apply_marks_facts` inject pass turns marks into words / rehearsal / metronome
+directions and is idempotent (a text already present in the measure is skipped). Facts never edit
+the score directly; they are data.
 
 ```
 python -m scorepipe.cli score.musicxml --facts marks.json --trace -o out.musicxml
