@@ -15,6 +15,7 @@ from .xml_basic import (
     DropRedundantTimeSignatures,
     UnhideRests,
 )
+from .xml_clefs import DROP_REDUNDANT_CLEFS, DROP_REDUNDANT_KEYS, DropRedundantClefs, DropRedundantKeySignatures
 from .xml_duplicates import DROP_DUPLICATE_NOTES, DropDuplicateNotes
 from .xml_facts import ApplyMarksFacts, INJECT_PASSES
 from .xml_measures import FILL_PASS, FillShortMeasures
@@ -25,7 +26,15 @@ from .xml_voices import NORMALIZE_VOICES_PASS, NormalizeVoiceNumbers
 # order matters only inside a phase; keep the cheap, local rewrites first
 STRUCTURAL_PASSES = (
     STRUCTURAL_PASSES
-    + [DROP_DUPLICATE_NOTES, DROP_DUPLICATE_TAIL, NORMALIZE_VOICES_PASS, SLUR_PASS, FILL_PASS]
+    + [
+        DROP_REDUNDANT_CLEFS,
+        DROP_REDUNDANT_KEYS,
+        DROP_DUPLICATE_NOTES,
+        DROP_DUPLICATE_TAIL,
+        NORMALIZE_VOICES_PASS,
+        SLUR_PASS,
+        FILL_PASS,
+    ]
     + ANALYSIS_PASSES
 )
 DISPLAY_PASSES = DISPLAY_PASSES + DISPLAY_FACT_PASSES

@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 45 tests
+Ran 51 tests
 OK
 ```
 
@@ -18,6 +18,7 @@ Coverage:
 | slur sanitation, short-measure padding | `test_passes.py` |
 | voice numbering | `test_voices.py` |
 | duplicate notes | `test_duplicates.py` |
+| redundant clefs and key signatures | `test_clefs.py` |
 | trailing duplicate measure | `test_tail.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
@@ -34,7 +35,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-16 entries: 9 structural (8 mechanical + 1 analysis), 1 inject, 6 display. Every mechanical pass
+18 entries: 11 structural (10 mechanical + 1 analysis), 1 inject, 6 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 

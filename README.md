@@ -55,6 +55,8 @@ Implemented passes:
 |---|---|---|---|
 | `dedupe_ties` | structural | `tie-elements` | duplicate tie elements |
 | `drop_redundant_time_signatures` | structural | `time-signatures` | repeated time signatures |
+| `drop_redundant_clefs` | structural | `clefs` | repeated clefs per staff |
+| `drop_redundant_key_signatures` | structural | `key-signatures` | repeated key signatures |
 | `unhide_rests` | structural | `rest-visibility` | hidden rests |
 | `sanitize_slurs` | structural | `slur-endpoints` | unmatched / >N-bar endpoints |
 | `normalize_voice_numbers` | structural | `voice-numbers` | voice labels not 1..n by density |
