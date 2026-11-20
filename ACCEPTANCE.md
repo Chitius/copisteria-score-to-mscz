@@ -34,7 +34,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-17 entries: 9 structural (8 mechanical + 1 analysis), 1 inject, 6 display. Every mechanical pass
+16 entries: 9 structural (8 mechanical + 1 analysis), 1 inject, 6 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
