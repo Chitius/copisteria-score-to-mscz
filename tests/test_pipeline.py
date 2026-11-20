@@ -55,8 +55,10 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(any(v.code == "measure-length" for v in violations))
 
     def test_each_owned_property_has_one_writer(self):
-        owner: dict[str, str] = {}
+        # the two IRs are separate documents, so the same property name may be owned once in
+        # each phase list; within one phase it must be unique
         for phase_passes in (STRUCTURAL_PASSES, DISPLAY_PASSES):
+            owner: dict[str, str] = {}
             for one_pass in phase_passes:
                 for property_name in one_pass.spec.owns:
                     self.assertNotIn(
