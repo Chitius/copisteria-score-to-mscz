@@ -62,13 +62,15 @@ def main(argv: list[str] | None = None) -> int:
     for problem in validate_facts(facts):
         print(f"facts: {problem}")
 
+    pages = None
     if path.is_dir():
         merged = load_pages(path)
         print(f"pages: {len(merged.pages)} files, measures per page {merged.measure_counts}")
         doc = merged.document
+        pages = merged
     else:
         doc = Document.load(path)
-    ctx = Context(facts=facts)
+    ctx = Context(facts=facts, pages=pages)
     report = run_pipeline(
         doc,
         ctx,

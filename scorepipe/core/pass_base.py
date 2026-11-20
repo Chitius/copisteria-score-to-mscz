@@ -52,4 +52,5 @@ class Context:
 
     facts: dict = field(default_factory=dict)
     options: dict = field(default_factory=dict)
+    pages: object | None = None
     log: list[str] = field(default_factory=list)

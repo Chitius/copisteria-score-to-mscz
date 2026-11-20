@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 62 tests
+Ran 66 tests
 OK
 ```
 
@@ -24,6 +24,7 @@ Coverage:
 | overflow notes and barline-crossing splits | `test_overflow.py`, `test_rebase.py` |
 | aligned voice merging | `test_merge.py` |
 | page merging and page-directory CLI | `test_loader.py` |
+| page-level tie/slur/pedal restoration | `test_page_restore.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -39,7 +40,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-21 entries: 14 structural (13 mechanical + 1 analysis), 1 inject, 6 display. Every mechanical pass
+24 entries: 17 structural (16 mechanical + 1 analysis), 1 inject, 6 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -56,8 +57,10 @@ scorepipe laputa.musicxml --check --report laputa.json
   repaired: notes starting past the barline moved into the next bar as a new voice, and notes
   crossing the barline were split with a tie.
 - `laputa` **page directory** (copisteria output: 3 files, 26 / 23 / 14 measures): merged to one
-  63-measure score by `merge_pages`, then verifier clean — the loader works on real per-page OMR
-  output, not only on already-merged MusicXML.
+  63-measure score by `merge_pages`, then verifier clean. On this run `restore_page_pedals`
+  reported 36 adjustments (replacing page-less pedal directions with page-accurate ones) and the
+  structural phase converged in 3 rounds; ties and slurs needed no restoration because the merged
+  file already carried them.
 - `laputa.mscz`: display pipeline runs to a fixed point with **0 changes** and a clean mscx
   verifier — the display invariants hold on a real MuseScore file.
 

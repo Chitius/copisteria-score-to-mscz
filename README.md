@@ -71,6 +71,9 @@ Implemented passes:
 | `drop_overflow_duplicates` | structural | `overflow-notes` | overflow notes repeating the next barline |
 | `rebase_measures` | structural | `measure-content` | overflow beats beyond the barline |
 | `merge_aligned_voices` | structural | `voice-merge` | mergeable secondary voices |
+| `restore_page_ties` | structural | `page-ties` | page ties missing from the merged score |
+| `restore_page_slurs` | structural | `page-slurs` | page slurs missing from the merged score |
+| `restore_page_pedals` | structural | `page-pedals` | pedal directions that differ from the page |
 | `upgrade_tempo_texts` | display | `tempo-objects` | tempo words still plain staff text |
 | `upgrade_gradual_texts` | display | `gradual-spanners` | rit./rall./accel. words needing a paired spanner |
 
@@ -107,6 +110,11 @@ numbering) into one score, renumbers measures globally and keeps `measure_counts
 can map a measure back to its page (`MergedPages.page_of_measure`). `load_pages(dir)` sorts the
 directory. The CLI accepts a directory as input and runs the structural pipeline on the merged
 score; page-join duplicates (time signatures, clefs, keys) are cleaned by the normal passes.
+
+When the input is a page directory, the loader model is put on `Context.pages`, which enables the
+page-restoration passes: `restore_page_ties`, `restore_page_slurs` (paired per staff and number,
+ignoring voice, with a 6-bar span guard) and `restore_page_pedals` (page-accurate pedal onsets,
+existing pedal directions replaced only when they differ).
 
 ## Facts
 

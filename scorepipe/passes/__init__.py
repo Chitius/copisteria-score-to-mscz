@@ -9,6 +9,14 @@ from .mscx_display import (
     DropTextVoiceRests,
     UnhideRealRests,
 )
+from .page_restore import (
+    RESTORE_PAGE_PEDALS,
+    RESTORE_PAGE_SLURS,
+    RESTORE_PAGE_TIES,
+    RestorePagePedals,
+    RestorePageSlurs,
+    RestorePageTies,
+)
 from .xml_basic import (
     STRUCTURAL_PASSES,
     DedupeTies,
@@ -40,6 +48,9 @@ STRUCTURAL_PASSES = (
         NORMALIZE_VOICES_PASS,
         SLUR_PASS,
         FILL_PASS,
+        RESTORE_PAGE_TIES,
+        RESTORE_PAGE_SLURS,
+        RESTORE_PAGE_PEDALS,
     ]
     + ANALYSIS_PASSES
 )
@@ -61,6 +72,9 @@ __all__ = [
     "DropOverflowDuplicates",
     "RebaseMeasures",
     "MergeAlignedVoices",
+    "RestorePageTies",
+    "RestorePageSlurs",
+    "RestorePagePedals",
     "DropDuplicateNotes",
     "UpgradeTempoTexts",
     "UpgradeGradualTexts",
