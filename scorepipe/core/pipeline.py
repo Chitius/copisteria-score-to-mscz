@@ -32,6 +32,10 @@ class RunReport:
     trace: list[TraceEntry] = field(default_factory=list)
     verifier: list = field(default_factory=list)
 
+    @property
+    def changes(self) -> int:
+        return sum(phase.changes for phase in self.phases)
+
 
 def run_phase(
     doc: Document,

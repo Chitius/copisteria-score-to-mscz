@@ -13,6 +13,7 @@ from .xml_basic import (
     DropRedundantTimeSignatures,
     UnhideRests,
 )
+from .xml_facts import ApplyMarksFacts, INJECT_PASSES
 from .xml_measures import FILL_PASS, FillShortMeasures
 from .xml_slurs import SLUR_PASS, SanitizeSlurs
 
@@ -22,11 +23,13 @@ STRUCTURAL_PASSES = STRUCTURAL_PASSES + [SLUR_PASS, FILL_PASS]
 __all__ = [
     "STRUCTURAL_PASSES",
     "DISPLAY_PASSES",
+    "INJECT_PASSES",
     "DedupeTies",
     "DropRedundantTimeSignatures",
     "UnhideRests",
     "SanitizeSlurs",
     "FillShortMeasures",
+    "ApplyMarksFacts",
     "DropTextVoiceRests",
     "UnhideRealRests",
     "DropPaddingVoices",

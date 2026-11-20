@@ -77,6 +77,27 @@ structural r1 dedupe_ties                        2
 structural r1 drop_redundant_time_signatures     1
 structural r1 unhide_rests                       1
 structural: rounds=2 changes=4 stable=True
+inject: rounds=2 changes=4 stable=True
 verifier: clean
 ```
+
+## MuseScore container
+
+`scorepipe.core.mscz.MsczArchive` opens a `.mscz` zip, finds the main `.mscx` through
+`META-INF/container.xml`, exposes it as an `MsxcDocument`, and writes it back while preserving
+every other entry (styles, settings). Display passes run on that document through the same
+fixed-point runner; `MSCX_VERIFIERS` checks hidden non-measure rests, text-voice rests, padding
+voices and voice order.
+
+## Facts
+
+`scorepipe.facts.load_facts` reads a JSON file produced by the text layer or by the agent. The
+`apply_marks_facts` inject pass turns marks into words / rehearsal / metronome directions and is
+idempotent (a text already present in the measure is skipped). Facts never edit the score
+directly; they are data.
+
+```
+python -m scorepipe.cli score.musicxml --facts marks.json --trace -o out.musicxml
+```
+
 

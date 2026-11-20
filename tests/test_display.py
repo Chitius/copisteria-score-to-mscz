@@ -4,6 +4,7 @@ import unittest
 from xml.etree import ElementTree
 
 from scorepipe.core.mscx import MsxcDocument
+from scorepipe.core.mscx_invariants import MSCX_VERIFIERS
 from scorepipe.core.pass_base import Context, Phase
 from scorepipe.core.pipeline import run_phase
 from scorepipe.passes import DISPLAY_PASSES
@@ -81,6 +82,8 @@ class DisplayPassesTest(unittest.TestCase):
         self.assertTrue(measure.findall("voice")[0].findall("Chord"))
         second = run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
         self.assertEqual(second.changes, 0)
+        for verifier in MSCX_VERIFIERS:
+            self.assertEqual(verifier(doc, Context()), [], verifier.__name__)
 
 
 if __name__ == "__main__":
