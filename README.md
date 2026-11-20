@@ -71,6 +71,8 @@ Implemented passes:
 | `canonical_voice_order` | display | `voice-order` | voice slots out of canonical order |
 | `dedupe_pedal_spanners` | display | `pedal-spanners` | duplicate pedal spanners |
 | `dedupe_text_objects` | display | `display-text-duplicates` | duplicate text objects in a measure |
+| `merge_text_voices` | display | `text-voice-slots` | zero-length voice holding only text |
+| `drop_empty_voices` | display | `empty-voices` | voice slot with no notes/rests/spanners |
 | `apply_credits_display` | display | `display-credits` | title/composer missing from the mscx title frame |
 | `restore_mscx_ties` | display | `mscx-ties` | ties the MuseScore importer dropped |
 | `split_chord_fragments` | display | `mscx-chord-fragments` | chord members whose duration the importer coerced |

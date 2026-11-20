@@ -66,7 +66,81 @@ class DedupeTextObjects:
         return PassResult(changed=removed)
 
 
-DISPLAY_DEDUPE_PASSES = [DedupePedalSpanners(), DedupeTextObjects()]
+class DropEmptyVoices:
+    spec = PassSpec(
+        name="drop_empty_voices",
+        phase=Phase.DISPLAY,
+        kind=Kind.MECHANICAL,
+        owns=("empty-voices",),
+        description="remove voice slots that contain no chord, rest or spanner",
+        measure="empty voice slots",
+    )
+
+    def run(self, doc: MsxcDocument, ctx: Context) -> PassResult:
+        removed = 0
+        for _staff, _index, measure in doc.iter_measures():
+            voices = list(measure.findall("voice"))
+            for position, voice in enumerate(voices):
+                if any(child.tag not in ("BarLine", "location") for child in voice):
+                    continue
+                barline = voice.find("BarLine")
+                if barline is not None and position > 0:
+                    voices[position - 1].append(barline)
+                measure.remove(voice)
+                removed += 1
+        return PassResult(changed=removed)
+
+
+TEXT_TAGS = {
+    "Tempo",
+    "StaffText",
+    "SystemText",
+    "RehearsalMark",
+    "Expression",
+    "Dynamic",
+    "Harmony",
+    "Fingering",
+}
+
+
+class MergeTextVoices:
+    spec = PassSpec(
+        name="merge_text_voices",
+        phase=Phase.DISPLAY,
+        kind=Kind.MECHANICAL,
+        owns=("text-voice-slots",),
+        description="move text objects out of their own zero-length voice into the first chord voice",
+        measure="text-only voice slots",
+    )
+
+    def run(self, doc: MsxcDocument, ctx: Context) -> PassResult:
+        removed = 0
+        for _staff, _index, measure in doc.iter_measures():
+            voices = list(measure.findall("voice"))
+            chords = [voice for voice in voices if voice.findall("Chord")]
+            if not chords:
+                continue
+            target = chords[0]
+            for voice in voices:
+                if voice is target or voice.findall("Chord") or voice.findall("Rest"):
+                    continue
+                texts = [child for child in voice if child.tag in TEXT_TAGS]
+                if not texts:
+                    continue
+                for text in texts:
+                    voice.remove(text)
+                    target.insert(0, text)
+                measure.remove(voice)
+                removed += 1
+        return PassResult(changed=removed)
+
+
+DISPLAY_DEDUPE_PASSES = [
+    DedupePedalSpanners(),
+    DedupeTextObjects(),
+    MergeTextVoices(),
+    DropEmptyVoices(),
+]
 
 
 def _signature(element) -> tuple:

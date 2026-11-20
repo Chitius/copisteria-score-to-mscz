@@ -58,9 +58,75 @@ def voice_order(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     return out
 
 
+def empty_voices(doc: MsxcDocument, ctx: Context) -> list[Violation]:
+    out: list[Violation] = []
+    for _staff, index, measure in doc.iter_measures():
+        for voice in measure.findall("voice"):
+            if any(child.tag not in ("BarLine", "location") for child in voice):
+                continue
+            out.append(Violation("empty-voice", index, "voice slot without notes, rests or spanners"))
+    return out
+
+
+DURATIONS = {
+    "breve": 8.0,
+    "whole": 4.0,
+    "half": 2.0,
+    "quarter": 1.0,
+    "eighth": 0.5,
+    "16th": 0.25,
+    "32nd": 0.125,
+    "64th": 0.0625,
+}
+
+
+def _beats(element) -> float:
+    name = element.findtext("durationType") or "quarter"
+    if name == "measure":
+        return 4.0
+    base = DURATIONS.get(name, 1.0)
+    dots = int(element.findtext("dots") or 0)
+    return base * sum(0.5**index for index in range(dots + 1))
+
+
+def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
+    """What MuseScore flags as an incomplete measure: a voice whose ticks miss the time signature."""
+    signatures: dict[int, float] = {}
+    for staff in doc.root.iter("Staff"):
+        for index, measure in enumerate(staff.findall("Measure"), start=1):
+            for time in measure.iter("TimeSig"):
+                try:
+                    signatures[index] = float(time.findtext("sigN") or 4) * 4.0 / float(
+                        time.findtext("sigD") or 4
+                    )
+                except ValueError:
+                    pass
+    out: list[Violation] = []
+    meter = 4.0
+    for staff in doc.root.iter("Staff"):
+        for index, measure in enumerate(staff.findall("Measure"), start=1):
+            meter = signatures.get(index, meter)
+            for voice in measure.findall("voice"):
+                total = 0.0
+                for child in voice:
+                    if child.tag in ("Chord", "Rest"):
+                        total += _beats(child)
+                if total <= 0:
+                    continue
+                if abs(total - meter) > 1e-6:
+                    out.append(
+                        Violation(
+                            "mscx-measure-length", index, f"voice {total:g} beats, metre {meter:g}"
+                        )
+                    )
+    return out
+
+
 MSCX_VERIFIERS = (
     hidden_non_measure_rests,
     text_voice_rests,
     padding_voices,
     voice_order,
+    empty_voices,
+    measure_lengths,
 )

@@ -38,22 +38,32 @@ class RebuildVoiceLayers:
 
 def _needs_rebuild(doc: Document, measure) -> bool:
     seen: set[tuple] = set()
-    durations: dict[tuple, set] = {}
-    for event in doc.events(measure):
-        if event.rest:
+    events = doc.events(measure)
+    for event in events:
+        if event.rest or event.chord:
             continue
         key = (event.staff, event.voice, round(event.onset, 4))
         if key in seen:
-            # same voice, same onset: copisteria fragments or a conflicting duration
-            durations.setdefault(key, set()).add(round(event.duration, 4))
+            return True
         seen.add(key)
-        durations.setdefault(key, set()).add(round(event.duration, 4))
-    return any(len(values) > 1 for values in durations.values())
+    by_voice: dict[tuple, list] = {}
+    for event in events:
+        if event.rest or event.chord:
+            continue
+        by_voice.setdefault((event.staff, event.voice), []).append(event)
+    for voice_events in by_voice.values():
+        voice_events.sort(key=lambda event: event.onset)
+        end = -1.0
+        for event in voice_events:
+            if event.onset < end - 1e-6:
+                return True
+            end = max(end, event.end)
+    return False
 
 
 def _rebuild(doc: Document, measure) -> bool:
     events = doc.events(measure)
-    if not events:
+    if not events or not any(not event.rest for event in events):
         return False
     meter = doc.time_signature(measure) or (4.0, 4.0)
     bar = meter[0] * 4.0 / meter[1]

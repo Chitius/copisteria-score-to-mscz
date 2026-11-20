@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 101 tests
+Ran 102 tests
 OK
 ```
 
@@ -55,7 +55,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-37 entries: 24 structural (23 mechanical + 1 analysis), 2 inject, 11 display. Every mechanical pass
+39 entries: 24 structural (23 mechanical + 1 analysis), 2 inject, 13 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -99,6 +99,10 @@ scorepipe laputa.musicxml --check --report laputa.json
   each chord lasting until the next onset (fill conflicts are still skipped). Remaining differences
   are concentrated in m30–m32 (one ambiguous bass measure where OMR gives a whole note and a
   quarter line) and isolated single symbols in m42–m47 and m61–m62.
+- **MuseScore's incomplete-measure warnings** (mscx `measure_lengths` verifier): the laputa mscz
+  went from 12 flagged measures to **1** (m33, a measure whose OMR source carries two overlapping
+  rests in one voice: 2+1+1 beats of rest). The display passes now move text-only voices into the
+  chord voice and remove zero-length/empty voice slots, which were the other eleven warnings.
 
 These are baseline reports, not failures of the pipeline: they show the verifiers catching the
 same problems the old ad-hoc pipeline found, with stable codes.

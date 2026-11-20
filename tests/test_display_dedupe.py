@@ -44,6 +44,16 @@ class DisplayDedupeTest(unittest.TestCase):
         again = run_phase(doc, DISPLAY_PASSES, ctx, Phase.DISPLAY)
         self.assertEqual(again.changes, 0)
 
+    def test_text_only_voice_moves_into_the_chord_voice(self):
+        doc = MsxcDocument(ElementTree.fromstring(MSCX))
+        measure = doc.root.find("Score/Staff/Measure")
+        voice = ElementTree.SubElement(measure, "voice")
+        ElementTree.SubElement(voice, "StaffText").append(ElementTree.Element("text"))
+        voice.find("StaffText/text").text = "dolce"
+        run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        self.assertEqual(len(measure.findall("voice")), 1)
+        self.assertEqual(measure.findtext("voice/StaffText/text"), "dolce")
+
 
 if __name__ == "__main__":
     unittest.main()
