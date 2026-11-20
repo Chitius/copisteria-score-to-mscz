@@ -97,5 +97,23 @@ class MergeStaffVoicesTest(unittest.TestCase):
         self.assertIsNotNone(tied_note.find("tie"))
 
 
+    def test_a_whole_note_over_a_rest_is_protected_from_retiming(self):
+        rest = '<note><rest/><duration>4</duration><voice>1</voice></note>'
+        body = (
+            rest
+            + note("B", 4, 4)
+            + note("G", 4, 4)
+            + note("B", 4, 4)
+            + "<backup><duration>16</duration></backup>"
+            + note("E", 3, 16, voice="2")
+        )
+        doc = Document(ElementTree.fromstring(PART.format(measures=measure(body) + LAST)))
+        MERGE_STAFF_VOICES.run(doc, Context())
+        events = [event for event in doc.events(doc.measures()[0]) if not event.rest]
+        whole = next(e for e in events if e.element.findtext("pitch/step") == "E")
+        self.assertEqual(whole.duration, 4.0)
+        self.assertNotEqual(whole.voice, "1")
+
+
 if __name__ == "__main__":
     unittest.main()

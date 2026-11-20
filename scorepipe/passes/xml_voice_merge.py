@@ -38,9 +38,13 @@ class MergeStaffVoices:
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
         changed = 0
-        for _number, measure in doc.iter_measures():
+        done = ctx.options.setdefault("merge_staff_done", set())
+        for number, measure in doc.iter_measures():
+            if number in done:
+                continue
             if _merge(doc, measure):
                 changed += 1
+                done.add(number)
         return PassResult(changed=changed)
 
 
@@ -64,12 +68,14 @@ def _merge(doc: Document, measure) -> bool:
     divisions = doc.divisions()
     rebuilt = False
     for staff, staff_events in targets.items():
-        if _fill_conflict(staff_events, bar):
-            continue
         notes = [event for event in staff_events if not event.rest and event.element.find("pitch") is not None]
         if not notes:
             continue
-        onsets = sorted({round(event.onset, 4) for event in notes})
+        protected = _protected_notes(notes, bar)
+        active = [event for event in notes if id(event.element) not in protected]
+        if not active:
+            continue
+        onsets = sorted({round(event.onset, 4) for event in active})
         if onsets[0] < -1e-6 or onsets[-1] >= bar - 1e-6:
             continue
         sequence: list[ElementTree.Element] = []
@@ -79,7 +85,7 @@ def _merge(doc: Document, measure) -> bool:
             following = onsets[index + 1] if index + 1 < len(onsets) else bar
             duration = following - onset
             pitches = []
-            for event in notes:
+            for event in active:
                 if abs(event.onset - onset) > 1e-6:
                     continue
                 pitch = _pitch(event.element)
@@ -90,39 +96,92 @@ def _merge(doc: Document, measure) -> bool:
                 sequence.append(
                     _note(pitch, duration, divisions, staff, chord=position > 0, source=source)
                 )
-        _replace_staff(doc, measure, staff, sequence)
+        extras = _protected_blocks(
+            [event for event in notes if id(event.element) in protected], bar, divisions, staff
+        )
+        _replace_staff(doc, measure, staff, sequence, extras)
         rebuilt = True
     return rebuilt
 
 
-def _fill_conflict(staff_events, bar: float) -> bool:
-    voices = {}
-    for event in staff_events:
-        voices.setdefault(event.voice, []).append(event)
-    if len(voices) < 2:
-        return False
-    primary = max(voices, key=lambda voice: len(voices[voice]))
-    primary_notes = [event for event in voices[primary] if not event.rest]
-    if not primary_notes:
-        return False
-    for voice, events in voices.items():
-        if voice == primary:
-            continue
-        for event in events:
-            if event.rest:
-                continue
-            hollow = event.duration >= 2.0
-            matches = [
-                other
-                for other in primary_notes
-                if other.onset <= event.onset < other.end
-            ]
-            if any((other.duration >= 2.0) != hollow for other in matches):
-                return True
-    return False
+def _protected_notes(notes, bar: float) -> set[int]:
+    """Ids of notes whose retimed duration would cross the filled/hollow boundary.
+
+    A note that would turn a whole/half note into a quarter (or vice versa) keeps its original
+    duration and is excluded from the merge; the remaining notes are retimed again, so protection is
+    iterative.
+    """
+    protected: set[int] = set()
+    while True:
+        active = [event for event in notes if id(event.element) not in protected]
+        onsets = sorted({round(event.onset, 4) for event in active})
+        added: set[int] = set()
+        for index, onset in enumerate(onsets):
+            following = onsets[index + 1] if index + 1 < len(onsets) else bar
+            duration = following - onset
+            for event in active:
+                if abs(event.onset - onset) > 1e-6:
+                    continue
+                if (event.duration >= 2.0 - 1e-6) != (duration >= 2.0 - 1e-6):
+                    added.add(id(event.element))
+        if not added - protected:
+            return protected
+        protected |= added
 
 
-def _replace_staff(doc: Document, measure, staff: str, sequence: list) -> None:
+def _protected_blocks(events: list, bar: float, divisions: float, staff: str) -> list[list]:
+    """One block per original voice, keeping each protected note at its own onset and duration."""
+    if not events:
+        return []
+    by_voice: dict[str, list] = {}
+    for event in events:
+        by_voice.setdefault(event.voice, []).append(event)
+    blocks: list[list] = []
+    for position, voice in enumerate(
+        sorted(by_voice, key=lambda value: (-len(by_voice[value]), value)), start=2
+    ):
+        layer = sorted(by_voice[voice], key=lambda event: event.onset)
+        block: list[ElementTree.Element] = []
+        cursor = 0.0
+        index = 0
+        while index < len(layer):
+            onset = layer[index].onset
+            group = []
+            while index < len(layer) and abs(layer[index].onset - onset) < 1e-6:
+                group.append(layer[index])
+                index += 1
+            if onset > cursor + 1e-6:
+                forward = ElementTree.Element("forward")
+                ElementTree.SubElement(forward, "duration").text = str(
+                    int(round((onset - cursor) * divisions))
+                )
+                block.append(forward)
+            length = 0.0
+            for chord_position, event in enumerate(group):
+                pitch = _pitch(event.element)
+                if pitch is None:
+                    continue
+                element = _note(
+                    pitch,
+                    event.duration,
+                    divisions,
+                    staff,
+                    chord=chord_position > 0,
+                    source=event.element,
+                    voice=str(position),
+                )
+                block.append(element)
+                length = max(length, event.duration)
+            cursor = onset + length
+        if cursor < bar - 1e-6:
+            block.append(_rest(bar - cursor, divisions, staff, voice=str(position)))
+        blocks.append(block)
+    return blocks
+
+
+def _replace_staff(
+    doc: Document, measure, staff: str, sequence: list, extras: list[list] | None = None
+) -> None:
     children = list(measure)
     segments: list[list] = []
     current: list = []
@@ -152,7 +211,7 @@ def _replace_staff(doc: Document, measure, staff: str, sequence: list) -> None:
     meter = doc.time_signature(measure) or (4.0, 4.0)
     bar = meter[0] * 4.0 / meter[1]
     divisions = doc.divisions()
-    blocks = [sequence] + other_blocks
+    blocks = [sequence] + list(extras or []) + other_blocks
     for index, block in enumerate(blocks):
         if index:
             backup = ElementTree.Element("backup")
@@ -171,7 +230,14 @@ def _pitch(note_element) -> tuple[str, str, str] | None:
 
 
 def _note(
-    pitch, duration: float, divisions: float, staff: str, *, chord: bool, source=None
+    pitch,
+    duration: float,
+    divisions: float,
+    staff: str,
+    *,
+    chord: bool,
+    source=None,
+    voice: str = "1",
 ) -> ElementTree.Element:
     if source is not None:
         # keep tie/slur/articulation/accidental/beam children when the duration did not change;
@@ -185,10 +251,10 @@ def _note(
         duration_element = element.find("duration")
         if duration_element is not None:
             duration_element.text = str(int(round(duration * divisions)))
-        voice = element.find("voice")
-        if voice is None:
-            voice = ElementTree.SubElement(element, "voice")
-        voice.text = "1"
+        voice_element = element.find("voice")
+        if voice_element is None:
+            voice_element = ElementTree.SubElement(element, "voice")
+        voice_element.text = voice
         staff_element = element.find("staff")
         if staff_element is None:
             staff_element = ElementTree.SubElement(element, "staff")
@@ -204,7 +270,7 @@ def _note(
         ElementTree.SubElement(pitch_element, "alter").text = alter
     ElementTree.SubElement(pitch_element, "octave").text = octave
     ElementTree.SubElement(element, "duration").text = str(int(round(duration * divisions)))
-    ElementTree.SubElement(element, "voice").text = "1"
+    ElementTree.SubElement(element, "voice").text = voice
     note_type, dots = _type_for(duration)
     ElementTree.SubElement(element, "type").text = note_type
     for _ in range(dots):
@@ -213,11 +279,11 @@ def _note(
     return element
 
 
-def _rest(duration: float, divisions: float, staff: str) -> ElementTree.Element:
+def _rest(duration: float, divisions: float, staff: str, *, voice: str = "1") -> ElementTree.Element:
     element = ElementTree.Element("note")
     ElementTree.SubElement(element, "rest")
     ElementTree.SubElement(element, "duration").text = str(int(round(duration * divisions)))
-    ElementTree.SubElement(element, "voice").text = "1"
+    ElementTree.SubElement(element, "voice").text = voice
     note_type, dots = _type_for(duration)
     ElementTree.SubElement(element, "type").text = note_type
     for _ in range(dots):
