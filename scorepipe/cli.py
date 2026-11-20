@@ -30,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--layout", help="JSON measure boxes for a PDF text-layer facts producer")
     parser.add_argument("--trace", action="store_true", help="print every pass that changed something")
     parser.add_argument("--report", help="write the run report (phases, trace, verifier, analysis) as JSON")
+    parser.add_argument("--compare-golden", help="compare the written output with a golden MusicXML")
     parser.add_argument("--check", action="store_true", help="verify only: never write the score")
     parser.add_argument("--list-passes", action="store_true", help="print the registered passes and exit")
     parser.add_argument(
@@ -113,6 +114,19 @@ def main(argv: list[str] | None = None) -> int:
     _write_report(report, args.report)
     if args.output and not args.check:
         doc.save(args.output)
+    if args.compare_golden:
+        if not args.output or args.check:
+            print("compare: needs a written output (-o, without --check)")
+        else:
+            from .compare import compare
+
+            result = compare(args.compare_golden, args.output)
+            print(
+                f"compare: {result['ratio'] * 100:.2f}% mismatch "
+                f"(missing {result['missing']}, extra {result['extra']})"
+            )
+            print(f"compare: worst missing {result['missing_by_measure']}")
+            print(f"compare: worst extra   {result['extra_by_measure']}")
     status = 0 if not report.verifier else 1
     if args.mscz_out and not args.check:
         display_report = export_and_display(

@@ -58,6 +58,7 @@ Implemented passes:
 | `drop_redundant_clefs` | structural | `clefs` | repeated clefs per staff |
 | `drop_redundant_key_signatures` | structural | `key-signatures` | repeated key signatures |
 | `mark_pickup` | structural | `pickup-marking` | short opening bar that is an anacrusis |
+| `pad_empty_staves` | structural | `empty-staff-rests` | silent staff without a measure rest |
 | `rebuild_voice_layers` | structural | `voice-layers` | fragmented same-voice blocks MuseScore would coerce |
 | `unhide_rests` | structural | `rest-visibility` | hidden rests |
 | `sanitize_slurs` | structural | `slur-endpoints` | unmatched / >N-bar endpoints |
@@ -115,6 +116,19 @@ fixed-point runner; `MSCX_VERIFIERS` checks hidden non-measure rests, text-voice
 voices and voice order. On the MusicXML side `VERIFIERS` checks duplicate ties, redundant time
 signatures, hidden rests, chord/cursor semantics (an orphan `<chord/>` or a negative cursor is an
 error an XSD cannot see) and per-voice measure lengths.
+
+## Comparing against a golden score
+
+`scorepipe.compare.compare(golden, candidate)` reduces both files to (measure, staff, onset, duration,
+pitch) symbols, ignoring divisions and voice layout, and reports missing/extra symbols with a ratio
+and the worst measures. The CLI wires it to `--compare-golden`:
+
+```
+scorepipe pages/ -o out.musicxml --compare-golden golden.musicxml
+compare: 8.35% mismatch (missing 37, extra 63)
+```
+
+Use it after every pass change; it is the objective replacement for eyeballing a render.
 
 ## Loaders
 
