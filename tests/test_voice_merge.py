@@ -8,6 +8,7 @@ from scorepipe.core.invariants import measure_lengths
 from scorepipe.core.pass_base import Context
 from scorepipe.core.pipeline import run_pipeline
 from scorepipe.passes import STRUCTURAL_PASSES
+from scorepipe.passes.xml_voice_merge import MERGE_STAFF_VOICES
 
 PART = """
 <score-partwise version="4.0">
@@ -52,6 +53,27 @@ class MergeStaffVoicesTest(unittest.TestCase):
         pitches = [(event.element.findtext("pitch/step"), event.duration) for event in events]
         self.assertEqual(pitches, [("C", 2.0), ("D", 2.0)])
         self.assertEqual(measure_lengths(doc, Context()), [])
+
+    def test_other_staff_keeps_its_forward_gap(self):
+        # staff 1 has two voices (a sustained chord and a run); staff 2 starts on beat 3.
+        # The rebuild must not swallow staff 2's <forward> (laputa m31).
+        body = (
+            note("C", 4, 16)
+            + "<backup><duration>16</duration></backup>"
+            + note("E", 4, 16, voice="2")
+            + "<backup><duration>16</duration></backup>"
+            + "<forward><duration>8</duration></forward>"
+            + '<note><pitch><step>D</step><octave>3</octave></pitch>'
+            '<duration>8</duration><voice>1</voice><staff>2</staff></note>'
+        )
+        doc = Document(ElementTree.fromstring(PART.format(measures=measure(body) + LAST)))
+        MERGE_STAFF_VOICES.run(doc, Context())
+        events = doc.events(doc.measures()[0])
+        staff_two = [event for event in events if event.staff == "2"]
+        self.assertEqual(len(staff_two), 1)
+        self.assertEqual(staff_two[0].onset, 2.0)
+        pitches = {event.element.findtext("pitch/step") for event in events if not event.rest}
+        self.assertEqual(pitches, {"C", "E", "D"})
 
     def test_fill_conflict_is_left_alone(self):
         quarters = "".join(note(step, 4, 4) for step in ("C", "D", "E", "F"))

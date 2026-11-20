@@ -122,26 +122,36 @@ def _fill_conflict(staff_events, bar: float) -> bool:
 
 
 def _replace_staff(doc: Document, measure, staff: str, sequence: list) -> None:
-    leading = [
-        child
-        for child in list(measure)
-        if child.tag in ("attributes", "print", "direction", "sound", "barline")
-    ]
-    others: dict[str, list] = {}
-    for child in list(measure):
-        if child.tag != "note":
+    children = list(measure)
+    segments: list[list] = []
+    current: list = []
+    for child in children:
+        if child.tag == "backup":
+            segments.append(current)
+            current = []
+        else:
+            current.append(child)
+    segments.append(current)
+
+    leading_tags = ("attributes", "print", "sound", "barline")
+    leading = [child for child in children if child.tag in leading_tags]
+    other_blocks: list[list] = []
+    for segment in segments:
+        staffs = {child.findtext("staff") or "1" for child in segment if child.tag == "note"}
+        if not staffs or staffs == {staff}:
             continue
-        child_staff = child.findtext("staff") or "1"
-        if child_staff != staff:
-            others.setdefault(child_staff, []).append(child)
-    for child in list(measure):
+        # keep the whole block (forwards, gaps, directions), not only its notes, otherwise the
+        # other staff's onsets move (laputa m31: bass D3 from beat 3 to beat 1)
+        other_blocks.append([child for child in segment if child.tag not in leading_tags])
+
+    for child in children:
         measure.remove(child)
     for child in leading:
         measure.append(child)
     meter = doc.time_signature(measure) or (4.0, 4.0)
     bar = meter[0] * 4.0 / meter[1]
     divisions = doc.divisions()
-    blocks = [sequence] + [others[key] for key in sorted(others)]
+    blocks = [sequence] + other_blocks
     for index, block in enumerate(blocks):
         if index:
             backup = ElementTree.Element("backup")

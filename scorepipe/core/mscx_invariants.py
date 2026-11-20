@@ -107,6 +107,10 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
         for index, measure in enumerate(staff.findall("Measure"), start=1):
             meter = signatures.get(index, meter)
             for voice in measure.findall("voice"):
+                if voice.find("location") is not None:
+                    # a location advances/rewinds the cursor (gaps, voices starting off-beat);
+                    # the fraction arithmetic is MuseScore's, not ours, so do not guess a length
+                    continue
                 total = 0.0
                 for child in voice:
                     if child.tag in ("Chord", "Rest"):

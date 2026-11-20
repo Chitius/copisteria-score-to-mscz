@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 103 tests
+Ran 104 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -97,16 +97,16 @@ scorepipe laputa.musicxml --check --report laputa.json
   7 tie spanners and m2 6, F6 is a filled dotted quarter, and the big chords are tied across the
   barline.
 - **Fidelity against the old skill** (laputa, normalised pitch/onset/duration multiset, voice
-  ignored): the symbol mismatch is **4.17%** (23 missing + 26 extra), down from 18.35% at the start
-  of this review. The last fix was `merge_staff_voices`, the old skill's aggressive pass: when a
-  staff has several voices and their notehead fills agree, the measure is rebuilt as one line,
-  each chord lasting until the next onset (fill conflicts are still skipped). Remaining differences
-  are concentrated in m30–m32 (one ambiguous bass measure where OMR gives a whole note and a
-  quarter line) and isolated single symbols in m42–m47 and m61–m62.
+  ignored): the symbol mismatch is **2.04%** (9 missing + 15 extra), down from 18.35% at the start
+  of this review. `merge_staff_voices` rebuilds a multi-voice staff as one retimed line (each chord
+  lasts until the next onset, fill conflicts still skipped) and now preserves the other staff's
+  `<forward>` gaps, so laputa m31's sustained chord survives at beat 0. Remaining differences are
+  concentrated in m30–m32 and isolated single symbols in m43/m45.
 - **MuseScore's incomplete-measure warnings** (mscx `measure_lengths` verifier): the laputa mscz
-  went from 12 flagged measures to **1** (m33, a measure whose OMR source carries two overlapping
-  rests in one voice: 2+1+1 beats of rest). The display passes now move text-only voices into the
-  chord voice and remove zero-length/empty voice slots, which were the other eleven warnings.
+  now reports **0** flagged measures. It started at 12: eleven were text-only/empty voice slots
+  (moved into the chord voice or removed) and the last was m33's overlapping rests, which the
+  `rebuild_voice_layers` duplicate detection now folds away. Voices whose `<location>` carries a
+  gap are skipped by the verifier because that fraction arithmetic belongs to MuseScore.
 
 These are baseline reports, not failures of the pipeline: they show the verifiers catching the
 same problems the old ad-hoc pipeline found, with stable codes.
@@ -115,11 +115,12 @@ same problems the old ad-hoc pipeline found, with stable codes.
 
 - `SANITY.md` lists the contract violations that are still open, with file:line and repro shapes:
   `rebase_measures` does not shrink the closing backup and can give two overflow groups the same
-  voice; `merge_staff_voices` drops `<forward>` gaps and note attributes on other staves;
-  `drop_overflow_duplicates` can delete a chord base without its members;
+  voice; `drop_overflow_duplicates` can delete a chord base without its members;
   `drop_trailing_duplicate_measure` can delete more than one measure; `pad_empty_staves` is wrong in
-  3/4 and on pickups; `split_chord_fragments` hard-codes 4/4. The sanity matrix's fixtures do not
-  all trigger these yet; adding those adversarial fixtures is the next step.
+  3/4 and on pickups; `split_chord_fragments` hard-codes 4/4. `merge_staff_voices` now preserves the
+  other staff's `<forward>` gaps and the laputa m31 sustained chord, but its rebuilt notes still
+  drop ties/slurs/articulations unless a page model is supplied to restore them. The sanity matrix's
+  fixtures do not all trigger these yet; adding those adversarial fixtures is the next step.
 - Voice merging beyond exact alignment is not ported; the pass refuses anything that needs a
   retiming decision.
 - Credits cover title/subtitle/composer/lyricist styles and are moved into the mscx title frame;
