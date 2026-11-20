@@ -547,3 +547,28 @@ no `implicit` guard, `xml_empty_staves.py:33-52`), `split_chord_fragments` (hard
   passes gives one trace entry (`sanitize_slurs`, changed=2) and a clean verifier `[real]`. The
   rebase/merge/layers paths therefore have no real-file coverage; all contracts above must be pinned
   by synthetic fixtures.
+
+---
+
+## 8. Status after the first fix round (2026-11-20)
+
+Pinned by tests and fixed:
+
+- `rebase_measures`: the source block's closing `<backup>` is recomputed from the remaining notes,
+  and overflow groups get distinct voice numbers (`tests/test_rebase.py`).
+- `drop_overflow_duplicates`: removing a chord base also removes its `<chord/>` members
+  (`tests/test_overflow.py`).
+- `drop_trailing_duplicate_measure`: only a complete penultimate bar may own a truncated duplicate
+  tail, so a run of short bars is no longer eaten one bar per round (`tests/test_tail.py`).
+- `pad_empty_staves`: backup equals the actual cursor, and implicit pickup bars are skipped
+  (`tests/test_empty_staves.py`).
+- `split_chord_fragments`: the new voice is padded by the measure's own time signature instead of
+  hard-coded 4/4 (`tests/test_mscx_fragments.py`).
+- `merge_staff_voices`: other staves keep their `<forward>` gaps, so laputa m31's sustained chord
+  survives (`tests/test_voice_merge.py`); laputa fidelity is 2.04% against the old output.
+- `restore_page_slurs`: global 1..16 numbering and dropped reversed pairs remove the m29-m30
+  cross-staff slur (`tests/test_page_restore.py`).
+
+Still open (see sections above): notation loss in `merge_staff_voices`/`split_chord_fragments`,
+display spanner/BarLine deletions, `upgrade_tempo_texts` change accounting, `drop_duplicate_notes`
+duration-blind key, `merge_aligned_voices` duplicate chord member, and the design/doc drift.

@@ -46,12 +46,14 @@ class UpgradeTempoTexts:
             if any(_tempo_text(node).strip() == text for node in measure.iter("Tempo")):
                 continue
             # the metronome direction imported from MusicXML becomes its own Tempo with just the
-            # glyph and a number; drop it, the real Tempo below carries the words and the glyph
+            # glyph and a number; drop it, the real Tempo below carries the words and the glyph.
+            # Deleting a node is a change even when no StaffText replacement follows.
             for voice in measure.findall("voice"):
                 for node in list(voice.findall("Tempo")):
                     plain = _plain_text(node).strip()
                     if plain and not any(character.isalpha() for character in plain):
                         voice.remove(node)
+                        changed += 1
             for voice in measure.findall("voice"):
                 replaced = False
                 for node in list(voice):

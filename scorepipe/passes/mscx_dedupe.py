@@ -79,16 +79,41 @@ class DropEmptyVoices:
     def run(self, doc: MsxcDocument, ctx: Context) -> PassResult:
         removed = 0
         for _staff, _index, measure in doc.iter_measures():
-            voices = list(measure.findall("voice"))
-            for position, voice in enumerate(voices):
+            for voice in list(measure.findall("voice")):
                 if any(child.tag not in ("BarLine", "location") for child in voice):
                     continue
-                barline = voice.find("BarLine")
-                if barline is not None and position > 0:
-                    voices[position - 1].append(barline)
+                barlines = list(voice.findall("BarLine"))
+                if barlines:
+                    owner = _barline_owner(measure, voice)
+                    if owner is None:
+                        # no other voice can carry the barline; keeping the slot is the
+                        # only way not to delete notation
+                        continue
+                    for barline in barlines:
+                        voice.remove(barline)
+                        owner.append(barline)
                 measure.remove(voice)
                 removed += 1
         return PassResult(changed=removed)
+
+
+def _barline_owner(measure, voice):
+    """The voice that should adopt a BarLine from an otherwise empty slot.
+
+    Prefer the immediately preceding voice (MuseScore's canonical order puts chord voices
+    first), otherwise the next one.  ``None`` means the measure has no other voice at all.
+    """
+    before: list = []
+    after: list = []
+    seen = False
+    for other in measure.findall("voice"):
+        if other is voice:
+            seen = True
+            continue
+        (after if seen else before).append(other)
+    if before:
+        return before[-1]
+    return after[0] if after else None
 
 
 TEXT_TAGS = {
@@ -124,15 +149,35 @@ class MergeTextVoices:
             for voice in voices:
                 if voice is target or voice.findall("Chord") or voice.findall("Rest"):
                     continue
-                texts = [child for child in voice if child.tag in TEXT_TAGS]
-                if not texts:
+                # every child that is not a barline or cursor positioning is content:
+                # move it into the owning voice instead of deleting it with the slot
+                movable = [
+                    child for child in voice if child.tag not in ("BarLine", "location")
+                ]
+                if not movable:
                     continue
-                for text in texts:
-                    voice.remove(text)
-                    target.insert(0, text)
+                position = _content_index(target)
+                for child in movable:
+                    voice.remove(child)
+                    target.insert(position, child)
+                    position += 1
+                if any(child.tag not in ("BarLine", "location") for child in voice):
+                    continue  # safety: never drop a slot that still holds content
+                for barline in list(voice.findall("BarLine")):
+                    voice.remove(barline)
+                    if target.find("BarLine") is None:
+                        target.append(barline)
                 measure.remove(voice)
                 removed += 1
         return PassResult(changed=removed)
+
+
+def _content_index(voice) -> int:
+    """Where MuseScore keeps text objects: after clef/key/time metadata, before chords."""
+    for position, child in enumerate(voice):
+        if child.tag not in ("Clef", "KeySig", "TimeSig", "eid"):
+            return position
+    return len(voice)
 
 
 DISPLAY_DEDUPE_PASSES = [
