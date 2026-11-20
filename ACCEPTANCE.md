@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 53 tests
+Ran 55 tests
 OK
 ```
 
@@ -36,7 +36,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-19 entries: 12 structural (11 mechanical + 1 analysis), 1 inject, 6 display. Every mechanical pass
+20 entries: 13 structural (12 mechanical + 1 analysis), 1 inject, 6 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -46,11 +46,13 @@ code 2 if that is violated.
 scorepipe laputa.musicxml --check --report laputa.json
 ```
 
-- `laputa` (63 measures): verifier reports 5 `measure-length` violations, all in staff 2 at m1
-  (6.5 beats) and m31 (7 beats across four voices). Nothing else: ties, slurs, rest visibility and
-  duplicate notes are clean.
-- `summer` (55 measures): 8 `measure-length` violations at m36–m40 (4.25–5.5 beats in 4/4),
-  matching the known OMR duration drift; no other violations.
+- `laputa` (63 measures): the verifier reports **1** `measure-length` violation, staff 2 voice 1 at
+  m1 (6.5 beats); ties, slurs, rest visibility, duplicate notes, clefs and keys are clean. This is
+  the first bar, where there is no previous measure to rebase into (a pickup/overfull opening).
+- `summer` (55 measures): **2** `measure-length` violations left, m38 staff 2 (4.5) and m39 staff 2
+  (4.25); the earlier m36–m40 block was repaired by `rebase_measures`, which moved the overflow
+  notes into the next bar. The remaining two are cases where the *next* bar is also overfull, so
+  the pass refuses to push the problem forward.
 - `laputa.mscz`: display pipeline runs to a fixed point with **0 changes** and a clean mscx
   verifier — the display invariants hold on a real MuseScore file.
 
