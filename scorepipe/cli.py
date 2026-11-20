@@ -39,6 +39,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--omr-dir", help="directory for the OMR page output (default: <pdf>_omr)")
     parser.add_argument("--mscz-out", help="also convert to .mscz and run the display phase")
     parser.add_argument("--musescore", help="MuseScore executable (default: MSCORE or common paths)")
+    parser.add_argument("--title", help="title credit to inject (agent-recognised for scans)")
+    parser.add_argument("--composer", help="composer credit to inject")
     parser.add_argument("--max-rounds", type=int, default=8)
     args = parser.parse_args(argv)
 
@@ -73,7 +75,13 @@ def main(argv: list[str] | None = None) -> int:
     if producer is not None:
         if Path(args.facts).suffix.lower() == ".pdf" and layout is None:
             print("facts: PDF text layer has no --layout, so no marks will be produced")
-        facts = {"marks": producer.produce(path).marks}
+        produced = producer.produce(path)
+        facts = {"marks": produced.marks, "credits": produced.credits}
+    credits = facts.setdefault("credits", [])
+    if args.title:
+        credits.append({"type": "title", "text": args.title})
+    if args.composer:
+        credits.append({"type": "composer", "text": args.composer})
     for problem in validate_facts(facts):
         print(f"facts: {problem}")
 

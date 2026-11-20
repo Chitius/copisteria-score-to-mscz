@@ -32,6 +32,7 @@ from .xml_basic import (
 )
 from .xml_clefs import DROP_REDUNDANT_CLEFS, DROP_REDUNDANT_KEYS, DropRedundantClefs, DropRedundantKeySignatures
 from .xml_duplicates import DROP_DUPLICATE_NOTES, DropDuplicateNotes
+from .xml_credits import INJECT_CREDITS, ApplyCreditsFacts
 from .xml_facts import ApplyMarksFacts, INJECT_PASSES
 from .xml_measures import FILL_PASS, FillShortMeasures
 from .xml_merge import MERGE_ALIGNED_VOICES, MergeAlignedVoices
@@ -67,6 +68,7 @@ STRUCTURAL_PASSES = (
     + ANALYSIS_PASSES
 )
 DISPLAY_PASSES = DISPLAY_PASSES + DISPLAY_DEDUPE_PASSES + DISPLAY_FACT_PASSES
+INJECT_PASSES = INJECT_PASSES + [INJECT_CREDITS]
 
 __all__ = [
     "STRUCTURAL_PASSES",
@@ -97,6 +99,7 @@ __all__ = [
     "DedupePedalSpanners",
     "DedupeTextObjects",
     "ApplyMarksFacts",
+    "ApplyCreditsFacts",
     "DropTextVoiceRests",
     "UnhideRealRests",
     "DropPaddingVoices",

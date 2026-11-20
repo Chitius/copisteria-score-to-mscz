@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 80 tests
+Ran 82 tests
 OK
 ```
 
@@ -31,6 +31,7 @@ Coverage:
 | MusicXML -> mscz -> display combined driver | `test_mscz_export.py` |
 | display text and pedal dedupe | `test_display_dedupe.py` |
 | anacrusis (pickup) detection | `test_pickup.py` |
+| credits injection and idempotence | `test_credits.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -46,7 +47,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-30 entries: 21 structural (20 mechanical + 1 analysis), 1 inject, 8 display. Every mechanical pass
+31 entries: 21 structural (20 mechanical + 1 analysis), 2 inject, 8 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -69,6 +70,8 @@ scorepipe laputa.musicxml --check --report laputa.json
   carried them.
 - `laputa.mscz`: display pipeline runs to a fixed point with **0 changes** and a clean mscx
   verifier — the display invariants hold on a real MuseScore file.
+- Credited real run: `scorepipe laputa.musicxml --title Innocent --composer "Joe Hisaishi" --check`
+  injects both credits (before `<part-list>`) and still verifies clean.
 - **Whole chain**: `scorepipe laputa.musicxml --mscz-out laputa_pipeline.mscz` produced a 68 KB
   mscz; the display phase converged in 2 rounds (72 changes) and the mscx verifier was clean. This
   is the `structural -> MuseScore conversion -> display` chain end to end on a real score.

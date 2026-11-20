@@ -29,7 +29,11 @@ class JsonProducer:
 
     def produce(self, input_path: Path) -> FactSet:
         data = load_facts(self.path)
-        return FactSet(marks=data.get("marks") or [], source=str(self.path))
+        return FactSet(
+            marks=data.get("marks") or [],
+            credits=data.get("credits") or [],
+            source=str(self.path),
+        )
 
 
 class TextLayerProducer:
@@ -79,14 +83,16 @@ class CompositeProducer:
 
     def produce(self, input_path: Path) -> FactSet:
         marks: list[dict] = []
+        credits: list[dict] = []
         words: list[dict] = []
         sources: list[str] = []
         for producer in self.producers:
             result = producer.produce(input_path)
             marks.extend(result.marks)
+            credits.extend(result.credits)
             words.extend(result.words)
             sources.append(result.source)
-        return FactSet(marks=marks, words=words, source=", ".join(sources))
+        return FactSet(marks=marks, credits=credits, words=words, source=", ".join(sources))
 
 
 def resolve(path: str | Path | None, layout: dict | None = None) -> Producer | None:

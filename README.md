@@ -82,6 +82,7 @@ Implemented passes:
 | `restore_page_wedges` | structural | `page-wedges` | wedge directions that differ from the page |
 | `upgrade_tempo_texts` | display | `tempo-objects` | tempo words still plain staff text |
 | `upgrade_gradual_texts` | display | `gradual-spanners` | rit./rall./accel. words needing a paired spanner |
+| `apply_credits_facts` | inject | `credits` | title/composer credits from facts |
 
 Run:
 
