@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 68 tests
+Ran 71 tests
 OK
 ```
 
@@ -26,6 +26,7 @@ Coverage:
 | page merging and page-directory CLI | `test_loader.py` |
 | page-level tie/slur/pedal restoration | `test_page_restore.py` |
 | external OMR command front-end | `test_omr.py` |
+| PDF text layer, measure-box assignment | `test_pdf_producer.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -76,5 +77,7 @@ same problems the old ad-hoc pipeline found, with stable codes.
   environment setup are not bundled in this project.
 - The display layer runs after MuseScore conversion of a `.mscz`; a combined
   `musicxml -> mscz -> display` driver is not wired into the CLI yet.
+- The PDF producer handles digital PDFs (text layer + layout); the laputa scan has no text layer
+  and yields zero words, which is why scanned scores still need the agent/vision path for marks.
 - `rebase_measures` refuses to push an overflow that would itself land past the next barline; such
   a case is still reported by the verifier rather than cascaded further.

@@ -6,17 +6,11 @@ document, and it is mechanical and idempotent.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
 from ..facts import load_facts
-
-
-@dataclass
-class FactSet:
-    marks: list[dict] = field(default_factory=list)
-    source: str = ""
+from .base import FactSet
 
 
 class Producer(Protocol):
@@ -85,18 +79,35 @@ class CompositeProducer:
 
     def produce(self, input_path: Path) -> FactSet:
         marks: list[dict] = []
+        words: list[dict] = []
         sources: list[str] = []
         for producer in self.producers:
             result = producer.produce(input_path)
             marks.extend(result.marks)
+            words.extend(result.words)
             sources.append(result.source)
-        return FactSet(marks=marks, source=", ".join(sources))
+        return FactSet(marks=marks, words=words, source=", ".join(sources))
 
 
-def resolve(path: str | Path | None) -> Producer | None:
+def resolve(path: str | Path | None, layout: dict | None = None) -> Producer | None:
     if not path:
         return None
     candidate = Path(path)
-    if candidate.suffix.lower() in (".txt", ".tsv"):
+    suffix = candidate.suffix.lower()
+    if suffix == ".pdf":
+        from .pdf import PdfTextProducer
+
+        return PdfTextProducer(candidate, layout=layout)
+    if suffix in (".txt", ".tsv"):
         return TextLayerProducer(candidate)
     return JsonProducer(candidate)
+
+
+__all__ = [
+    "FactSet",
+    "Producer",
+    "JsonProducer",
+    "TextLayerProducer",
+    "CompositeProducer",
+    "resolve",
+]

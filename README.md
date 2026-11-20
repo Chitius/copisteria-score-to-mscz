@@ -133,10 +133,21 @@ available to the restoration passes.
 
 `scorepipe.facts.load_facts` reads a JSON file produced by the text layer or by the agent.
 `scorepipe.producers` adds a `Producer` protocol: `JsonProducer`, `TextLayerProducer` (tab-separated
-`measure<TAB>beat<TAB>placement<TAB>text` sidecar) and `CompositeProducer`; the CLI picks one by
-file suffix. The `apply_marks_facts` inject pass turns marks into words / rehearsal / metronome
-directions and is idempotent (a text already present in the measure is skipped). Facts never edit
-the score directly; they are data.
+`measure<TAB>beat<TAB>placement<TAB>text` sidecar), `PdfTextProducer` (poppler `pdftotext -bbox`
+plus a measure-box layout) and `CompositeProducer`; the CLI picks one by file suffix. The
+`apply_marks_facts` inject pass turns marks into words / rehearsal / metronome directions and is
+idempotent (a text already present in the measure is skipped). Facts never edit the score
+directly; they are data.
+
+A PDF layout file gives each measure's box in PDF points:
+
+```json
+{"pages": [{"page": 1, "measures": [{"number": 9, "x0": 80, "y0": 690, "x1": 260, "y1": 730}]}]}
+```
+
+Words are assigned to the measure whose box contains their centre; without a layout the producer
+still returns the words but no marks. A scanned PDF has no text layer and yields zero words — that
+is the agent/vision path, not this producer.
 
 ```
 python -m scorepipe.cli score.musicxml --facts marks.json --trace -o out.musicxml

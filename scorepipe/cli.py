@@ -26,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("input", nargs="?", help="MusicXML file or MuseScore .mscz")
     parser.add_argument("-o", "--output", help="write the repaired score here")
     parser.add_argument("--facts", help="marks facts JSON produced by the text layer or the agent")
+    parser.add_argument("--layout", help="JSON measure boxes for a PDF text-layer facts producer")
     parser.add_argument("--trace", action="store_true", help="print every pass that changed something")
     parser.add_argument("--report", help="write the run report (phases, trace, verifier, analysis) as JSON")
     parser.add_argument("--check", action="store_true", help="verify only: never write the score")
@@ -62,8 +63,13 @@ def main(argv: list[str] | None = None) -> int:
         return _run_mscz(path, args)
 
     facts = {}
-    producer = resolve_producer(args.facts)
+    layout = None
+    if args.layout:
+        layout = json.loads(Path(args.layout).read_text(encoding="utf-8-sig"))
+    producer = resolve_producer(args.facts, layout=layout)
     if producer is not None:
+        if Path(args.facts).suffix.lower() == ".pdf" and layout is None:
+            print("facts: PDF text layer has no --layout, so no marks will be produced")
         facts = {"marks": producer.produce(path).marks}
     for problem in validate_facts(facts):
         print(f"facts: {problem}")
