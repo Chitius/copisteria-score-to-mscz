@@ -64,6 +64,8 @@ Implemented passes:
 | `drop_padding_voices` | display | `padding-voices` | rest-only voices next to a chord voice |
 | `canonical_voice_order` | display | `voice-order` | voice slots out of canonical order |
 | `measure_length_report` | structural | – | analysis only (notes, never mutates) |
+| `drop_trailing_duplicate_measure` | structural | `measure-list` | trailing duplicate final bars |
+| `upgrade_tempo_texts` | display | `tempo-objects` | tempo words still plain staff text |
 
 Run:
 

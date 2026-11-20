@@ -12,7 +12,7 @@ from scorepipe.core.invariants import (
 )
 from scorepipe.core.pass_base import Context
 from scorepipe.core.pipeline import run_pipeline
-from scorepipe.passes import STRUCTURAL_PASSES
+from scorepipe.passes import DISPLAY_PASSES, STRUCTURAL_PASSES
 
 FIXTURE = Path(__file__).parent / "fixtures" / "tiny.musicxml"
 
@@ -56,14 +56,15 @@ class PipelineTest(unittest.TestCase):
 
     def test_each_owned_property_has_one_writer(self):
         owner: dict[str, str] = {}
-        for one_pass in STRUCTURAL_PASSES:
-            for property_name in one_pass.spec.owns:
-                self.assertNotIn(
-                    property_name,
-                    owner,
-                    f"{property_name} owned by {owner.get(property_name)} and {one_pass.spec.name}",
-                )
-                owner[property_name] = one_pass.spec.name
+        for phase_passes in (STRUCTURAL_PASSES, DISPLAY_PASSES):
+            for one_pass in phase_passes:
+                for property_name in one_pass.spec.owns:
+                    self.assertNotIn(
+                        property_name,
+                        owner,
+                        f"{property_name} owned by {owner.get(property_name)} and {one_pass.spec.name}",
+                    )
+                    owner[property_name] = one_pass.spec.name
 
 
 if __name__ == "__main__":
