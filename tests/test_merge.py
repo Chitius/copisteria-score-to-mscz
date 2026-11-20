@@ -48,13 +48,13 @@ class MergeAlignedVoicesTest(unittest.TestCase):
         self.assertIsNotNone(first.find(".//note/chord"))
         self.assertEqual(measure_lengths(doc, Context()), [])
 
-    def test_misaligned_voice_is_left_alone(self):
+    def test_misaligned_voice_keeps_its_notes(self):
         body = note("C", 16) + "<backup><duration>16</duration></backup>" + note("E", 8, voice="2")
         doc = build(measure(1, body) + measure(2, note("G", 16)))
-        result = run_pipeline(doc, Context(), structural=STRUCTURAL_PASSES, verifiers=[])
-        voices = {event.voice for event in doc.events(doc.measures()[0])}
-        self.assertIn("2", voices)
-        self.assertGreaterEqual(result.changes, 0)
+        run_pipeline(doc, Context(), structural=STRUCTURAL_PASSES, verifiers=[])
+        events = [event for event in doc.events(doc.measures()[0]) if not event.rest]
+        pitches = {event.element.findtext("pitch/step") for event in events}
+        self.assertEqual(pitches, {"C", "E"})
 
     def test_second_run_is_a_no_op(self):
         body = note("C", 16) + "<backup><duration>16</duration></backup>" + note("E", 16, voice="2")

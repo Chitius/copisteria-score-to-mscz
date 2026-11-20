@@ -60,6 +60,7 @@ Implemented passes:
 | `mark_pickup` | structural | `pickup-marking` | short opening bar that is an anacrusis |
 | `pad_empty_staves` | structural | `empty-staff-rests` | silent staff without a measure rest |
 | `rebuild_voice_layers` | structural | `voice-layers` | fragmented same-voice blocks MuseScore would coerce |
+| `merge_staff_voices` | structural | `staff-line` | multi-voice staff whose durations drift |
 | `unhide_rests` | structural | `rest-visibility` | hidden rests |
 | `sanitize_slurs` | structural | `slur-endpoints` | unmatched / >N-bar endpoints |
 | `normalize_voice_numbers` | structural | `voice-numbers` | voice labels not 1..n by density |

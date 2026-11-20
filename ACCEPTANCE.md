@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 99 tests
+Ran 101 tests
 OK
 ```
 
@@ -39,6 +39,7 @@ Coverage:
 | chord/cursor semantics verifier | `test_semantics.py` |
 | empty staff measure rests | `test_empty_staves.py` |
 | golden-score comparison | `test_compare.py` |
+| multi-voice staff retiming / fill conflict | `test_voice_merge.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -54,7 +55,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-36 entries: 23 structural (22 mechanical + 1 analysis), 2 inject, 11 display. Every mechanical pass
+37 entries: 24 structural (23 mechanical + 1 analysis), 2 inject, 11 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -92,11 +93,12 @@ scorepipe laputa.musicxml --check --report laputa.json
   7 tie spanners and m2 6, F6 is a filled dotted quarter, and the big chords are tied across the
   barline.
 - **Fidelity against the old skill** (laputa, normalised pitch/onset/duration multiset, voice
-  ignored): after the `fill_short_measures` backup fix and `pad_empty_staves` the symbol mismatch is
-  **8.35%** (37 missing + 63 extra of 1194 symbols, down from 18.35%). Empty-staff measures now carry
-  a measure rest and no longer account for the m1–m6 gaps. The remaining clusters are m25–m32 and
-  m50–m54: OMR writes a second whole-note voice against a short bass line and the old skill merged
-  or dropped it differently from us; these are ambiguous source measures, not cursor corruption.
+  ignored): the symbol mismatch is **4.17%** (23 missing + 26 extra), down from 18.35% at the start
+  of this review. The last fix was `merge_staff_voices`, the old skill's aggressive pass: when a
+  staff has several voices and their notehead fills agree, the measure is rebuilt as one line,
+  each chord lasting until the next onset (fill conflicts are still skipped). Remaining differences
+  are concentrated in m30–m32 (one ambiguous bass measure where OMR gives a whole note and a
+  quarter line) and isolated single symbols in m42–m47 and m61–m62.
 
 These are baseline reports, not failures of the pipeline: they show the verifiers catching the
 same problems the old ad-hoc pipeline found, with stable codes.

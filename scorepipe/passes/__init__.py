@@ -45,6 +45,7 @@ from .xml_pickup import MARK_PICKUP, MarkPickup
 from .xml_rebase import REBASE_MEASURES, RebaseMeasures
 from .xml_slurs import SLUR_PASS, SanitizeSlurs
 from .xml_tail import DROP_DUPLICATE_TAIL, DropTrailingDuplicateMeasure
+from .xml_voice_merge import MERGE_STAFF_VOICES, MergeStaffVoices
 from .xml_voices import NORMALIZE_VOICES_PASS, NormalizeVoiceNumbers
 
 # order matters only inside a phase; keep the cheap, local rewrites first
@@ -59,6 +60,7 @@ STRUCTURAL_PASSES = (
         MARK_PICKUP,
         PAD_EMPTY_STAVES,
         REBUILD_VOICE_LAYERS,
+        MERGE_STAFF_VOICES,
         REBASE_MEASURES,
         MERGE_ALIGNED_VOICES,
         NORMALIZE_VOICES_PASS,
@@ -93,6 +95,7 @@ __all__ = [
     "MarkPickup",
     "RebuildVoiceLayers",
     "PadEmptyStaves",
+    "MergeStaffVoices",
     "RebaseMeasures",
     "MergeAlignedVoices",
     "RestorePageTies",
