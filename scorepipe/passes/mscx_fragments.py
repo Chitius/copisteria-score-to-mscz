@@ -59,7 +59,7 @@ class SplitChordFragments:
                 for voice in measure.findall("voice"):
                     if chord in list(voice):
                         voice.remove(chord)
-            _new_voice(measure, fragment, note)
+            _new_voice(doc, measure, fragment, note)
             added += 1
         return PassResult(changed=added)
 
@@ -88,7 +88,7 @@ def _find_note(measure, pitch: int, onset: float):
     return None, None
 
 
-def _new_voice(measure, fragment, note) -> None:
+def _new_voice(doc, measure, fragment, note) -> None:
     voice = ElementTree.SubElement(measure, "voice")
     onset = float(fragment["onset"])
     duration = float(fragment["duration"])
@@ -101,10 +101,27 @@ def _new_voice(measure, fragment, note) -> None:
     for child in note:
         if child.tag in ("pitch", "tpc"):
             copy.append(ElementTree.fromstring(ElementTree.tostring(child)))
-    remaining = 4.0 - onset - duration
+    remaining = _measure_beats(doc, measure) - onset - duration
     if remaining > 1e-6:
         rest = ElementTree.SubElement(voice, "Rest")
         _set_type(rest, remaining)
+
+
+def _measure_beats(doc, target) -> float:
+    """Follow TimeSig changes up to `target`; the mscx does not repeat the signature each bar."""
+    meter = 4.0
+    for staff in doc.root.iter("Staff"):
+        for measure in staff.findall("Measure"):
+            for time in measure.iter("TimeSig"):
+                try:
+                    meter = float(time.findtext("sigN") or 4) * 4.0 / float(
+                        time.findtext("sigD") or 4
+                    )
+                except ValueError:
+                    pass
+            if measure is target:
+                return meter
+    return meter
 
 
 def _set_type(element, beats: float) -> None:

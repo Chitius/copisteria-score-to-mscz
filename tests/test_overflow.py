@@ -44,6 +44,20 @@ class DropOverflowDuplicatesTest(unittest.TestCase):
         doc = build(measure(1, note("C", 16) + note("D", 4)) + measure(2, note("E", 16)))
         self.assertEqual(DropOverflowDuplicates().run(doc, Context()).changed, 0)
 
+    def test_removing_a_chord_base_removes_its_members(self):
+        chord_member = (
+            "<note><chord/><pitch><step>B</step><octave>4</octave></pitch>"
+            "<duration>8</duration><voice>1</voice></note>"
+        )
+        doc = build(measure(1, note("C", 16) + note("G", 8) + chord_member) + measure(2, note("G", 8)))
+        result = DropOverflowDuplicates().run(doc, Context())
+        self.assertEqual(result.changed, 2)
+        first = doc.measures()[0]
+        self.assertEqual(first.findall(".//note/chord"), [])
+        from scorepipe.core.invariants import chord_semantics
+
+        self.assertEqual(chord_semantics(doc, Context()), [])
+
 
 if __name__ == "__main__":
     unittest.main()

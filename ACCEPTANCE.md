@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 104 tests
+Ran 110 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -113,14 +113,15 @@ same problems the old ad-hoc pipeline found, with stable codes.
 
 ## Known gaps (documented, not hidden)
 
-- `SANITY.md` lists the contract violations that are still open, with file:line and repro shapes:
-  `rebase_measures` does not shrink the closing backup and can give two overflow groups the same
-  voice; `drop_overflow_duplicates` can delete a chord base without its members;
-  `drop_trailing_duplicate_measure` can delete more than one measure; `pad_empty_staves` is wrong in
-  3/4 and on pickups; `split_chord_fragments` hard-codes 4/4. `merge_staff_voices` now preserves the
-  other staff's `<forward>` gaps and the laputa m31 sustained chord, but its rebuilt notes still
-  drop ties/slurs/articulations unless a page model is supplied to restore them. The sanity matrix's
-  fixtures do not all trigger these yet; adding those adversarial fixtures is the next step.
+- `SANITY.md` remains the audit snapshot. The first four violations are now fixed and pinned by
+  tests: `rebase_measures` shrinks the closing backup and numbers overflow voices uniquely
+  (`test_rebase.py`); `drop_overflow_duplicates` removes chord members with their base
+  (`test_overflow.py`); `drop_trailing_duplicate_measure` no longer eats a run of short bars
+  (`test_tail.py`); `pad_empty_staves` uses the real cursor length and skips pickups
+  (`test_empty_staves.py`). `split_chord_fragments` now pads by the measure's own time signature
+  (`test_mscx_fragments.py`), though a moved member still loses non-pitch notations.
+  `merge_staff_voices` keeps other staves' `<forward>` gaps and the laputa m31 sustained chord, but
+  rebuilt notes still drop ties/slurs/articulations unless a page model restores them.
 - Voice merging beyond exact alignment is not ported; the pass refuses anything that needs a
   retiming decision.
 - Credits cover title/subtitle/composer/lyricist styles and are moved into the mscx title frame;

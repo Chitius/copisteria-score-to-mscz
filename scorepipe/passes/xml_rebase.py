@@ -30,6 +30,7 @@ class RebaseMeasures:
         divisions = doc.divisions()
         meter = (4.0, 4.0)
         moved = 0
+        touched: set[int] = set()
         for index, measure in enumerate(measures):
             declared = doc.time_signature(measure)
             if declared is not None:
@@ -40,6 +41,10 @@ class RebaseMeasures:
             next_measure = measures[index + 1]
             next_meter = doc.time_signature(next_measure)
             next_bar = next_meter[0] * 4.0 / next_meter[1] if next_meter is not None else bar
+            next_voices = {
+                staff: _max_voice(next_measure, staff) + 1
+                for staff in {event.staff for event in doc.events(next_measure)}
+            }
 
             groups: dict[tuple[str, str], list[Event]] = {}
             removals: list[ElementTree.Element] = []
@@ -67,17 +72,26 @@ class RebaseMeasures:
                 offset = min(event.onset for event in events) - bar
                 if offset >= next_bar - 1e-6:
                     continue
-                fragments.append(_block(events, offset, bar, staff, divisions, next_measure, next_bar))
+                number = next_voices.get(staff, _max_voice(next_measure, staff) + 1)
+                next_voices[staff] = number + 1
+                fragments.append(
+                    _block(events, offset, bar, staff, divisions, next_measure, next_bar, number)
+                )
             if fragments:
                 insertion = _insertion_index(next_measure)
                 payload: list[ElementTree.Element] = []
                 for fragment in fragments:
                     payload.extend(fragment)
                 next_measure[insertion:insertion] = payload
+            if removals:
+                touched.add(id(measure))
             for element in removals:
                 if element in list(measure):
                     measure.remove(element)
                     moved += 1
+        for measure in measures:
+            if id(measure) in touched:
+                _shrink_backups(measure)
         return PassResult(changed=moved)
 
 
@@ -125,11 +139,41 @@ def _add_tie(note, kind: str) -> None:
         ElementTree.SubElement(notations, "tied", {"type": kind})
 
 
+def _max_voice(measure, staff: str) -> int:
+    used = [
+        int(note.findtext("voice"))
+        for note in measure.iter("note")
+        if (note.findtext("staff") or "1") == staff and (note.findtext("voice") or "").isdigit()
+    ]
+    return max(used, default=0)
+
+
+def _shrink_backups(measure) -> None:
+    """After removing overflow notes, the block's closing backup must match what is left."""
+    children = list(measure)
+    start = 0
+    for index, child in enumerate(children):
+        if child.tag != "backup":
+            continue
+        end = 0
+        for item in children[start:index]:
+            if item.tag == "note" and item.find("chord") is not None:
+                continue
+            if item.tag in ("note", "forward", "rest"):
+                text = item.findtext("duration")
+                if text is not None:
+                    end += int(text)
+        duration = child.find("duration")
+        if duration is not None:
+            duration.text = str(end)
+        start = index + 1
+
+
 def _block(
-    events, offset: float, bar: float, staff: str, divisions: float, measure, next_bar: float
+    events, offset: float, bar: float, staff: str, divisions: float, measure, next_bar: float, number: int
 ) -> list[ElementTree.Element]:
     ordered = sorted(events, key=lambda event: (event.onset, event.chord))
-    new_voice = _next_voice(measure, staff)
+    new_voice = str(number)
     fragment: list[ElementTree.Element] = []
     if offset > 1e-6:
         forward = ElementTree.Element("forward")
@@ -174,17 +218,6 @@ def _block(
     ElementTree.SubElement(backup, "duration").text = str(int(round(cursor * divisions)))
     fragment.append(backup)
     return fragment
-
-
-def _next_voice(measure, staff: str) -> str:
-    used = set()
-    for note in measure.iter("note"):
-        if (note.findtext("staff") or "1") != staff:
-            continue
-        text = note.findtext("voice") or "1"
-        if text.isdigit():
-            used.add(int(text))
-    return str(max(used) + 1 if used else 1)
 
 
 def _insertion_index(measure) -> int:

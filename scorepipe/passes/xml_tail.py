@@ -26,6 +26,12 @@ class DropTrailingDuplicateMeasure:
         previous = _profile(doc, measures[-2])
         if not last or not previous:
             return PassResult()
+        meter = doc.time_signature(measures[-2]) or (4.0, 4.0)
+        bar = meter[0] * 4.0 / meter[1]
+        if previous["total"] < bar - 1e-6:
+            # only a *complete* penultimate bar may own a truncated duplicate tail; otherwise a
+            # run of short bars would delete itself one bar per fixpoint round (12/8/4 ticks)
+            return PassResult()
         if set(last["pitches"]) != set(previous["pitches"]):
             return PassResult()
         if last["total"] >= previous["total"] - 1e-6:

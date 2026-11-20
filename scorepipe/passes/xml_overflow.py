@@ -38,8 +38,21 @@ class DropOverflowDuplicates:
                 target_onset = round(event.onset - bar, 4)
                 key = (event.staff, event.voice, target_onset, pitch)
                 if key in following:
-                    measure.remove(event.element)
-                    changed += 1
+                    elements = [event.element]
+                    if event.element.find("chord") is None:
+                        children = list(measure)
+                        position = children.index(event.element) + 1
+                        while (
+                            position < len(children)
+                            and children[position].tag == "note"
+                            and children[position].find("chord") is not None
+                        ):
+                            elements.append(children[position])
+                            position += 1
+                    for element in elements:
+                        if element in list(measure):
+                            measure.remove(element)
+                            changed += 1
         return PassResult(changed=changed)
 
 

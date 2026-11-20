@@ -31,17 +31,21 @@ class PadEmptyStaves:
         meter = (4.0, 4.0)
         added = 0
         for _number, measure in doc.iter_measures():
+            if measure.get("implicit") == "yes":
+                continue  # an anacrusis is intentionally short; do not fill it with a measure rest
             declared = doc.time_signature(measure)
             if declared is not None:
                 meter = declared
             bar = meter[0] * 4.0 / meter[1]
-            present = {event.staff for event in doc.events(measure)}
+            events = doc.events(measure)
+            present = {event.staff for event in events}
+            cursor = max((event.end for event in events), default=0.0)
             for staff in sorted(staves - present):
-                if any(
-                    child.tag == "note" for child in measure
-                ):
+                if events:
                     backup = ElementTree.Element("backup")
-                    ElementTree.SubElement(backup, "duration").text = str(int(round(bar * divisions)))
+                    ElementTree.SubElement(backup, "duration").text = str(
+                        int(round(cursor * divisions))
+                    )
                     measure.append(backup)
                 rest = ElementTree.Element("note")
                 ElementTree.SubElement(rest, "rest", {"measure": "yes"})

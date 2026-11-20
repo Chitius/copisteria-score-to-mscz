@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import unittest
 from xml.etree import ElementTree
@@ -47,3 +47,26 @@ class SplitChordFragmentsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class ThreeFourFragmentTest(unittest.TestCase):
+    def test_new_voice_fills_a_three_four_bar(self):
+        from scorepipe.core.mscx_invariants import measure_lengths as mscx_lengths
+        from scorepipe.passes.mscx_fragments import FRAGMENTS
+
+        xml = '''<museScore><Score><Staff id="1"><Measure>
+          <voice>
+            <TimeSig><sigN>3</sigN><sigD>4</sigD></TimeSig>
+            <Rest><durationType>quarter</durationType></Rest>
+            <Chord><durationType>half</durationType>
+              <Note><pitch>60</pitch><tpc>14</tpc></Note>
+              <Note><pitch>72</pitch><tpc>14</tpc></Note>
+            </Chord>
+          </voice>
+        </Measure></Staff></Score></museScore>'''
+        doc = MsxcDocument(ElementTree.fromstring(xml))
+        fragments = [{"measure": 1, "staff": "1", "pitch": 72, "onset": 1.0, "duration": 1.0}]
+        FRAGMENTS.run(doc, Context(options={"chord_fragments": fragments}))
+        self.assertEqual(mscx_lengths(doc, Context()), [])
+        voices = doc.root.findall("Score/Staff/Measure/voice")
+        self.assertEqual(len(voices), 2)
+

@@ -37,6 +37,32 @@ def build(measures: str) -> Document:
 
 
 class RebaseMeasuresTest(unittest.TestCase):
+    def test_source_measure_backup_shrinks_and_new_voices_are_distinct(self):
+        body_one = (
+            '<note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration><voice>1</voice></note>'
+            '<note><pitch><step>D</step><octave>4</octave></pitch><duration>8</duration><voice>1</voice></note>'
+            "<backup><duration>24</duration></backup>"
+            '<note><pitch><step>E</step><octave>4</octave></pitch><duration>16</duration><voice>2</voice></note>'
+            '<note><pitch><step>F</step><octave>4</octave></pitch><duration>8</duration><voice>2</voice></note>'
+        )
+        measures = measure(1, body_one) + measure(2, note("G", 16))
+        doc = build(measures)
+        from scorepipe.passes import REBASE_MEASURES
+
+        REBASE_MEASURES.run(doc, Context())
+        first = doc.measures()[0]
+        self.assertEqual(measure_lengths(doc, Context()), [])
+        onsets = [(event.voice, event.onset) for event in doc.events(first)]
+        self.assertIn(("2", 0.0), onsets)
+        second = doc.measures()[1]
+        blocks = {}
+        for event in doc.events(second):
+            if event.rest:
+                continue
+            blocks.setdefault((event.staff, event.voice), 0)
+            blocks[(event.staff, event.voice)] += 1
+        self.assertEqual(set(blocks), {("1", "1"), ("1", "2"), ("1", "3")})
+
     def test_overflow_moves_to_the_next_measure_as_a_new_voice(self):
         doc = build(measure(1, note("C", 16) + note("E", 4)) + measure(2, note("D", 16)))
         report = run_pipeline(doc, Context(), structural=STRUCTURAL_PASSES, verifiers=[])

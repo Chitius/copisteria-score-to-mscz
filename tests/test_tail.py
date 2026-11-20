@@ -49,6 +49,11 @@ class DropTrailingDuplicateTest(unittest.TestCase):
         ctx = Context(options={"drop_trailing_duplicate": False})
         self.assertEqual(DropTrailingDuplicateMeasure().run(doc, ctx).changed, 0)
 
+    def test_a_run_of_short_bars_is_not_eaten_one_per_round(self):
+        doc = build(measure(1, "C", 12) + measure(2, "C", 8) + measure(3, "C", 4))
+        self.assertEqual(DropTrailingDuplicateMeasure().run(doc, Context()).changed, 0)
+        self.assertEqual(len(doc.measures()), 3)
+
 
 if __name__ == "__main__":
     unittest.main()
