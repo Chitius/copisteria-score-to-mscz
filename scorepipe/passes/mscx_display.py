@@ -72,20 +72,32 @@ class DropPaddingVoices:
             for voice in list(doc.voices(measure)):
                 if voice.findall("Chord") or has_text(voice):
                     continue
-                # a spanner, dynamic or barline is real content: only pure padding (rests /
-                # locations) may disappear. A barline is handed to the chord voice first.
-                if any(child.tag not in ("Rest", "BarLine", "location") for child in voice):
+                # a spanner or dynamic is real content. Clef/KeySig/TimeSig are measure metadata
+                # that MuseScore sometimes parks in the padding voice (laputa m26 voice 2 was a
+                # measure rest + Clef, so the whole voice looked non-empty and survived).
+                metadata_tags = ("Clef", "KeySig", "TimeSig")
+                if any(
+                    child.tag not in ("Rest", "BarLine", "location", *metadata_tags)
+                    for child in voice
+                ):
                     continue
+                owner = next(
+                    (candidate for candidate in doc.voices(measure) if candidate.findall("Chord")),
+                    None,
+                )
+                if owner is None:
+                    continue
+                for tag in reversed(metadata_tags):
+                    item = voice.find(tag)
+                    if item is None:
+                        continue
+                    if owner.find(tag) is None:
+                        owner.insert(0, item)
+                    else:
+                        voice.remove(item)
                 barline = voice.find("BarLine")
                 if barline is not None:
-                    owner = next(
-                        (candidate for candidate in doc.voices(measure) if candidate.findall("Chord")),
-                        None,
-                    )
-                    if owner is not None:
-                        owner.append(barline)
-                    else:
-                        continue
+                    owner.append(barline)
                 measure.remove(voice)
                 changed += 1
         return PassResult(changed=changed)

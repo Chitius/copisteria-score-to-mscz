@@ -113,3 +113,16 @@ class PaddingVoiceContentTest(unittest.TestCase):
         measure = doc.root.find('Score/Staff/Measure')
         self.assertEqual(len(measure.findall('voice')), 1)
         self.assertEqual(len(list(measure.iter('BarLine'))), 1)
+
+    def test_measure_rest_voice_with_a_clef_is_padding(self):
+        doc = MsxcDocument(ElementTree.fromstring('''
+          <museScore><Score><Staff id="1"><Measure>
+            <voice><Chord><durationType>whole</durationType><Note><pitch>60</pitch></Note></Chord></voice>
+            <voice><Rest><durationType>measure</durationType></Rest>
+              <Clef><concertClefType>G</concertClefType></Clef></voice>
+          </Measure></Staff></Score></museScore>'''))
+        run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        measure = doc.root.find('Score/Staff/Measure')
+        self.assertEqual(len(measure.findall('voice')), 1)
+        self.assertEqual(len(measure.findall('.//Rest')), 0)
+        self.assertEqual(len(measure.findall('.//Clef')), 1)

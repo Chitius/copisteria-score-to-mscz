@@ -39,7 +39,12 @@ def padding_voices(doc: MsxcDocument, ctx: Context) -> list[Violation]:
         for voice in voices:
             if voice.findall("Chord") or has_text(voice):
                 continue
-            if any(child.tag not in ("Rest", "location") for child in voice):
+            if not voice.findall("Rest"):
+                continue
+            if any(
+                child.tag not in ("Rest", "location", "Clef", "KeySig", "TimeSig")
+                for child in voice
+            ):
                 continue
             out.append(Violation("padding-voice", index, "rest-only voice next to chords"))
     return out
