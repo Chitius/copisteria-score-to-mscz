@@ -1,16 +1,17 @@
-"""Move notes that start past the barline into the next measure as a new voice.
+"""Move or split notes that cross the barline.
 
-The moved notes keep their relative rhythm: the block starts with a forward for the offset, notes
-follow in onset order, and a backup of the block's length lets the original voices start at 0 again.
-This is conservative: if the overflow would land past the *next* barline too, the measure is left
-alone and the verifier keeps reporting it.
+Two cases are handled:
+
+- a note that *starts* past the barline is moved into the next measure as a new voice;
+- a note that starts before the barline but ends after it is split: the first part stays, the
+  remainder becomes a tied note at the start of the next measure's new voice.
 """
 
 from __future__ import annotations
 
 from xml.etree import ElementTree
 
-from ..core.document import Document
+from ..core.document import Document, Event
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
 
 
@@ -20,7 +21,7 @@ class RebaseMeasures:
         phase=Phase.STRUCTURAL,
         kind=Kind.MECHANICAL,
         owns=("measure-content",),
-        description="move notes starting past the barline into the next measure as a new voice",
+        description="move notes starting past the barline, split notes crossing it, into a new voice",
         measure="overflow beats beyond the barline",
     )
 
@@ -39,31 +40,89 @@ class RebaseMeasures:
             next_measure = measures[index + 1]
             next_meter = doc.time_signature(next_measure)
             next_bar = next_meter[0] * 4.0 / next_meter[1] if next_meter is not None else bar
-            overflow: dict[tuple[str, str], list] = {}
+
+            groups: dict[tuple[str, str], list[Event]] = {}
+            removals: list[ElementTree.Element] = []
             for event in doc.events(measure):
-                if event.onset < bar - 1e-6:
-                    continue
-                overflow.setdefault((event.staff, event.voice), []).append(event)
-            if not overflow:
+                if event.onset >= bar - 1e-6:
+                    groups.setdefault((event.staff, event.voice), []).append(event)
+                    removals.append(event.element)
+                elif event.end > bar + 1e-6:
+                    first = bar - event.onset
+                    remainder = event.end - bar
+                    continuation = ElementTree.fromstring(ElementTree.tostring(event.element))
+                    _truncate(event.element, first, divisions)
+                    _set_duration(continuation, remainder, divisions)
+                    _remove_tie(continuation, "start")
+                    _add_tie(continuation, "stop")
+                    _drop_type(continuation)
+                    groups.setdefault((event.staff, event.voice), []).append(
+                        Event(continuation, event.staff, event.voice, bar, remainder, event.rest, False)
+                    )
+                    moved += 1
+            if not groups:
                 continue
             fragments: list[list[ElementTree.Element]] = []
-            for (staff, _voice), events in overflow.items():
+            for (staff, _voice), events in groups.items():
                 offset = min(event.onset for event in events) - bar
                 if offset >= next_bar - 1e-6:
                     continue
-                fragment = _block(events, offset, bar, staff, divisions, next_measure, next_bar)
-                fragments.append(fragment)
-                for event in events:
-                    measure.remove(event.element)
+                fragments.append(_block(events, offset, bar, staff, divisions, next_measure, next_bar))
+            if fragments:
+                insertion = _insertion_index(next_measure)
+                payload: list[ElementTree.Element] = []
+                for fragment in fragments:
+                    payload.extend(fragment)
+                next_measure[insertion:insertion] = payload
+            for element in removals:
+                if element in list(measure):
+                    measure.remove(element)
                     moved += 1
-            if not fragments:
-                continue
-            insertion = _insertion_index(next_measure)
-            payload: list[ElementTree.Element] = []
-            for fragment in fragments:
-                payload.extend(fragment)
-            next_measure[insertion:insertion] = payload
         return PassResult(changed=moved)
+
+
+def _truncate(note, duration: float, divisions: float) -> None:
+    _set_duration(note, duration, divisions)
+    _add_tie(note, "start")
+    _drop_type(note)
+
+
+def _remove_tie(note, kind: str) -> None:
+    for tie in list(note.findall("tie")):
+        if tie.get("type") == kind:
+            note.remove(tie)
+    notations = note.find("notations")
+    if notations is not None:
+        for tied in list(notations.findall("tied")):
+            if tied.get("type") == kind:
+                notations.remove(tied)
+
+
+def _set_duration(note, duration: float, divisions: float) -> None:
+    element = note.find("duration")
+    if element is None:
+        element = ElementTree.SubElement(note, "duration")
+    element.text = str(int(round(duration * divisions)))
+
+
+def _drop_type(note) -> None:
+    for note_type in note.findall("type"):
+        note.remove(note_type)
+
+
+def _add_tie(note, kind: str) -> None:
+    if note.find("pitch") is None:
+        return
+    if any(tie.get("type") == kind for tie in note.findall("tie")):
+        return
+    duration = note.find("duration")
+    position = list(note).index(duration) + 1 if duration is not None else 0
+    note.insert(position, ElementTree.Element("tie", {"type": kind}))
+    notations = note.find("notations")
+    if notations is None:
+        notations = ElementTree.SubElement(note, "notations")
+    if not any(tied.get("type") == kind for tied in notations.findall("tied")):
+        ElementTree.SubElement(notations, "tied", {"type": kind})
 
 
 def _block(
@@ -103,7 +162,9 @@ def _block(
     if cursor < next_bar - 1e-6:
         rest = ElementTree.Element("note")
         ElementTree.SubElement(rest, "rest")
-        ElementTree.SubElement(rest, "duration").text = str(int(round((next_bar - cursor) * divisions)))
+        ElementTree.SubElement(rest, "duration").text = str(
+            int(round((next_bar - cursor) * divisions))
+        )
         ElementTree.SubElement(rest, "voice").text = new_voice
         ElementTree.SubElement(rest, "staff").text = staff
         fragment.append(rest)

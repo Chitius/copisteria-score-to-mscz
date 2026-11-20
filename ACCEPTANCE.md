@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 55 tests
+Ran 56 tests
 OK
 ```
 
@@ -21,6 +21,7 @@ Coverage:
 | redundant clefs and key signatures | `test_clefs.py` |
 | overflow notes repeating the next barline | `test_overflow.py` |
 | trailing duplicate measure | `test_tail.py` |
+| overflow notes and barline-crossing splits | `test_overflow.py`, `test_rebase.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -46,13 +47,12 @@ code 2 if that is violated.
 scorepipe laputa.musicxml --check --report laputa.json
 ```
 
-- `laputa` (63 measures): the verifier reports **1** `measure-length` violation, staff 2 voice 1 at
-  m1 (6.5 beats); ties, slurs, rest visibility, duplicate notes, clefs and keys are clean. This is
-  the first bar, where there is no previous measure to rebase into (a pickup/overfull opening).
-- `summer` (55 measures): **2** `measure-length` violations left, m38 staff 2 (4.5) and m39 staff 2
-  (4.25); the earlier m36–m40 block was repaired by `rebase_measures`, which moved the overflow
-  notes into the next bar. The remaining two are cases where the *next* bar is also overfull, so
-  the pass refuses to push the problem forward.
+- `laputa` (63 measures): **verifier clean**. Ties, slurs, rest visibility, duplicate notes,
+  clefs, keys and measure lengths all pass after `rebase_measures` split the overlong first-bar
+  note that used to make staff 2 end at 6.5 beats.
+- `summer` (55 measures): **verifier clean**. The former m36–m40 block (4.25–5.5 beats in 4/4) was
+  repaired: notes starting past the barline moved into the next bar as a new voice, and notes
+  crossing the barline were split with a tie.
 - `laputa.mscz`: display pipeline runs to a fixed point with **0 changes** and a clean mscx
   verifier — the display invariants hold on a real MuseScore file.
 
@@ -61,10 +61,10 @@ same problems the old ad-hoc pipeline found, with stable codes.
 
 ## Known gaps (documented, not hidden)
 
-- No `rebase_measures` pass yet, so the `measure-length` violations above are reported, not
-  repaired.
 - Voice merging, page-level tie/slur restoration and pedal-line deduplication from the old skill
   are not ported yet.
 - No copisteria/OMR front-end: the loader expects MusicXML already produced by an OMR step.
 - The display layer runs after MuseScore conversion of a `.mscz`; a combined
   `musicxml -> mscz -> display` driver is not wired into the CLI yet.
+- `rebase_measures` refuses to push an overflow that would itself land past the next barline; such
+  a case is still reported by the verifier rather than cascaded further.

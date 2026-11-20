@@ -58,6 +58,22 @@ class RebaseMeasuresTest(unittest.TestCase):
         again = run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, verifiers=[])
         self.assertEqual(again.changes, 0)
 
+    def test_note_crossing_the_barline_is_split_and_tied(self):
+        body = note("C", 4) + note("D", 4) + note("E", 4) + note("F", 8)
+        doc = build(measure(1, body) + measure(2, note("G", 16)))
+        run_pipeline(doc, Context(), structural=STRUCTURAL_PASSES, verifiers=[])
+        self.assertEqual(measure_lengths(doc, Context()), [])
+
+        first_notes = doc.measures()[0].findall(".//note")
+        f_first = next(n for n in first_notes if n.findtext("pitch/step") == "F")
+        self.assertEqual(f_first.findtext("duration"), "4")  # one beat left before the barline
+        self.assertTrue(any(tie.get("type") == "start" for tie in f_first.findall("tie")))
+
+        second_notes = doc.measures()[1].findall(".//note")
+        f_second = next(n for n in second_notes if n.findtext("pitch/step") == "F")
+        self.assertEqual(f_second.findtext("duration"), "4")
+        self.assertTrue(any(tie.get("type") == "stop" for tie in f_second.findall("tie")))
+
 
 if __name__ == "__main__":
     unittest.main()
