@@ -116,6 +116,19 @@ page-restoration passes: `restore_page_ties`, `restore_page_slurs` (paired per s
 ignoring voice, with a 6-bar span guard) and `restore_page_pedals` (page-accurate pedal onsets,
 existing pedal directions replaced only when they differ).
 
+## OMR front-end
+
+The converter itself stays external; the pipeline runs a command with two placeholders and then
+loads whatever page MusicXML it wrote:
+
+```
+scorepipe scan.pdf --omr 'python -m copisteria.cli {pdf} {outdir}' --omr-dir out/ --check
+```
+
+`scorepipe.omr.run_omr` fails loudly if the command exits non-zero or writes no pages; on success
+the directory is merged exactly like `--omr` pages / a page directory, and the page model is
+available to the restoration passes.
+
 ## Facts
 
 `scorepipe.facts.load_facts` reads a JSON file produced by the text layer or by the agent.

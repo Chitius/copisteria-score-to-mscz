@@ -15,7 +15,8 @@ from .core.pass_base import Context, Phase
 from .core.pipeline import RunReport, run_display, run_pipeline
 from .core.registry import validate_all
 from .facts import validate_facts
-from .loader import load_pages
+from .loader import load_pages, merge_pages
+from .omr import run_omr
 from .passes import DISPLAY_PASSES, INJECT_PASSES, STRUCTURAL_PASSES
 from .producers import resolve as resolve_producer
 
@@ -29,6 +30,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report", help="write the run report (phases, trace, verifier, analysis) as JSON")
     parser.add_argument("--check", action="store_true", help="verify only: never write the score")
     parser.add_argument("--list-passes", action="store_true", help="print the registered passes and exit")
+    parser.add_argument(
+        "--omr",
+        help="external OMR command with {pdf} and {outdir} placeholders; its page MusicXML is merged first",
+    )
+    parser.add_argument("--omr-dir", help="directory for the OMR page output (default: <pdf>_omr)")
     parser.add_argument("--max-rounds", type=int, default=8)
     args = parser.parse_args(argv)
 
@@ -63,7 +69,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"facts: {problem}")
 
     pages = None
-    if path.is_dir():
+    if args.omr:
+        outdir = Path(args.omr_dir) if args.omr_dir else path.with_name(path.stem + "_omr")
+        page_paths = run_omr(args.omr, path, outdir)
+        merged = merge_pages(page_paths)
+        print(f"omr: {len(page_paths)} page files, measures per page {merged.measure_counts}")
+        doc = merged.document
+        pages = merged
+    elif path.is_dir():
         merged = load_pages(path)
         print(f"pages: {len(merged.pages)} files, measures per page {merged.measure_counts}")
         doc = merged.document

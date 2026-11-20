@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 66 tests
+Ran 68 tests
 OK
 ```
 
@@ -25,6 +25,7 @@ Coverage:
 | aligned voice merging | `test_merge.py` |
 | page merging and page-directory CLI | `test_loader.py` |
 | page-level tie/slur/pedal restoration | `test_page_restore.py` |
+| external OMR command front-end | `test_omr.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -69,9 +70,10 @@ same problems the old ad-hoc pipeline found, with stable codes.
 
 ## Known gaps (documented, not hidden)
 
-- Voice merging, page-level tie/slur restoration and pedal-line deduplication from the old skill
-  are not ported yet.
-- No copisteria/OMR front-end: the loader expects MusicXML already produced by an OMR step.
+- Voice merging beyond exact alignment, and display-layer pedal-line deduplication, are not
+  ported yet.
+- The OMR front-end runs an external command; a ready-made copisteria command line and its
+  environment setup are not bundled in this project.
 - The display layer runs after MuseScore conversion of a `.mscz`; a combined
   `musicxml -> mscz -> display` driver is not wired into the CLI yet.
 - `rebase_measures` refuses to push an overflow that would itself land past the next barline; such
