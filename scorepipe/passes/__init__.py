@@ -1,7 +1,7 @@
 """Pass registry: the order here is only within a phase; phases are ordered by the runner."""
 
 from .analysis import ANALYSIS_PASSES, MeasureLengthReport
-from .mscx_facts import DISPLAY_FACT_PASSES, UpgradeTempoTexts
+from .mscx_facts import DISPLAY_FACT_PASSES, UpgradeGradualTexts, UpgradeTempoTexts
 from .mscx_display import (
     DISPLAY_PASSES,
     CanonicalVoiceOrder,
@@ -43,6 +43,7 @@ __all__ = [
     "NormalizeVoiceNumbers",
     "DropTrailingDuplicateMeasure",
     "UpgradeTempoTexts",
+    "UpgradeGradualTexts",
     "ApplyMarksFacts",
     "DropTextVoiceRests",
     "UnhideRealRests",
