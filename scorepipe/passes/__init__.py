@@ -1,6 +1,7 @@
 """Pass registry: the order here is only within a phase; phases are ordered by the runner."""
 
 from .analysis import ANALYSIS_PASSES, MeasureLengthReport
+from .mscx_dedupe import DISPLAY_DEDUPE_PASSES, DedupePedalSpanners, DedupeTextObjects
 from .mscx_facts import DISPLAY_FACT_PASSES, UpgradeGradualTexts, UpgradeTempoTexts
 from .mscx_display import (
     DISPLAY_PASSES,
@@ -63,7 +64,7 @@ STRUCTURAL_PASSES = (
     ]
     + ANALYSIS_PASSES
 )
-DISPLAY_PASSES = DISPLAY_PASSES + DISPLAY_FACT_PASSES
+DISPLAY_PASSES = DISPLAY_PASSES + DISPLAY_DEDUPE_PASSES + DISPLAY_FACT_PASSES
 
 __all__ = [
     "STRUCTURAL_PASSES",
@@ -90,6 +91,8 @@ __all__ = [
     "DropDuplicateNotes",
     "UpgradeTempoTexts",
     "UpgradeGradualTexts",
+    "DedupePedalSpanners",
+    "DedupeTextObjects",
     "ApplyMarksFacts",
     "DropTextVoiceRests",
     "UnhideRealRests",

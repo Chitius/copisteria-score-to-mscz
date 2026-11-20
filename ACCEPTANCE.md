@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 75 tests
+Ran 77 tests
 OK
 ```
 
@@ -29,6 +29,7 @@ Coverage:
 | external OMR command front-end | `test_omr.py` |
 | PDF text layer, measure-box assignment | `test_pdf_producer.py` |
 | MusicXML -> mscz -> display combined driver | `test_mscz_export.py` |
+| display text and pedal dedupe | `test_display_dedupe.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
 | facts injection idempotence | `test_facts.py` |
@@ -44,7 +45,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-27 entries: 20 structural (19 mechanical + 1 analysis), 1 inject, 6 display. Every mechanical pass
+29 entries: 20 structural (19 mechanical + 1 analysis), 1 inject, 8 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
