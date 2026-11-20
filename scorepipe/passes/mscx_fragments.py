@@ -101,6 +101,10 @@ def _new_voice(doc, measure, fragment, note) -> None:
     for child in note:
         if child.tag in ("pitch", "tpc"):
             copy.append(ElementTree.fromstring(ElementTree.tostring(child)))
+    for child in note:
+        if child.tag in ("pitch", "tpc", "eid"):
+            continue
+        copy.append(ElementTree.fromstring(ElementTree.tostring(child)))
     remaining = _measure_beats(doc, measure) - onset - duration
     if remaining > 1e-6:
         rest = ElementTree.SubElement(voice, "Rest")

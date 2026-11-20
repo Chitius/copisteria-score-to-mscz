@@ -8,6 +8,7 @@ from scorepipe.core.invariants import measure_lengths
 from scorepipe.core.pass_base import Context
 from scorepipe.core.pipeline import run_pipeline
 from scorepipe.passes import STRUCTURAL_PASSES
+from scorepipe.passes.xml_merge import MERGE_ALIGNED_VOICES
 
 PART = """
 <score-partwise version="4.0">
@@ -63,6 +64,25 @@ class MergeAlignedVoicesTest(unittest.TestCase):
         run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, verifiers=[])
         again = run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, verifiers=[])
         self.assertEqual(again.changes, 0)
+
+    def test_a_pitch_already_in_the_primary_chord_is_not_doubled(self):
+        chord = (
+            "<note><pitch><step>E</step><octave>4</octave></pitch>"
+            "<duration>16</duration><voice>1</voice></note>"
+            "<note><chord/><pitch><step>G</step><octave>4</octave></pitch>"
+            "<duration>16</duration><voice>1</voice></note>"
+        )
+        body = (
+            note("C", 16)
+            + "<note><chord/><pitch><step>E</step><octave>4</octave></pitch>"
+            "<duration>16</duration><voice>1</voice></note>"
+            + "<backup><duration>16</duration></backup>"
+            + chord.replace("<voice>1</voice>", "<voice>2</voice>")
+        )
+        doc = build(measure(1, body) + measure(2, note("A", 16)))
+        MERGE_ALIGNED_VOICES.run(doc, Context())
+        pitches = [event.element.findtext("pitch/step") for event in doc.events(doc.measures()[0]) if not event.rest]
+        self.assertEqual(sorted(pitches), ["C", "E", "G"])
 
 
 if __name__ == "__main__":

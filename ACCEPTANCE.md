@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 122 tests
+Ran 125 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -113,15 +113,18 @@ same problems the old ad-hoc pipeline found, with stable codes.
 
 ## Known gaps (documented, not hidden)
 
-- `SANITY.md` remains the audit snapshot. The first four violations are now fixed and pinned by
+- `SANITY.md` remains the audit snapshot. The open structural violations are fixed and pinned by
   tests: `rebase_measures` shrinks the closing backup and numbers overflow voices uniquely
   (`test_rebase.py`); `drop_overflow_duplicates` removes chord members with their base
   (`test_overflow.py`); `drop_trailing_duplicate_measure` no longer eats a run of short bars
   (`test_tail.py`); `pad_empty_staves` uses the real cursor length and skips pickups
-  (`test_empty_staves.py`). `split_chord_fragments` now pads by the measure's own time signature
-  (`test_mscx_fragments.py`), though a moved member still loses non-pitch notations.
-  `merge_staff_voices` keeps other staves' `<forward>` gaps and the laputa m31 sustained chord, but
-  rebuilt notes still drop ties/slurs/articulations unless a page model restores them.
+  (`test_empty_staves.py`); `split_chord_fragments` pads by the measure's own time signature and
+  keeps the moved note's other children (`test_mscx_fragments.py`); `drop_duplicate_notes` keeps the
+  longer duplicate (`test_duplicates.py`); `merge_aligned_voices` no longer doubles a pitch already
+  in the chord (`test_merge.py`). `merge_staff_voices` keeps other staves' `<forward>` gaps and the
+  laputa m31 sustained chord, and preserves tie/slur/articulation children when the duration is
+  unchanged (`test_voice_merge.py`); a retimed note still drops them, to be restored by the page
+  passes when `Context.pages` exists.
 - Voice merging beyond exact alignment is not ported; the pass refuses anything that needs a
   retiming decision.
 - Credits cover title/subtitle/composer/lyricist styles and are moved into the mscx title frame;

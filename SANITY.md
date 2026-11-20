@@ -573,6 +573,16 @@ Pinned by tests and fixed:
   spanner-only voices alone; `upgrade_tempo_texts` counts glyph-only Tempo removals
   (`tests/test_display_dedupe.py`, `tests/test_display.py`, `tests/test_display_facts.py`).
 
-Still open (see sections above): notation loss in `merge_staff_voices`/`split_chord_fragments`,
-`drop_duplicate_notes` duration-blind key, `merge_aligned_voices` duplicate chord member, and the
-design/doc drift.
+- `drop_duplicate_notes`: the longer duplicate survives; the duration-blind key is gone
+  (`tests/test_duplicates.py`).
+- `merge_aligned_voices`: a pitch already sounding in the primary chord is not doubled
+  (`tests/test_merge.py`).
+- `split_chord_fragments`: the moved note keeps its non-pitch children (accidental, tie, …), tested
+  with an `<Accidental>` (`tests/test_mscx_fragments.py`).
+- `DESIGN.md`: the ownership table now names the registered passes
+  (`drop_redundant_time_signatures`, `upgrade_tempo_texts`, `upgrade_gradual_texts`); the phantom
+  `hoist_time_signature` row is gone.
+
+Still open (see sections above): a **retimed** note in `merge_staff_voices` still drops its
+tie/slur/articulation children (preserved only when the duration is unchanged); the page restorers
+re-add what they can when `Context.pages` is present.

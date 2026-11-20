@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import unittest
 from xml.etree import ElementTree
@@ -59,7 +59,8 @@ class ThreeFourFragmentTest(unittest.TestCase):
             <Rest><durationType>quarter</durationType></Rest>
             <Chord><durationType>half</durationType>
               <Note><pitch>60</pitch><tpc>14</tpc></Note>
-              <Note><pitch>72</pitch><tpc>14</tpc></Note>
+              <Note><pitch>72</pitch><tpc>14</tpc>
+                <Accidental><subtype>accidentalSharp</subtype></Accidental></Note>
             </Chord>
           </voice>
         </Measure></Staff></Score></museScore>'''
@@ -69,4 +70,5 @@ class ThreeFourFragmentTest(unittest.TestCase):
         self.assertEqual(mscx_lengths(doc, Context()), [])
         voices = doc.root.findall("Score/Staff/Measure/voice")
         self.assertEqual(len(voices), 2)
+        self.assertIsNotNone(voices[1].find(".//Accidental"))
 

@@ -141,9 +141,24 @@ def _clone(event, primary) -> ElementTree.Element:
 def _insert_chord(measure, base_note, clone) -> None:
     children = list(measure)
     index = children.index(base_note)
+    existing = [_pitch_key(base_note)]
     while index + 1 < len(children) and children[index + 1].tag == "note" and children[index + 1].find("chord") is not None:
         index += 1
+        existing.append(_pitch_key(children[index]))
+    if _pitch_key(clone) in existing:
+        return  # the primary chord already sounds this pitch; do not double it
     measure.insert(index + 1, clone)
+
+
+def _pitch_key(note) -> str | None:
+    pitch = note.find("pitch")
+    if pitch is None:
+        return None
+    return (
+        (pitch.findtext("step") or "")
+        + (pitch.findtext("alter") or "0")
+        + (pitch.findtext("octave") or "")
+    )
 
 
 MERGE_ALIGNED_VOICES = MergeAlignedVoices()

@@ -43,6 +43,12 @@ class DropDuplicateNotesTest(unittest.TestCase):
         doc = build(note("C", 4) + note("D", 4))
         self.assertEqual(DropDuplicateNotes().run(doc, Context()).changed, 0)
 
+    def test_the_longer_duplicate_survives(self):
+        doc = build(note("C", 8) + "<backup><duration>8</duration></backup>" + note("C", 16))
+        self.assertEqual(DropDuplicateNotes().run(doc, Context()).changed, 1)
+        durations = [event.duration for event in doc.events(doc.measures()[0])]
+        self.assertEqual(durations, [4.0])
+
 
 if __name__ == "__main__":
     unittest.main()

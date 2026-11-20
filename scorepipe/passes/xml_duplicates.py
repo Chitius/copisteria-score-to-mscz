@@ -20,7 +20,7 @@ class DropDuplicateNotes:
         changed = 0
         for _number, measure in doc.iter_measures():
             children = list(measure)
-            seen: set[tuple[str, str, float, str]] = set()
+            groups: dict[tuple[str, str, float, str], list] = {}
             for event in doc.events(measure):
                 if event.rest:
                     continue
@@ -33,13 +33,19 @@ class DropDuplicateNotes:
                     + (pitch.findtext("octave") or "")
                 )
                 key = (event.staff, event.voice, round(event.onset, 4), name)
-                if key in seen:
+                groups.setdefault(key, []).append(event)
+            for events in groups.values():
+                if len(events) < 2:
+                    continue
+                keeper = max(events, key=lambda event: event.duration)
+                for event in events:
+                    if event is keeper:
+                        continue
                     if not _removable(children, event.element):
                         continue
-                    measure.remove(event.element)
-                    changed += 1
-                else:
-                    seen.add(key)
+                    if event.element in list(measure):
+                        measure.remove(event.element)
+                        changed += 1
         return PassResult(changed=changed)
 
 

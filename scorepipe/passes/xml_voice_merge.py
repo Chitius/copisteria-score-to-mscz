@@ -83,11 +83,12 @@ def _merge(doc: Document, measure) -> bool:
                 if abs(event.onset - onset) > 1e-6:
                     continue
                 pitch = _pitch(event.element)
-                if pitch and pitch not in pitches:
-                    pitches.append(pitch)
-            for position, pitch in enumerate(pitches):
+                if pitch and pitch not in [item[0] for item in pitches]:
+                    pitches.append((pitch, event))
+            for position, (pitch, event) in enumerate(pitches):
+                source = event.element if abs(event.duration - duration) < 1e-6 else None
                 sequence.append(
-                    _note(pitch, duration, divisions, staff, chord=position > 0)
+                    _note(pitch, duration, divisions, staff, chord=position > 0, source=source)
                 )
         _replace_staff(doc, measure, staff, sequence)
         rebuilt = True
@@ -169,7 +170,30 @@ def _pitch(note_element) -> tuple[str, str, str] | None:
     return (step, note_element.findtext("pitch/alter") or "", octave)
 
 
-def _note(pitch, duration: float, divisions: float, staff: str, *, chord: bool) -> ElementTree.Element:
+def _note(
+    pitch, duration: float, divisions: float, staff: str, *, chord: bool, source=None
+) -> ElementTree.Element:
+    if source is not None:
+        # keep tie/slur/articulation/accidental/beam children when the duration did not change;
+        # a retimed note must drop them (the old skill restored ties separately)
+        element = ElementTree.fromstring(ElementTree.tostring(source))
+        chord_tag = element.find("chord")
+        if chord and chord_tag is None:
+            element.insert(0, ElementTree.Element("chord"))
+        elif not chord and chord_tag is not None:
+            element.remove(chord_tag)
+        duration_element = element.find("duration")
+        if duration_element is not None:
+            duration_element.text = str(int(round(duration * divisions)))
+        voice = element.find("voice")
+        if voice is None:
+            voice = ElementTree.SubElement(element, "voice")
+        voice.text = "1"
+        staff_element = element.find("staff")
+        if staff_element is None:
+            staff_element = ElementTree.SubElement(element, "staff")
+        staff_element.text = staff
+        return element
     element = ElementTree.Element("note")
     if chord:
         ElementTree.SubElement(element, "chord")

@@ -43,11 +43,11 @@ keeps the display invariants honest.
 |---|---|
 | voice order within a measure | `canonical_voice_order` |
 | redundant rest-only voices | `drop_padding_voices` |
-| rest visibility | `unhide_real_rests` |
+| rest visibility | `unhide_real_rests` (display) / `unhide_rests` (structural) |
 | rests inside text voices | `drop_text_voice_rests` |
-| time signature placement | `hoist_time_signature` |
-| tempo objects | `upgrade_tempo_marks` |
-| gradual tempo spanners | `upgrade_gradual_spanners` |
+| redundant time signatures | `drop_redundant_time_signatures` |
+| tempo objects | `upgrade_tempo_texts` |
+| gradual tempo spanners | `upgrade_gradual_texts` |
 | measure durations | `rebase_measures` |
 | tie elements | `dedupe_ties` |
 | slur endpoints | `sanitize_slurs` |

@@ -84,5 +84,18 @@ class MergeStaffVoicesTest(unittest.TestCase):
         self.assertIn("2", voices)
 
 
+    def test_tie_survives_when_the_duration_does_not_change(self):
+        tied = (
+            "<note><pitch><step>C</step><octave>4</octave></pitch>"
+            "<duration>16</duration><tie type=\"start\"/><voice>1</voice></note>"
+        )
+        body = tied + "<backup><duration>16</duration></backup>" + note("E", 4, 16, voice="2")
+        doc = Document(ElementTree.fromstring(PART.format(measures=measure(body) + LAST)))
+        MERGE_STAFF_VOICES.run(doc, Context())
+        notes = [event.element for event in doc.events(doc.measures()[0]) if not event.rest]
+        tied_note = next(note for note in notes if note.findtext("pitch/step") == "C")
+        self.assertIsNotNone(tied_note.find("tie"))
+
+
 if __name__ == "__main__":
     unittest.main()
