@@ -98,11 +98,25 @@ pipeline 按 structural → inject → display 跑到不动点，再跑只读 ve
 
 ### 4. Facts 与视觉复核
 
-文字层可以提供标题、作曲、速度文字、排练号和说明文字。当前 producer 是机械的；
-agent/视觉 facts 是后续交付阶段工作。添加 facts 前先读 `references/facts.md`。facts 是数据：
-在注入 pass 应用前不会改谱，每个已应用 fact 必须可追溯。
+文字层可以提供标题、作曲、速度文字、排练号和说明文字。添加 facts 前先读
+`references/facts.md`。facts 是数据：在注入 pass 应用前不会改谱，每个已应用 fact 必须可追溯。
 
-视觉复核至少渲染 `.mscz` 为 PDF 并栅格化，检查：
+Agent/视觉 facts 的流程：
+
+```bash
+# 渲染源 PDF，生成逐页图片和 agent 指令
+python scripts/agent_facts.py prepare --pdf "score.pdf" --outdir review/facts
+
+# agent 逐页看图，写出带 page/evidence/bbox 的 JSON
+python scripts/agent_facts.py validate --facts review/facts/agent-page1.json --pages 2
+python scripts/agent_facts.py merge --parts review/facts/agent-page*.json -o review/facts/facts.json
+
+# 注入并重新渲染
+python scripts/convert.py "score.pdf" --pages path/to/omr-pages \
+  --facts review/facts/facts.json --outdir "out/score"
+```
+
+看不清的内容放进 `unresolved`，不要猜。视觉复核至少渲染 `.mscz` 为 PDF 并栅格化，检查：
 
 - 首尾系统、页缝；
 - 弱起和小节编号；
@@ -123,8 +137,9 @@ agent/视觉 facts 是后续交付阶段工作。添加 facts 前先读 `referen
 SKILL.md                 本操作契约
 scripts/preflight.py     只读环境探测，不安装
 scripts/convert.py       PDF -> OMR pages -> scorepipe -> mscz/pdf
+scripts/agent_facts.py   prepare/validate/merge agent 视觉 facts
 schemas/                 facts JSON schema
-scorepipe/               Python pipeline（子模块）
+scorepipe/               Python pipeline（子模块，含 agent_facts 校验）
 tests/                   回归测试和 Lieder corpus
 docs/                    架构、验收证据、归档计划
 references/              skill 操作参考
@@ -133,9 +148,9 @@ SANITY.md                pass 契约审计
 
 ## 当前状态（2026-11）
 
-- `unittest`：178 个测试；`pytest`：258 个测试。
+- `unittest`：185 个测试；`pytest`：265 个测试。
 - Gute Nacht：sounding notes 98.94% / 99.0%（vocal/piano），verifier clean。
 - `aus_meinen_traenen`：91.38% / 90.10%；`die_wetterfahne`：98.97% / 97.75%。
 - `der_lindenbaum` P2 仍是 OMR 质量异常项（约 51%）。
-- 已知交付阶段缺口：agent 视觉 facts 提取尚未实现；目前有文字层 producer 和手动
-  `--facts` 路径。
+- 已知交付阶段缺口：agent/视觉 facts 已有 prepare/validate/merge 和证据校验；真实交付还需要
+  逐页视觉复核和人工确认 unresolved 项。

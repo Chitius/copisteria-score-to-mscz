@@ -18,7 +18,12 @@ def load_facts(path: str | Path | None) -> dict:
     if not path:
         return {}
     # BOM tolerant: the file may come from PowerShell or an agent writer
-    return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+    data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+    if (data.get("producer") or {}).get("name") == "agent-visual":
+        from .agent_facts import normalize_agent_facts
+
+        data = normalize_agent_facts(data)
+    return data
 
 
 def validate_facts(facts: dict) -> list[str]:

@@ -53,8 +53,8 @@ Keep the page directory. It is the audit trail for page-level ties/slurs and for
 3. **Repair** — scorepipe runs structural → inject → display fixed points and read-only
    verifiers. A non-empty verifier is a blocker, not a cosmetic warning.
 4. **Facts** — apply explicit title/composer/marks facts. The text layer is a producer, not
-   ground truth. The agent/vision delivery-stage producer is planned; see
-   [`references/facts.md`](references/facts.md).
+   ground truth. The agent/vision producer has a prepared page packet and evidence-checking workflow;
+   see [`references/facts.md`](references/facts.md).
 5. **Review** — render the `.mscz` to PDF, rasterize pages, and check the first/last systems,
    page joins, pickup, dense piano pages, ledger-line octaves, and text placement.
 6. **Deliver** — follow [`references/delivery.md`](references/delivery.md). Report known OMR
@@ -108,13 +108,27 @@ Tempo notation is written once with a `<sound tempo>`; arranger/transcriber cred
 composer line. A PDF text layer can be used through the producers; a scanned PDF with no usable
 text layer still needs the agent/vision facts path.
 
+### Agent visual facts
+
+```bash
+python scripts/agent_facts.py prepare --pdf score.pdf --outdir review/facts
+python scripts/agent_facts.py validate --facts review/facts/agent-page1.json --pages 2
+python scripts/agent_facts.py merge --parts review/facts/agent-page*.json -o review/facts/facts.json
+python scripts/convert.py score.pdf --pages path/to/omr-pages \
+  --facts review/facts/facts.json --outdir out/score
+```
+
+Every agent credit/mark must carry `page`, `evidence`, and `bbox`/`crop`; ambiguous items go in
+`unresolved`. `merge` strips printed role labels (`Original Artist:TRUE` → `TRUE`) and keeps the
+original wording in evidence. See [`references/facts.md`](references/facts.md).
+
 ## Current status (2026-11-21)
 
 Tests:
 
 ```text
-python -m unittest discover -s tests   # 178 tests
-python -m pytest tests -q              # 258 tests
+python -m unittest discover -s tests   # 185 tests
+python -m pytest tests -q              # 265 tests
 ```
 
 Corpus (sounding-note match; rests excluded from the primary score):
@@ -136,7 +150,8 @@ Recent Sincerely-specific fixes:
 
 ## Known limitations
 
-- Agent/vision fact extraction is not implemented yet; only JSON/text-layer/manual facts exist.
+- Agent/vision fact extraction has page preparation, evidence validation and merge; real delivery
+  still needs per-page review and resolving `unresolved` claims.
 - Same-value beam runs are still rebuilt as one group; a full compound-metre `BeamGrouper` is
   future work.
 - Voice merge skips tuplet measures rather than preserving nested ratios.
@@ -152,6 +167,7 @@ Recent Sincerely-specific fixes:
 SKILL.md                 skill operator contract
 scripts/preflight.py     read-only environment probe
 scripts/convert.py       PDF -> OMR pages -> scorepipe -> mscz/pdf
+scripts/agent_facts.py   prepare/validate/merge agent visual facts
 schemas/                 facts JSON schema
 scorepipe/               the Python pipeline
 references/              setup, OMR, facts, delivery references

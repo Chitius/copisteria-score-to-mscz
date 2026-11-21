@@ -52,7 +52,8 @@ the verifier.
 
 ## Current limitations (2026-11)
 
-- The agent/vision facts producer is not implemented yet; the text-layer/manual JSON path is.
+- The agent/vision facts workflow exists (`prepare` → agent JSON → `validate`/`merge`), but real
+  delivery still requires per-page review and resolving `unresolved` claims.
 - `der_lindenbaum` piano remains a low-quality OMR case; do not use it as a delivery showcase.
 - Same-value beam runs are still rebuilt as one run (laputa m50 behavior).
 - OMR octave/ledger errors are preserved; the pipeline does not transpose.

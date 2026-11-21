@@ -6,8 +6,9 @@
 | [`../README.md`](../README.md) | current project overview and status |
 | [`../references/environment.md`](../references/environment.md) | preflight and environment variables |
 | [`../references/omr.md`](../references/omr.md) | page contract and OMR integration |
-| [`../references/facts.md`](../references/facts.md) | facts schema and planned visual review |
+| [`../references/facts.md`](../references/facts.md) | facts schema and agent visual workflow |
 | [`../references/delivery.md`](../references/delivery.md) | delivery checklist and known limitations |
+| [`../scripts/agent_facts.py`](../scripts/agent_facts.py) | prepare/validate/merge agent visual facts |
 | [`DESIGN.md`](DESIGN.md) | compiler-style pipeline architecture |
 | [`../SANITY.md`](../SANITY.md) | pass contracts and adversarial fixtures |
 | [`ACCEPTANCE.md`](ACCEPTANCE.md) | historical acceptance evidence |

@@ -14,7 +14,12 @@
         "properties": {
           "type": {"type": "string", "enum": ["title", "subtitle", "composer", "arranger", "transcriber", "lyricist"]},
           "text": {"type": "string", "minLength": 1},
-          "page": {"type": "integer", "minimum": 1}
+          "page": {"type": "integer", "minimum": 1},
+          "bbox": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+          "bbox_space": {"type": "string", "enum": ["pdf-points", "image-px"]},
+          "crop": {"type": "string"},
+          "evidence": {"type": "string", "minLength": 1},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
         }
       }
     },
@@ -35,7 +40,13 @@
           "beat_unit": {"type": "string", "enum": ["whole", "half", "quarter", "eighth", "16th", "32nd"]},
           "italic": {"type": "boolean"},
           "font_size": {"type": "number"},
-          "justify": {"type": "string"}
+          "justify": {"type": "string"},
+          "page": {"type": "integer", "minimum": 1},
+          "bbox": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+          "bbox_space": {"type": "string", "enum": ["pdf-points", "image-px"]},
+          "crop": {"type": "string"},
+          "evidence": {"type": "string", "minLength": 1},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
         },
         "anyOf": [
           {"required": ["text"]},

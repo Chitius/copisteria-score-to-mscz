@@ -37,6 +37,8 @@ edits to the score; an inject pass applies them mechanically.
 `above` or `below`. Tempo-notation text such as `q = 72` is injected once with a `<sound tempo>`,
 not duplicated as a metronome glyph.
 
+The JSON Schema is [`schemas/facts.schema.json`](../schemas/facts.schema.json).
+
 ## Producers
 
 | Producer | Input | Status |
@@ -44,34 +46,76 @@ not duplicated as a metronome glyph.
 | `JsonProducer` | explicit `facts.json` | available |
 | `TextLayerProducer` | TSV `measure/beat/placement/text` | available |
 | `PdfTextProducer` | PDF text layer + measure boxes | available; garbled on some PDFs |
-| agent/vision | rendered page + explicit transcription | planned delivery stage |
+| agent/vision | rendered page + explicit transcript | available via `scripts/agent_facts.py` |
 
 The text layer is not automatically correct. Sincerely's PDF text layer produced spaced/garbled
 tokens; do not trust it without checking the rendered page.
 
-## Visual facts (next stage)
+## Agent visual facts
 
-The delivery agent should inspect rendered pages and write a separate, auditable facts file rather
-than editing the MusicXML. Record enough evidence to review each fact:
+The agent inspects **source PDF pages**, not the repaired score. It writes JSON claims with page,
+evidence and bbox/crop; the pipeline never receives an unverified "I saw a tempo" statement.
+
+### 1. Prepare a page packet
+
+```bash
+python scripts/agent_facts.py prepare \
+  --pdf "score.pdf" --outdir "review/facts"
+```
+
+This renders `page-*.png` and writes `instructions.md` plus `manifest.json`. Give the agent the
+page images and instructions. Each claim must include:
 
 ```json
 {
-  "page": 1,
-  "measure": 1,
-  "bbox": [80, 120, 500, 220],
-  "kind": "credit|tempo|rehearsal|articulation|text",
-  "text": "q = 72",
-  "confidence": 0.0,
-  "evidence": "short description of what is visible"
+  "producer": {"name": "agent-visual", "pages": [1]},
+  "credits": [
+    {"type": "title", "text": "Sincerely", "page": 1,
+     "bbox": [240, 20, 360, 60],
+     "evidence": "top centre title", "confidence": 0.98}
+  ],
+  "marks": [
+    {"measure": 1, "beat": 0, "placement": "above", "text": "q = 72", "tempo": 72,
+     "page": 1, "bbox": [60, 70, 110, 95],
+     "evidence": "tempo above the first system", "confidence": 0.95}
+  ],
+  "unresolved": [
+    {"page": 1, "measure": 3, "reason": "text is clipped; cannot decide"}
+  ]
 }
 ```
 
-Rules:
+`bbox` is in PDF points `[x0, y0, x1, y1]`; `crop` may replace it. If the agent measures the
+rendered image, add `"bbox_space": "image-px"`; otherwise omit it and use PDF points. `evidence`
+is mandatory for agent facts (manual facts may omit it).
+
+### 2. Validate and merge
+
+```bash
+python scripts/agent_facts.py validate --facts review/facts/agent-page1.json --pages 2 --measures 31
+python scripts/agent_facts.py merge --parts review/facts/agent-page*.json -o review/facts/facts.json
+```
+
+Invalid evidence fails; it is not silently dropped. Duplicate claims are de-duplicated and the
+first evidence is kept. `merge` also strips printed role labels from credit values
+(`Original Artist:TRUE` → `TRUE`, `Arranged by X` → `X`) while keeping the original wording in
+`evidence`.
+
+### 3. Apply and re-check
+
+```bash
+python scripts/convert.py score.pdf --pages path/to/omr-pages \
+  --facts review/facts/facts.json --outdir out/score
+```
+
+Re-render after injection. A fact is not finished until the credit/mark appears in the expected
+place. Keep unresolved claims in the report; do not turn them into guessed facts.
+
+## Rules
 
 1. One fact per visible mark; do not infer a mark from musical expectations.
-2. Keep page/bbox or a crop path so a human can verify it.
+2. Keep page and bbox/crop so a human can verify the claim.
 3. Unknown or ambiguous marks go in `unresolved`, never silently into `marks`.
 4. A visual pass may propose pitch corrections, but must record the page evidence and must not
    apply them without an explicit correction step.
-5. Re-render and re-check after injection; a fact is not done until the display shows it in the
-   expected place.
+5. Re-render and re-check after injection.
