@@ -42,8 +42,8 @@ A shorter additional run on `aus_meinen_traenen` gives a raw OMR baseline of 85.
 ordinal rather than by the printed number.
 
 The P1 pipeline (`scorepipe .../P1.musicxml`) is verifier-clean and keeps the same 98.24% note
-match.  The P2 piano part now also reaches a clean verifier and a stable structural fixed point; it
-needs 22 rounds because its rebase tail cascades one bar per round.
+match.  The P2 piano part also converges (2 rounds, clean verifier) and matches the ground truth at
+97.44% after the pipeline; the remaining gap is the padding-rest/extra-event cleanup.
 
 ## Rebuild
 

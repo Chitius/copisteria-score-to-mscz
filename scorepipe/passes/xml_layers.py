@@ -65,7 +65,7 @@ def _rebuild(doc: Document, measure) -> bool:
     events = doc.events(measure)
     if not events or not any(not event.rest for event in events):
         return False
-    meter = doc.time_signature(measure) or (4.0, 4.0)
+    meter = doc.effective_time_signature(measure)
     bar = meter[0] * 4.0 / meter[1]
     divisions = doc.divisions()
     leading = [

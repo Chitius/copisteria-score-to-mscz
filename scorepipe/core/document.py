@@ -108,6 +108,17 @@ class Document:
             return None
         return float(time.findtext("beats")), float(time.findtext("beat-type"))
 
+    def effective_time_signature(self, measure: ElementTree.Element) -> tuple[float, float]:
+        """The active meter at ``measure``; MusicXML only prints the declaration when it changes."""
+        current = (4.0, 4.0)
+        for candidate in self.measures():
+            declared = self.time_signature(candidate)
+            if declared is not None:
+                current = declared
+            if candidate is measure:
+                return current
+        return current
+
     def iter_measures(self) -> Iterator[tuple[int, ElementTree.Element]]:
         for index, measure in enumerate(self.measures(), start=1):
             yield index, measure

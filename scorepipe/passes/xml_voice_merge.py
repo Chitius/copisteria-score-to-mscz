@@ -63,7 +63,7 @@ def _merge(doc: Document, measure) -> bool:
     if not targets:
         return False
 
-    meter = doc.time_signature(measure) or (4.0, 4.0)
+    meter = doc.effective_time_signature(measure)
     bar = meter[0] * 4.0 / meter[1]
     divisions = doc.divisions()
     rebuilt = False
@@ -215,7 +215,7 @@ def _replace_staff(
         measure.remove(child)
     for child in leading:
         measure.append(child)
-    meter = doc.time_signature(measure) or (4.0, 4.0)
+    meter = doc.effective_time_signature(measure)
     bar = meter[0] * 4.0 / meter[1]
     divisions = doc.divisions()
     blocks = [sequence] + list(extras or []) + other_blocks

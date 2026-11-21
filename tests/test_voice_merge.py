@@ -143,6 +143,31 @@ class MergeStaffVoicesTest(unittest.TestCase):
         self.assertEqual(len({e.voice for e in chords}), 1)
         self.assertNotEqual(a_notes[0].voice, chords[0].voice)
 
+    def test_a_measure_without_a_time_signature_inherits_the_previous_meter(self):
+        first = (
+            '<measure number="1"><attributes><divisions>8</divisions>'
+            "<time><beats>2</beats><beat-type>4</beat-type></time></attributes>"
+            + note("C", 4, 16)
+            + "</measure>"
+        )
+        second = (
+            '<measure number="2"><attributes><divisions>8</divisions></attributes>'
+            + note("E", 5, 4)
+            + note("D", 5, 4)
+            + note("A", 4, 4)
+            + note("F", 4, 3)
+            + note("E", 4, 1)
+            + "<backup><duration>16</duration></backup>"
+            + note("F", 4, 4, voice="2")
+            + "</measure>"
+        )
+        doc = Document(ElementTree.fromstring(PART.format(measures=first + second)))
+        MERGE_STAFF_VOICES.run(doc, Context())
+        events = doc.events(doc.measures()[1])
+        self.assertEqual({event.voice for event in events if not event.rest}, {"1"})
+        self.assertEqual(max(event.end for event in events), 2.0)
+        self.assertEqual([event for event in events if event.rest], [])
+
 
 if __name__ == "__main__":
     unittest.main()
