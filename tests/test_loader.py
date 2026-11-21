@@ -31,6 +31,32 @@ class LoaderTest(unittest.TestCase):
         self.assertEqual(redundant_time_signatures(merged.document, Context()), [])
         self.assertEqual(len(merged.document.measures()), 4)
 
+    def test_pages_are_rescaled_to_one_divisions(self):
+        work = Path(__file__).parent / ".runs" / "loader_divisions"
+        work.mkdir(parents=True, exist_ok=True)
+        template = (
+            '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+            '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+            '<part id="P1"><measure number="1"><attributes><divisions>{divisions}</divisions>'
+            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+            '<note><pitch><step>{step}</step><octave>4</octave></pitch>'
+            '<duration>{duration}</duration><voice>1</voice></note></measure>'
+            "</part></score-partwise>"
+        )
+        first = work / "page1.musicxml"
+        second = work / "page2.musicxml"
+        first.write_text(template.format(divisions=4, step="C", duration=4), encoding="utf-8")
+        second.write_text(template.format(divisions=8, step="D", duration=8), encoding="utf-8")
+        merged = merge_pages([first, second])
+        self.assertEqual(merged.document.divisions(), 8)
+        durations = [
+            event.duration
+            for _number, measure in merged.document.iter_measures()
+            for event in merged.document.events(measure)
+            if not event.rest
+        ]
+        self.assertEqual(durations, [1.0, 1.0])
+
     def test_cli_accepts_a_page_directory(self):
         output = Path(__file__).parent / ".runs" / "pages" / "merged.musicxml"
         buffer = io.StringIO()

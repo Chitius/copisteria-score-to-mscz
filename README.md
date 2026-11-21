@@ -163,9 +163,11 @@ Use it after every pass change; it is the objective replacement for eyeballing a
 
 `scorepipe.loader.merge_pages(paths)` concatenates per-page MusicXML (with per-page measure
 numbering) into one score, renumbers measures globally and keeps `measure_counts` so later passes
-can map a measure back to its page (`MergedPages.page_of_measure`). `load_pages(dir)` sorts the
-directory. The CLI accepts a directory as input and runs the structural pipeline on the merged
-score; page-join duplicates (time signatures, clefs, keys) are cleaned by the normal passes.
+can map a measure back to its page (`MergedPages.page_of_measure`). Pages may declare different
+`<divisions>`; the loader picks their LCM and rescales every duration, backup, forward and offset to
+that common resolution before concatenating. `load_pages(dir)` sorts the directory. The CLI accepts
+a directory as input and runs the structural pipeline on the merged score; page-join duplicates
+(time signatures, clefs, keys) are cleaned by the normal passes.
 
 When the input is a page directory, the loader model is put on `Context.pages`, which enables the
 page-restoration passes: `restore_page_ties`, `restore_page_slurs` (all open starts per staff/number

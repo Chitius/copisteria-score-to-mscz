@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 155 tests
+Ran 156 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -79,9 +79,13 @@ scorepipe laputa.musicxml --check --report laputa.json
 - `laputa` (63 measures): **verifier clean**. Ties, slurs, rest visibility, duplicate notes,
   clefs, keys and measure lengths all pass after `rebase_measures` split the overlong first-bar
   note that used to make staff 2 end at 6.5 beats.
-- `summer` (55 measures): **verifier clean**. The former m36–m40 block (4.25–5.5 beats in 4/4) was
-  repaired: notes starting past the barline moved into the next bar as a new voice, and notes
-  crossing the barline were split with a tie.
+- `summer` **page directory** (7 pages, 54 raw measures): the old-skill baseline is 55 measures and
+  verifier clean, but the pages do not share a division scale (4 / 8 / 24). Before the loader fix
+  this produced 14 verifier violations, negative cursors and a 70.78% golden mismatch. `merge_pages`
+  now rescales every page to the LCM divisions and the full structural run is stable with **1**
+  remaining violation (m54: 6 beats in 4/4) and a 12.97% mismatch. m54 looks like a genuine 4+2
+  measure split (old baseline had m54=4, m55=2), not another division error; the showcase summer
+  artifacts remain display-only from the stable baseline until measure splitting is implemented.
 - `laputa` **page directory** (copisteria output: 3 files, 26 / 23 / 14 measures): merged to one
   63-measure score by `merge_pages`, then verifier clean. On this run `restore_page_pedals`
   reported 36 adjustments and `restore_page_wedges` 20; the structural phase converged in 3 rounds.

@@ -222,10 +222,24 @@ def _replace_staff(
     for index, block in enumerate(blocks):
         if index:
             backup = ElementTree.Element("backup")
-            ElementTree.SubElement(backup, "duration").text = str(int(round(bar * divisions)))
+            ElementTree.SubElement(backup, "duration").text = str(_block_ticks(blocks[index - 1]))
             measure.append(backup)
         for child in block:
             measure.append(child)
+
+
+def _block_ticks(block: list) -> int:
+    total = 0
+    for child in block:
+        if child.tag == "backup":
+            continue
+        if child.tag == "note" and child.find("chord") is not None:
+            continue
+        if child.tag in ("note", "forward"):
+            text = child.findtext("duration")
+            if text:
+                total += int(text)
+    return total
 
 
 def _pitch(note_element) -> tuple[str, str, str] | None:
