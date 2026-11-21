@@ -40,17 +40,19 @@ class RestoreBeamsTest(unittest.TestCase):
         self.assertEqual([beam[0].text for beam in beams], ["begin"] + ["continue"] * 6 + ["end"])
         self.assertEqual(RestoreBeams().run(doc, Context()).changed, 0)
 
-    def test_partial_edge_beams_are_extended(self):
+    def test_source_begin_end_boundaries_are_hard(self):
         body = "".join(
-            note(step, beams=[("1", "begin")] if index == 1 else ([('1', 'end')] if index == 4 else None))
+            note(step, beams=[("1", "begin")] if index == 1 else ([("1", "end")] if index == 4 else None))
             for index, step in enumerate("CDEFGABC")
         )
         doc = build(body)
         RestoreBeams().run(doc, Context())
         beams = [note.findall("beam") for note in doc.measures()[0].iter("note")]
-        self.assertEqual(beams[0][0].text, "begin")
+        self.assertIsNone(beams[0][0] if beams[0] else None)
+        self.assertEqual(beams[1][0].text, "begin")
+        self.assertEqual(beams[4][0].text, "end")
+        self.assertEqual(beams[5][0].text, "begin")
         self.assertEqual(beams[-1][0].text, "end")
-        self.assertTrue(all(beam for beam in beams))
 
     def test_a_rest_breaks_the_beam_group(self):
         body = note("C") + note("D") + note("E") + note("", rest=True) + note("F") + note("G") + note("A")

@@ -24,7 +24,7 @@ class RestoreBeams:
         phase=Phase.STRUCTURAL,
         kind=Kind.MECHANICAL,
         owns=("beams",),
-        description="group consecutive eighth-or-shorter notes into beams and complete partial groups",
+        description="group consecutive eighth-or-shorter notes by source beam/beat boundaries",
         measure="unbeamed or partially beamed runs of eighth notes",
     )
 
@@ -94,11 +94,46 @@ def _restore_measure(measure, divisions: float, meter: tuple[float, float]) -> i
         for run in runs:
             if len(run) < 2:
                 continue
-            for chunk in _split_by_beat(run, _beat_length(meter)):
-                for target in _split_isolated_eighths(chunk):
-                    if len(target) >= 2:
-                        changed += _complete_run(target, divisions)
+            for source_chunk in _split_source_groups(run):
+                for chunk in _split_by_beat(source_chunk, _beat_length(meter)):
+                    for target in _split_isolated_eighths(chunk):
+                        if len(target) >= 2:
+                            changed += _complete_run(target, divisions)
     return changed
+
+
+def _split_source_groups(run: list[dict]) -> list[list[dict]]:
+    """Treat complete explicit source begin/end groups as hard boundaries.
+
+    A lone begin/end (or a one-note begin/end pair) is an OMR fragment, not a reliable beam group;
+    laputa m50's G3 source has such pairs and would otherwise be broken into single-note groups.
+    """
+    boundaries: set[int] = set()
+    open_starts: list[int] = []
+    for index, record in enumerate(run):
+        values = [(beam.text or "").strip() for beam in record["element"].findall("beam")]
+        if "begin" in values:
+            open_starts.append(index)
+        if "end" in values and open_starts:
+            start = open_starts.pop()
+            if index - start + 1 >= 2:
+                boundaries.add(start)
+                boundaries.add(index + 1)
+    if not boundaries:
+        return [run]
+    chunks: list[list[dict]] = []
+    chunk: list[dict] = []
+    for index, record in enumerate(run):
+        if index in boundaries and chunk:
+            chunks.append(chunk)
+            chunk = []
+        chunk.append(record)
+        if index + 1 in boundaries:
+            chunks.append(chunk)
+            chunk = []
+    if chunk:
+        chunks.append(chunk)
+    return chunks
 
 
 def _beat_length(meter: tuple[float, float]) -> float:

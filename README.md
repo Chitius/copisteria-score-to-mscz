@@ -248,8 +248,9 @@ between its endpoints into a slur, and converts a contiguous same-pitch slur int
 `restore_beams` runs after the voice merge and rebuilds beam groups for consecutive
 eighth-or-shorter notes, rebuilding a contiguous same-value run so a partial source group cannot
 leave a first note on a separate `begin`. Mixed eighth/sixteenth runs are split by the active beat
-grid, and an explicitly un-beamed eighth between 16th groups is kept separate rather than beamed
-into them.
+grid; a complete source `begin`/`end` group is a hard boundary, while a one-note source pair is
+treated as an OMR fragment. An explicitly un-beamed eighth between 16th groups is kept separate
+rather than beamed into them.
 
 ## Facts
 
