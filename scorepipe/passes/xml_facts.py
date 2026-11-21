@@ -37,6 +37,7 @@ class ApplyMarksFacts:
             placement = mark.get("placement") or "above"
             rehearsal = (mark.get("rehearsal") or "").strip()
             metronome = mark.get("tempo") or mark.get("metronome")
+            tempo_text = bool(metronome and text and _looks_like_tempo_text(text))
             if rehearsal and not _has_rehearsal(measure, rehearsal):
                 direction = _direction(placement)
                 direction_type = ElementTree.SubElement(direction, "direction-type")
@@ -50,9 +51,11 @@ class ApplyMarksFacts:
                 words = ElementTree.SubElement(direction_type, "words", _style_attributes(mark))
                 words.text = text
                 _stamp(direction, beat_ticks)
+                if tempo_text:
+                    ElementTree.SubElement(direction, "sound", {"tempo": str(metronome)})
                 _insert(measure, direction)
                 changed += 1
-            if metronome and not _has_metronome(measure, metronome):
+            if metronome and not tempo_text and not _has_metronome(measure, metronome):
                 direction = _direction(placement)
                 direction_type = ElementTree.SubElement(direction, "direction-type")
                 metronome_element = ElementTree.SubElement(direction_type, "metronome")
@@ -65,6 +68,11 @@ class ApplyMarksFacts:
                 _insert(measure, direction)
                 changed += 1
         return PassResult(changed=changed)
+
+
+def _looks_like_tempo_text(text: str) -> bool:
+    lowered = text.lower()
+    return "=" in text or "♩" in text or "♪" in text or lowered.startswith(("q ", "q."))
 
 
 def _style_attributes(mark: dict) -> dict:

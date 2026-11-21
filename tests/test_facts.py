@@ -75,6 +75,27 @@ class ApplyFactsTest(unittest.TestCase):
         self.assertEqual(words.get("font-style"), "italic")
         self.assertEqual(words.get("justify"), "center")
 
+    def test_tempo_notation_text_does_not_add_a_second_metronome(self):
+        doc = Document.load(FIXTURE)
+        ctx = Context(
+            facts={
+                "marks": [
+                    {
+                        "measure": 1,
+                        "text": "q = 72",
+                        "tempo": 72,
+                        "beat_unit": "quarter",
+                    }
+                ]
+            }
+        )
+        run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, inject=INJECT_PASSES, verifiers=[])
+        words = next(w for w in doc.root.iter("words") if w.text == "q = 72")
+        direction = next(d for d in doc.measures()[0].findall("direction") if d.find(".//words") is not None)
+        self.assertIsNotNone(direction.find("sound"))
+        self.assertEqual(direction.find("sound").get("tempo"), "72")
+        self.assertEqual(list(doc.root.iter("metronome")), [])
+
 
 if __name__ == "__main__":
     unittest.main()

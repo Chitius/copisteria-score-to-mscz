@@ -55,6 +55,15 @@ MULTILINE_FACTS = {
     ]
 }
 
+TEMPO_TEXT = """
+<museScore><Score><Staff id="1"><Measure>
+  <voice><Chord><durationType>whole</durationType><Note><pitch>60</pitch></Note></Chord></voice>
+  <voice><StaffText><text>q = 72</text></StaffText></voice>
+</Measure></Staff></Score></museScore>
+"""
+
+TEMPO_FACTS = {"marks": [{"measure": 1, "text": "q = 72", "tempo": 72, "beat_unit": "quarter"}]}
+
 
 class UpgradeTempoTest(unittest.TestCase):
     def test_staff_text_becomes_a_tempo_object(self):
@@ -123,6 +132,14 @@ class UpgradeTempoTest(unittest.TestCase):
         self.assertEqual(text.findtext("align"), "center,top")
         again = run_phase(doc, DISPLAY_PASSES, ctx, Phase.DISPLAY)
         self.assertEqual(again.changes, 0)
+
+    def test_tempo_notation_text_keeps_its_words_without_a_glyph(self):
+        doc = MsxcDocument(ElementTree.fromstring(TEMPO_TEXT))
+        run_phase(doc, DISPLAY_PASSES, Context(facts=TEMPO_FACTS), Phase.DISPLAY)
+        tempo = doc.root.find(".//Tempo")
+        self.assertIsNotNone(tempo)
+        self.assertEqual((tempo.findtext("text") or "").strip(), "q = 72")
+        self.assertIsNone(tempo.find("text/sym"))
 
 
 if __name__ == "__main__":

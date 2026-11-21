@@ -260,6 +260,8 @@ idempotent (a text already present in the measure is skipped). Facts never edit 
 directly; they are data. Marks may carry `italic`, `font_size` and `justify`; the words element gets
 the font attributes and `apply_text_facts_style` applies `justify` as an mscx `align`, so imported
 commentary is smaller, italic and centred instead of using the default StaffText layout.
+Tempo-notation text such as `q = 72` is written once with a `<sound tempo>` (no duplicate metronome),
+and arranger/transcriber credits are appended to the composer line instead of overlapping it.
 
 A PDF layout file gives each measure's box in PDF points:
 

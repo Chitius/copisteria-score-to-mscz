@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 170 tests
+Ran 173 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -187,6 +187,11 @@ scorepipe laputa.musicxml --check --report laputa.json
   The m3 commentary is centered and fits above the staff instead of overflowing to the right
   (`test_facts.py`, `test_display_facts.py`). This is the first-pass style/fit; true width estimation
   for arbitrary boxes is still open.
+- **Tempo text / arranger credits** (Sincerely): a fact such as `q = 72` used to produce both a words
+  direction and a metronome, which MuseScore rendered as `q = 72 ♩=72`. Tempo-notation text now gets
+  one words direction with a `<sound tempo>` and no separate metronome. Arranger/transcriber credits
+  are appended to the composer line rather than creating a second overlapping composer `Text`
+  (`test_facts.py`, `test_display_facts.py`, `test_credits_display.py`).
 - **Absolute musical positions**: `_ties_with_other_pitches_to_slurs` and
   `_tie_shaped_slurs_to_ties` used to compare measure-local onsets across the whole score, so a note
   in m60 could look "between" two m59 D4s. Both now use `scorepipe.core.positions.between`, keyed by

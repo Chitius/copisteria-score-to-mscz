@@ -38,6 +38,22 @@ class CreditsDisplayTest(unittest.TestCase):
         again = run_phase(doc, DISPLAY_PASSES, ctx, Phase.DISPLAY)
         self.assertEqual(again.changes, 0)
 
+    def test_arranger_is_appended_to_the_composer_line(self):
+        facts = {
+            "credits": [
+                {"type": "title", "text": "Innocent"},
+                {"type": "composer", "text": "Joe Hisaishi"},
+                {"type": "arranger", "text": "Arranger Name"},
+            ]
+        }
+        doc = MsxcDocument(ElementTree.fromstring(MSCX))
+        run_phase(doc, DISPLAY_PASSES, Context(facts=facts), Phase.DISPLAY)
+        styles = [box.findtext("Text/style") for box in doc.root.findall("Score/Staff/VBox")]
+        self.assertEqual(styles, ["title", "composer"])
+        composer_text = doc.root.findtext(".//Text[style='composer']/text")
+        self.assertIn("Joe Hisaishi", composer_text)
+        self.assertIn("Arranger Name", composer_text)
+
 
 if __name__ == "__main__":
     unittest.main()

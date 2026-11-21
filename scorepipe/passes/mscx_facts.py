@@ -17,6 +17,11 @@ METRONOME_SYMBOLS = {
 }
 
 
+def _looks_like_tempo_text(text: str) -> bool:
+    lowered = text.lower()
+    return "=" in text or "♩" in text or "♪" in text or lowered.startswith(("q ", "q."))
+
+
 class ApplyTextFactsStyle:
     spec = PassSpec(
         name="apply_text_facts_style",
@@ -114,12 +119,15 @@ class UpgradeTempoTexts:
                         f"{float(tempo) / 60:.6f}".rstrip("0").rstrip(".")
                     )
                     text_element = ElementTree.SubElement(element, "text")
-                    text_element.text = text + " "
-                    symbol = ElementTree.SubElement(text_element, "sym")
-                    symbol.text = METRONOME_SYMBOLS.get(
-                        fact.get("beat_unit") or "quarter", "metNoteQuarterUp"
-                    )
-                    symbol.tail = f" = {int(float(tempo))}"
+                    if _looks_like_tempo_text(text):
+                        text_element.text = text
+                    else:
+                        text_element.text = text + " "
+                        symbol = ElementTree.SubElement(text_element, "sym")
+                        symbol.text = METRONOME_SYMBOLS.get(
+                            fact.get("beat_unit") or "quarter", "metNoteQuarterUp"
+                        )
+                        symbol.tail = f" = {int(float(tempo))}"
                     voice.insert(list(voice).index(node), element)
                     voice.remove(node)
                     replaced = True
@@ -144,6 +152,8 @@ class ApplyCreditsDisplay:
         "title": "title",
         "subtitle": "subtitle",
         "composer": "composer",
+        "arranger": "composer",
+        "transcriber": "composer",
         "lyricist": "lyricist",
     }
 
@@ -167,6 +177,24 @@ class ApplyCreditsDisplay:
                 for node in doc.root.iter("Text")
                 if (node.findtext("text") or "").strip() == text
             ]
+            if style_name == "composer":
+                composer_texts = [
+                    node for node in doc.root.iter("Text") if node.findtext("style") == "composer"
+                ]
+                if composer_texts:
+                    composer_target = composer_texts[0]
+                    target_text = composer_target.find("text")
+                    if target_text is not None and text not in "".join(target_text.itertext()):
+                        target_text.text = (target_text.text or "") + "\n" + text
+                        added += 1
+                    # Drop the separate imported credit Text that duplicated this line.
+                    for node in existing:
+                        if node is composer_target:
+                            continue
+                        parent = _parent_of(doc.root, node)
+                        if parent is not None:
+                            parent.remove(node)
+                    continue
             if existing:
                 # MuseScore already imported the MusicXML credit as a Text; give it the style
                 for node in existing:
