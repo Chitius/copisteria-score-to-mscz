@@ -247,7 +247,8 @@ between its endpoints into a slur, and converts a contiguous same-pitch slur int
 `merge_adjacent_slurs` joins two slurs whose stop note is the next slur's start note.
 `restore_beams` runs after the voice merge and rebuilds beam groups for consecutive
 eighth-or-shorter notes, rebuilding the whole contiguous run so a partial source group cannot
-leave a first note on a separate `begin`.
+leave a first note on a separate `begin`. An explicitly un-beamed eighth between 16th groups is
+kept separate rather than beamed into them.
 
 ## Facts
 

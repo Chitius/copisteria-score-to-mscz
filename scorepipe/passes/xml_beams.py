@@ -92,8 +92,44 @@ def _restore_measure(measure, divisions: float) -> int:
         for run in runs:
             if len(run) < 2:
                 continue
-            changed += _complete_run(run, divisions)
+            chunks = _split_isolated_eighths(run)
+            for chunk in chunks:
+                if len(chunk) >= 2:
+                    changed += _complete_run(chunk, divisions)
     return changed
+
+
+def _split_isolated_eighths(run: list[dict]) -> list[list[dict]]:
+    """Keep an explicit un-beamed eighth out of surrounding sixteenth groups.
+
+    OMR often leaves an eighth with no beam between two beamed sixteenth runs (Sincerely m3's
+    low B3). Rebuilding the whole contiguous run would beam across it. Only an un-beamed level-1
+    note next to a shorter-value note is split out; fully beamed eighth runs (laputa m50) still
+    go through the normal rebuild.
+    """
+    isolated: set[int] = set()
+    for index, record in enumerate(run):
+        if record["level"] != 1 or record["element"].findall("beam"):
+            continue
+        left = run[index - 1]["level"] if index > 0 else None
+        right = run[index + 1]["level"] if index + 1 < len(run) else None
+        if (left is not None and left > 1) or (right is not None and right > 1):
+            isolated.add(index)
+    if not isolated:
+        return [run]
+    chunks: list[list[dict]] = []
+    chunk: list[dict] = []
+    for index, record in enumerate(run):
+        if index in isolated:
+            if chunk:
+                chunks.append(chunk)
+                chunk = []
+            chunks.append([record])
+        else:
+            chunk.append(record)
+    if chunk:
+        chunks.append(chunk)
+    return chunks
 
 
 def _complete_run(run: list[dict], divisions: float) -> int:

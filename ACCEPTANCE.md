@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 173 tests
+Ran 174 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -215,7 +215,8 @@ scorepipe laputa.musicxml --check --report laputa.json
   `restore_missing_beams`) groups consecutive eighth-or-shorter notes per staff/voice and rebuilds
   the whole contiguous run, so a partial source group cannot leave a first note on a separate
   `begin`. m50 bass is one eighth-note group from C3 to G3, and m51 starts with B2→G3 in the same
-  group (`test_beams.py`).
+  group (`test_beams.py`). An explicit un-beamed eighth between groups of 16ths is kept out of the
+  surrounding group (Sincerely m3's low B3), so rebuilding does not beam across it.
 - **Arpeggios belong to a chord**: `restore_page_arpeggios` used to copy the page mark to every
   note; after `merge_staff_voices` split F6 out of laputa m1's big chord, MuseScore promoted the
   mark on that single note and left the chord without an `Arpeggio`. The pass now collapses page

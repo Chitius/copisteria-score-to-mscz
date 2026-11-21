@@ -60,6 +60,30 @@ class RestoreBeamsTest(unittest.TestCase):
         self.assertEqual([note.find("beam").text for note in notes[:3]], ["begin", "continue", "end"])
         self.assertEqual([note.find("beam").text for note in notes[3:]], ["begin", "continue", "end"])
 
+    def test_an_unbeamed_eighth_between_sixteenths_stays_separate(self):
+        body = (
+            '<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration>'
+            "<voice>1</voice><type>16th</type><beam number=\"1\">begin</beam>"
+            '<beam number="2">begin</beam></note>'
+            '<note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration>'
+            "<voice>1</voice><type>16th</type><beam number=\"1\">continue</beam>"
+            '<beam number="2">end</beam></note>'
+            '<note><pitch><step>E</step><octave>4</octave></pitch><duration>2</duration>'
+            "<voice>1</voice><type>eighth</type></note>"
+            '<note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration>'
+            "<voice>1</voice><type>16th</type><beam number=\"1\">begin</beam>"
+            '<beam number="2">begin</beam></note>'
+            '<note><pitch><step>G</step><octave>4</octave></pitch><duration>1</duration>'
+            "<voice>1</voice><type>16th</type><beam number=\"1\">end</beam>"
+            '<beam number="2">end</beam></note>'
+        )
+        doc = build(body)
+        RestoreBeams().run(doc, Context())
+        notes = list(doc.measures()[0].iter("note"))
+        self.assertEqual(list(notes[2].findall("beam")), [])
+        self.assertEqual(notes[0].find("beam").text, "begin")
+        self.assertEqual(notes[-1].find("beam").text, "end")
+
 
 if __name__ == "__main__":
     unittest.main()
