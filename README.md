@@ -153,8 +153,8 @@ the report still lists what was overridden. See [`references/review.md`](referen
 Tests:
 
 ```text
-python -m unittest discover -s tests   # 192 tests
-python -m pytest tests -q              # 272 tests
+python -m unittest discover -s tests   # 194 tests
+python -m pytest tests -q              # 276 tests
 ```
 
 Corpus (sounding-note match; rests excluded from the primary score):
@@ -186,6 +186,9 @@ Recent Sincerely-specific fixes:
 - Voice merge skips tuplet measures rather than preserving nested ratios.
 - OMR octave/ledger errors are preserved. For example, Sincerely m30 has a raw C8; the pipeline
   reports the draft, it does not silently correct the pitch.
+- MuseScore can crash on schema-valid but importer-hostile XML; `normalize_forward_durations` and
+  `normalize_tuplet_rests` handle the known cases, but a crash should always be reproduced with
+  the MuseScore CLI and bisected. See [`references/troubleshooting.md`](references/troubleshooting.md).
 - `der_lindenbaum` P2 remains an OMR-quality outlier, not a delivery showcase.
 - Text layers can be garbled (Sincerely's credits were); do not trust extracted metadata without a
   visual check.

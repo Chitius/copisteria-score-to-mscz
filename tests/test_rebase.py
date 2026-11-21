@@ -36,6 +36,15 @@ def build(measures: str) -> Document:
     return Document(ElementTree.fromstring(PART.format(measures=measures)))
 
 
+def build_ticks(body: str) -> Document:
+    measure = (
+        '<measure number="1"><attributes><divisions>10080</divisions>'
+        "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+        f"{body}</measure>"
+    )
+    return Document(ElementTree.fromstring(PART.format(measures=measure)))
+
+
 class RebaseMeasuresTest(unittest.TestCase):
     def test_source_measure_backup_shrinks_and_new_voices_are_distinct(self):
         body_one = (
@@ -108,6 +117,33 @@ class RebaseMeasuresTest(unittest.TestCase):
         first = doc.measures()[0]
         self.assertEqual(measure_lengths(doc, Context()), [])
         self.assertEqual(len([e for e in doc.events(first) if e.rest]), 0)
+
+    def test_bar_filling_forward_is_rounded_to_a_safe_grid(self):
+        body = (
+            note("C", 16)
+            + '<forward><duration>26040</duration><voice>2</voice><staff>1</staff></forward>'
+            + "<backup><duration>40320</duration></backup>"
+            + note("D", 16)
+        )
+        doc = build_ticks(body)
+        from scorepipe.passes import NORMALIZE_FORWARDS
+
+        NORMALIZE_FORWARDS.run(doc, Context())
+        self.assertEqual(doc.measures()[0].findtext(".//forward/duration"), "25200")
+
+    def test_tuplet_rest_is_made_a_plain_grid_rest(self):
+        body = (
+            '<note><rest/><duration>1680</duration><voice>1</voice><type>16th</type>'
+            "<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes>"
+            "<normal-type>16th</normal-type></time-modification></note>"
+        )
+        doc = build_ticks(body)
+        from scorepipe.passes import NORMALIZE_TUPLET_RESTS
+
+        NORMALIZE_TUPLET_RESTS.run(doc, Context())
+        note = doc.measures()[0].find("note")
+        self.assertEqual(note.findtext("duration"), "2520")
+        self.assertIsNone(note.find("time-modification"))
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@
 | [`../references/facts.md`](../references/facts.md) | facts schema and agent visual workflow |
 | [`../references/notation-patches.md`](../references/notation-patches.md) | constrained 8va prototype and range review |
 | [`../references/review.md`](../references/review.md) | page-wise review loop and blocking policy |
+| [`../references/troubleshooting.md`](../references/troubleshooting.md) | MuseScore import crashes and bisection |
 | [`../references/delivery.md`](../references/delivery.md) | delivery checklist and known limitations |
 | [`../scripts/agent_facts.py`](../scripts/agent_facts.py) | prepare/validate/merge agent visual facts |
 | [`../scripts/review.py`](../scripts/review.py) | page-wise review → pipeline → render report |

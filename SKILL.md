@@ -178,7 +178,7 @@ SANITY.md                pass 契约审计
 
 ## 当前状态（2026-11）
 
-- `unittest`：192 个测试；`pytest`：272 个测试。
+- `unittest`：194 个测试；`pytest`：276 个测试。
 - Gute Nacht：sounding notes 98.94% / 99.0%（vocal/piano），verifier clean。
 - `aus_meinen_traenen`：91.38% / 90.10%；`die_wetterfahne`：98.97% / 97.75%。
 - `der_lindenbaum` P2 仍是 OMR 质量异常项（约 51%）。

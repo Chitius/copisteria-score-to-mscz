@@ -158,6 +158,31 @@ def overflow_rest():
     return build(measure(1, note("C", duration=16) + note(duration=8, rest=True)) + measure(2, note("D")))
 
 
+def forward_crash():
+    body = (
+        note("C", duration=14280)
+        + '<forward><duration>26040</duration><voice>2</voice><staff>1</staff></forward>'
+        + "<backup><duration>40320</duration></backup>"
+        + note("D", duration=10080)
+    )
+    return build(
+        '<measure number="1"><attributes><divisions>10080</divisions>'
+        "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+        f"{body}</measure>"
+    )
+
+
+def tuplet_rest():
+    return build(
+        measure(
+            1,
+            '<note><rest/><duration>1680</duration><voice>1</voice><type>16th</type>'
+            "<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes>"
+            "<normal-type>16th</normal-type></time-modification></note>",
+        )
+    )
+
+
 def aligned():
     return build(
         measure(1, note("C") + note("E", chord=True) + "<backup><duration>16</duration></backup>" + note("G", duration=16, voice="2"))
@@ -219,6 +244,8 @@ FACTORIES = {
     "drop_trailing_duplicate_measure": trailing_duplicate,
     "drop_overflow_duplicates": overflow_duplicate,
     "drop_overflow_rests": overflow_rest,
+    "normalize_forward_durations": forward_crash,
+    "normalize_tuplet_rests": tuplet_rest,
     "mark_pickup": pickup,
     "pad_empty_staves": empty_staff,
     "rebuild_voice_layers": fragmented,
@@ -255,6 +282,8 @@ CONTRACTS = {
     "drop_trailing_duplicate_measure": PassContract("drop_trailing_duplicate_measure", allows_add_or_remove_measures=True),
     "drop_overflow_duplicates": PassContract("drop_overflow_duplicates", allows_remove_notes=True),
     "drop_overflow_rests": PassContract("drop_overflow_rests", allows_remove_notes=True),
+    "normalize_forward_durations": PassContract("normalize_forward_durations", allows_retime=True),
+    "normalize_tuplet_rests": PassContract("normalize_tuplet_rests", allows_retime=True),
     "mark_pickup": PassContract("mark_pickup"),
     "pad_empty_staves": PassContract("pad_empty_staves", allows_add_notes=True, allows_voice_changes=True),
     "rebuild_voice_layers": PassContract(

@@ -38,6 +38,7 @@ from .xml_duplicates import DROP_DUPLICATE_NOTES, DropDuplicateNotes
 from .xml_credits import INJECT_CREDITS, ApplyCreditsFacts
 from .xml_empty_staves import PAD_EMPTY_STAVES, PadEmptyStaves
 from .xml_facts import ApplyMarksFacts, INJECT_PASSES
+from .xml_forwards import NORMALIZE_FORWARDS, NORMALIZE_TUPLET_RESTS, NormalizeForwardDurations, NormalizeTupletRests
 from .xml_layers import REBUILD_VOICE_LAYERS, RebuildVoiceLayers
 from .xml_measures import FILL_PASS, FillShortMeasures
 from .xml_merge import MERGE_ALIGNED_VOICES, MergeAlignedVoices
@@ -71,6 +72,8 @@ STRUCTURAL_PASSES = (
         NORMALIZE_VOICES_PASS,
         SLUR_PASS,
         FILL_PASS,
+        NORMALIZE_FORWARDS,
+        NORMALIZE_TUPLET_RESTS,
         RESTORE_PAGE_TIES,
         RESTORE_PAGE_SLURS,
         RESTORE_PAGE_PEDALS,

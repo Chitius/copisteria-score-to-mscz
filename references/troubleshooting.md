@@ -1,0 +1,36 @@
+# Troubleshooting
+
+## MuseScore crashes while importing MusicXML
+
+A schema-valid file can still crash MuseScore's importer. Reproduce outside the pipeline:
+
+```bash
+MuseScore4.exe -o out.mscz score.musicxml
+```
+
+A non-zero exit means the file is not importable, even if `xmllint` says it validates.
+
+### Known importer traps
+
+- **A `<forward>` that fills the rest of a bar and is followed by `<backup>`** with a duration not
+  on a quarter-beat grid. Example: 26040 ticks at 10080 divisions (`31/12` beats). The
+  `normalize_forward_durations` pass rounds it down and shortens the following backup.
+- **A tuplet rest whose duration is not representable as a plain rest**, e.g. a 1680-tick 16th
+  rest with `<time-modification>3:2</time-modification>`. The `normalize_tuplet_rests` pass makes
+  it a plain grid rest and removes the time-modification.
+- A missing `id` on `<part>` is invalid and can also terminate the import; check the skeleton when
+  bisecting.
+
+### Bisect a crashing file
+
+Make prefixes of the score (`first 8`, `16`, `32`, ... measures), import each, and find the first
+failing prefix. Then dump that measure and remove one construct at a time (forward, backup, tuplet
+rest, chord member). Keep the failing prefix as a regression fixture.
+
+This is how the 前前前世 10-page file was isolated to m16/m84 (`forward`) and m115 (tuplet rest).
+
+### After the crash is fixed
+
+A file can import but still have display measure-length warnings. Those are separate structural
+issues; do not call the score delivered just because MuseScore opens it. Run the full verifier and
+inspect the rendered pages.
