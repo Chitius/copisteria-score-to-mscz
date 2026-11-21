@@ -9,6 +9,17 @@ pipeline and OMR on ideal engraving, not paper noise or skew.
 The OpenScore score page for Gute Nacht says "OpenScore (CC0)"; check the upstream repository's
 current licence before redistributing a larger corpus.
 
+## Cases
+
+| case | source | parts | measures | PDF pages |
+|---|---|---|---:|---:|
+| `gute_nacht` | Schubert, Winterreise D.911 No.1 | vocal + piano | 105 | 4 |
+| `die_wetterfahne` | Schubert, Winterreise D.911 No.2 | vocal + piano | 52 | 4 |
+| `der_lindenbaum` | Schubert, Winterreise D.911 No.5 | vocal + piano | 82 | 6 |
+| `aus_meinen_traenen` | Schumann, Dichterliebe Op.48 No.2 | vocal + piano | 18 | 2 |
+
+Each case directory contains `{case}.mxl`, `ground_truth.musicxml` and `input.pdf`.
+
 ## Gute Nacht (Schubert, Winterreise D.911 No.1)
 
 - source: `lc5015378.mxl` from OpenScore Lieder

@@ -53,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-render", action="store_true")
     args = parser.parse_args(argv)
     args.output.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(args.mxl, args.output / args.mxl.name)
+    shutil.copy2(args.mxl, args.output / f"{args.output.name}.mxl")
     ground_truth = args.output / "ground_truth.musicxml"
     extract_mxl(args.mxl, ground_truth)
     print(f"ground truth: {ground_truth}")
