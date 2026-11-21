@@ -1,4 +1,4 @@
-﻿"""Mechanical passes on the MuseScore display form (.mscx)."""
+"""Mechanical passes on the MuseScore display form (.mscx)."""
 
 from __future__ import annotations
 
@@ -47,6 +47,8 @@ class UnhideRealRests:
             for voice in doc.voices(measure):
                 for rest in voice.findall("Rest"):
                     if rest.findtext("durationType") == "measure":
+                        continue
+                    if rest.find("pickupPadding") is not None:
                         continue
                     visible = rest.find("visible")
                     if visible is not None:
@@ -329,6 +331,56 @@ class CanonicalVoiceOrder:
         return PassResult(changed=changed)
 
 
-DISPLAY_PASSES = [DropTextVoiceRests(), UnhideRealRests(), DropPaddingVoices(), CanonicalVoiceOrder(), DropSecondaryVoiceRests(), NormalizeRangeSpanners()]
+class HidePickupLeadingRest:
+    spec = PassSpec(
+        name="hide_pickup_leading_rest",
+        phase=Phase.DISPLAY,
+        kind=Kind.MECHANICAL,
+        owns=("pickup-leading-rest",),
+        description="hide the padding rest that MuseScore creates before a bar-end pickup",
+        measure="rest at the start of the first measure before a late first chord",
+    )
+
+    def run(self, doc: MsxcDocument, ctx: Context) -> PassResult:
+        staff = next((s for s in doc.root.iter("Staff") if s.get("id") == "1"), None)
+        if staff is None:
+            return PassResult()
+        measure = staff.find("Measure")
+        if measure is None:
+            return PassResult()
+        changed = 0
+        for voice in measure.findall("voice"):
+            children = list(voice)
+            rest = next((child for child in children if child.tag == "Rest"), None)
+            if rest is None:
+                continue
+            first_chord = next((child for child in children if child.tag == "Chord"), None)
+            if first_chord is None or children.index(rest) > children.index(first_chord):
+                continue
+            if _rest_beats(rest) < 2.0:
+                continue
+            if rest.find("pickupPadding") is None:
+                marker = ElementTree.Element("pickupPadding")
+                marker.text = "1"
+                rest.insert(0, marker)
+            visible = rest.find("visible")
+            if visible is None:
+                visible = ElementTree.Element("visible")
+                rest.insert(0, visible)
+            if (visible.text or "") != "0":
+                visible.text = "0"
+                changed += 1
+        return PassResult(changed=changed)
+
+
+DISPLAY_PASSES = [
+    DropTextVoiceRests(),
+    UnhideRealRests(),
+    DropPaddingVoices(),
+    CanonicalVoiceOrder(),
+    DropSecondaryVoiceRests(),
+    NormalizeRangeSpanners(),
+    HidePickupLeadingRest(),
+]
 
 

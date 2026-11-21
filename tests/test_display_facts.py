@@ -141,6 +141,23 @@ class UpgradeTempoTest(unittest.TestCase):
         self.assertEqual((tempo.findtext("text") or "").strip(), "q = 72")
         self.assertIsNone(tempo.find("text/sym"))
 
+    def test_pickup_padding_rest_is_hidden_once(self):
+        mscx = """
+        <museScore><Score><Staff id="1"><Measure>
+          <voice>
+            <Rest><durationType>half</durationType><dots>1</dots></Rest>
+            <Chord><durationType>quarter</durationType><Note><pitch>69</pitch></Note></Chord>
+          </voice>
+        </Measure></Staff></Score></museScore>
+        """
+        doc = MsxcDocument(ElementTree.fromstring(mscx))
+        run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        rest = doc.root.find(".//Rest")
+        self.assertEqual(rest.findtext("visible"), "0")
+        self.assertIsNotNone(rest.find("pickupPadding"))
+        again = run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        self.assertEqual(again.changes, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

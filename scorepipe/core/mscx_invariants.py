@@ -14,6 +14,8 @@ def hidden_non_measure_rests(doc: MsxcDocument, ctx: Context) -> list[Violation]
             for rest in voice.findall("Rest"):
                 if rest.findtext("durationType") == "measure":
                     continue
+                if rest.find("pickupPadding") is not None:
+                    continue
                 if rest.find("visible") is not None:
                     out.append(Violation("hidden-rest", index, rest.findtext("durationType") or ""))
     return out
