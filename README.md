@@ -71,6 +71,7 @@ Implemented passes:
 | `drop_padding_voices` | display | `padding-voices` | rest-only voices next to a chord voice |
 | `drop_secondary_voice_rests` | display | `secondary-voice-rests` | rests on voices other than voice 1 |
 | `normalize_range_spanners` | display | `range-spanner-anchors` | HairPin/Pedal/GradualTempoChange anchored on a carrier voice |
+| `apply_text_facts_style` | display | `text-display-style` | fact text without its alignment |
 | `canonical_voice_order` | display | `voice-order` | voice slots out of canonical order |
 | `dedupe_pedal_spanners` | display | `pedal-spanners` | duplicate pedal spanners |
 | `dedupe_text_objects` | display | `display-text-duplicates` | duplicate text objects in a measure |
@@ -227,7 +228,9 @@ leave a first note on a separate `begin`.
 plus a measure-box layout) and `CompositeProducer`; the CLI picks one by file suffix. The
 `apply_marks_facts` inject pass turns marks into words / rehearsal / metronome directions and is
 idempotent (a text already present in the measure is skipped). Facts never edit the score
-directly; they are data.
+directly; they are data. Marks may carry `italic`, `font_size` and `justify`; the words element gets
+the font attributes and `apply_text_facts_style` applies `justify` as an mscx `align`, so imported
+commentary is smaller, italic and centred instead of using the default StaffText layout.
 
 A PDF layout file gives each measure's box in PDF points:
 

@@ -54,6 +54,27 @@ class ApplyFactsTest(unittest.TestCase):
         tags = [child.tag for child in direction]
         self.assertLess(tags.index("direction-type"), tags.index("offset"))
 
+    def test_fact_style_reaches_the_words_element(self):
+        doc = Document.load(FIXTURE)
+        ctx = Context(
+            facts={
+                "marks": [
+                    {
+                        "measure": 1,
+                        "text": "In the sense;",
+                        "italic": True,
+                        "font_size": 8,
+                        "justify": "center",
+                    }
+                ]
+            }
+        )
+        run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, inject=INJECT_PASSES, verifiers=[])
+        words = next(w for w in doc.root.iter("words") if w.text == "In the sense;")
+        self.assertEqual(words.get("font-size"), "8")
+        self.assertEqual(words.get("font-style"), "italic")
+        self.assertEqual(words.get("justify"), "center")
+
 
 if __name__ == "__main__":
     unittest.main()

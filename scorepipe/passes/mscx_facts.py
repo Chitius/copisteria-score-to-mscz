@@ -17,6 +17,54 @@ METRONOME_SYMBOLS = {
 }
 
 
+class ApplyTextFactsStyle:
+    spec = PassSpec(
+        name="apply_text_facts_style",
+        phase=Phase.DISPLAY,
+        kind=Kind.MECHANICAL,
+        owns=("text-display-style",),
+        description="apply facts justification to imported StaffText objects",
+        measure="fact text objects without their alignment",
+    )
+
+    def run(self, doc: MsxcDocument, ctx: Context) -> PassResult:
+        facts = (ctx.facts or {}).get("marks") or []
+        changed = 0
+        staves = doc.staves()
+        for fact in facts:
+            text = (fact.get("text") or "").strip()
+            justify = (fact.get("justify") or "").strip().lower()
+            if not text or justify not in ("center", "left", "right"):
+                continue
+            number = int(fact.get("measure") or 0)
+            for staff in staves:
+                measures = staff.findall("Measure")
+                if not 0 < number <= len(measures):
+                    continue
+                for node in measures[number - 1].iter():
+                    if node.tag not in ("StaffText", "SystemText"):
+                        continue
+                    if _node_text(node).strip() != text:
+                        continue
+                    align = f"{justify},top"
+                    if (node.findtext("align") or "") == align:
+                        continue
+                    existing = node.find("align")
+                    if existing is None:
+                        ElementTree.SubElement(node, "align").text = align
+                    else:
+                        existing.text = align
+                    changed += 1
+        return PassResult(changed=changed)
+
+
+def _node_text(node) -> str:
+    text = node.find("text")
+    if text is None:
+        return ""
+    return "".join(text.itertext())
+
+
 class UpgradeTempoTexts:
     spec = PassSpec(
         name="upgrade_tempo_texts",
@@ -344,4 +392,4 @@ def _fraction_quarters(fraction: str) -> float:
     return 0.0
 
 
-DISPLAY_FACT_PASSES = [UpgradeTempoTexts(), UpgradeGradualTexts(), ApplyCreditsDisplay()]
+DISPLAY_FACT_PASSES = [UpgradeTempoTexts(), UpgradeGradualTexts(), ApplyTextFactsStyle(), ApplyCreditsDisplay()]

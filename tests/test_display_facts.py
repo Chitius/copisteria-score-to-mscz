@@ -35,6 +35,26 @@ GLYPH_AND_TEXT_MSCX = """
 
 FACTS = {"marks": [{"measure": 1, "text": "Allegro", "tempo": 110, "beat_unit": "quarter"}]}
 
+MULTILINE = """
+<museScore><Score><Staff id="1"><Measure>
+  <voice><Chord><durationType>whole</durationType><Note><pitch>60</pitch></Note></Chord></voice>
+  <voice><StaffText><text><font size="8"/><i>First line
+Second line</i></text></StaffText></voice>
+</Measure></Staff></Score></museScore>
+"""
+
+MULTILINE_FACTS = {
+    "marks": [
+        {
+            "measure": 1,
+            "text": "First line\nSecond line",
+            "italic": True,
+            "font_size": 8,
+            "justify": "center",
+        }
+    ]
+}
+
 
 class UpgradeTempoTest(unittest.TestCase):
     def test_staff_text_becomes_a_tempo_object(self):
@@ -94,6 +114,15 @@ class UpgradeTempoTest(unittest.TestCase):
         self.assertEqual((tempos[0].findtext("text") or "").strip(), "Allegro")
         again = UpgradeTempoTexts().run(doc, Context(facts=FACTS))
         self.assertEqual(again.changed, 0)
+
+    def test_multiline_fact_text_gets_center_alignment(self):
+        doc = MsxcDocument(ElementTree.fromstring(MULTILINE))
+        ctx = Context(facts=MULTILINE_FACTS)
+        run_phase(doc, DISPLAY_PASSES, ctx, Phase.DISPLAY)
+        text = doc.root.find(".//StaffText")
+        self.assertEqual(text.findtext("align"), "center,top")
+        again = run_phase(doc, DISPLAY_PASSES, ctx, Phase.DISPLAY)
+        self.assertEqual(again.changes, 0)
 
 
 if __name__ == "__main__":

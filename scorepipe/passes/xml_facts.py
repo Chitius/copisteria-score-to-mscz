@@ -47,7 +47,8 @@ class ApplyMarksFacts:
             if text and not _has_words(measure, text):
                 direction = _direction(placement)
                 direction_type = ElementTree.SubElement(direction, "direction-type")
-                ElementTree.SubElement(direction_type, "words").text = text
+                words = ElementTree.SubElement(direction_type, "words", _style_attributes(mark))
+                words.text = text
                 _stamp(direction, beat_ticks)
                 _insert(measure, direction)
                 changed += 1
@@ -64,6 +65,21 @@ class ApplyMarksFacts:
                 _insert(measure, direction)
                 changed += 1
         return PassResult(changed=changed)
+
+
+def _style_attributes(mark: dict) -> dict:
+    attrs = {}
+    if mark.get("font_family"):
+        attrs["font-family"] = str(mark["font_family"])
+    if mark.get("font_size"):
+        attrs["font-size"] = str(mark["font_size"])
+    if mark.get("font_weight"):
+        attrs["font-weight"] = str(mark["font_weight"])
+    if mark.get("italic"):
+        attrs["font-style"] = "italic"
+    if mark.get("justify"):
+        attrs["justify"] = str(mark["justify"])
+    return attrs
 
 
 def _has_words(measure: ElementTree.Element, text: str) -> bool:

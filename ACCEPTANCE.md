@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 153 tests
+Ran 155 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -32,6 +32,7 @@ Coverage:
 | tie/slur confusion reconciliation | `test_tie_slurs.py` |
 | adjacent slur-chain merging | `test_slur_chains.py` |
 | beam group restoration | `test_beams.py` |
+| facts text styling / alignment | `test_facts.py`, `test_display_facts.py` |
 | page-level arpeggio/articulation/wedge restoration | `test_page_notation.py` |
 | external OMR command front-end | `test_omr.py` |
 | PDF text layer, measure-box assignment | `test_pdf_producer.py` |
@@ -65,7 +66,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-45 entries: 28 structural (27 mechanical + 1 analysis), 2 inject, 15 display. Every mechanical pass
+46 entries: 28 structural (27 mechanical + 1 analysis), 2 inject, 16 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -153,6 +154,12 @@ scorepipe laputa.musicxml --check --report laputa.json
   not over notes, so directions after notes/backups got negative onsets and were rendered at m27/m28.
   It now advances over non-chord note durations; m29's four pedal directions stay in m29 at
   `0, 4, 4, 8` (`test_page_restore.py::test_pedal_cursor_advances_over_notes`).
+- **Facts text styling** (laputa m3): `ApplyMarksFacts` used to write only `<words>` text, dropping
+  `italic`, `font_size` and `justify`; `ApplyTextFactsStyle` now applies justification as an mscx
+  `<align>` and the MusicXML words carry font attributes, so MuseScore imports 8pt italic text.
+  The m3 commentary is centered and fits above the staff instead of overflowing to the right
+  (`test_facts.py`, `test_display_facts.py`). This is the first-pass style/fit; true width estimation
+  for arbitrary boxes is still open.
 - **Adjacent slur chains** (laputa m53–m55): OMR wrote `m53 G4→m54 A4` and `m54 A4→m55 E5` as two
   slurs sharing the A4 note. `restore_page_slurs` joins such unique shared-note chains before
   numbering (and `merge_adjacent_slurs` handles the same shape outside the page path), producing one
