@@ -114,11 +114,7 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     for staff in doc.root.iter("Staff"):
         for index, measure in enumerate(staff.findall("Measure"), start=1):
             meter = signatures.get(index, meter)
-            for voice in measure.findall("voice"):
-                if voice.find("location") is not None:
-                    # a location advances/rewinds the cursor (gaps, voices starting off-beat);
-                    # the fraction arithmetic is MuseScore's, not ours, so do not guess a length
-                    continue
+            for voice in _primary_voice(measure):
                 total = 0.0
                 for child in voice:
                     if child.tag in ("Chord", "Rest"):
@@ -132,6 +128,15 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
                         )
                     )
     return out
+
+
+def _primary_voice(measure):
+    """Only voice 1 must fill the measure; later voices may start or end early by design."""
+    voices = measure.findall("voice")
+    for voice in voices:
+        if voice.findall("Chord"):
+            return [voice]
+    return voices[:1]
 
 
 MSCX_VERIFIERS = (

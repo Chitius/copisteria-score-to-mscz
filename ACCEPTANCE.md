@@ -6,11 +6,11 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 138 tests
+Ran 139 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
-75 passed
+76 passed
 ```
 
 Coverage:
@@ -45,7 +45,7 @@ Coverage:
 | per-note fill protection when retiming | `test_voice_merge.py` |
 | empty staff measure rests | `test_empty_staves.py` |
 | golden-score comparison | `test_compare.py` |
-| pass sanity framework (74 pytest cases) | `test_sanity.py`, `test_pass_sanity.py` |
+| pass sanity framework (76 pytest cases) | `test_sanity.py`, `test_pass_sanity.py` |
 | multi-voice staff retiming / fill conflict | `test_voice_merge.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
@@ -109,9 +109,11 @@ scorepipe laputa.musicxml --check --report laputa.json
   notes on the treble staff. Remaining differences are concentrated in m25–m32 and m42–m45.
 - **Per-note fill protection** (`merge_staff_voices`): the old `fill_conflict` test skipped or
   allowed a whole measure based on whether a *primary note* overlapped; it missed a long note over a
-  rest. The pass now iteratively protects every note whose proposed retimed duration would cross the
-  2-beat hollow/filled boundary, merges the rest, and keeps protected notes in their own voice with
-  their original duration. This is the rule the old `fill_conflict` was trying to express.
+  rest. The pass now protects every note whose proposed duration, measured against **all original
+  onsets**, would cross the 2-beat hollow/filled boundary, merges the rest, and keeps protected notes
+  in their own voice with their original duration. Protected notes still reserve their slot in the
+  merged timeline (a gap/rest), so they cannot stretch a neighbour and cascade protection. This is the
+  rule the old `fill_conflict` was trying to express.
 - **Reused slur numbers** (laputa m7–m10): the page writes four starts numbered 1–4 at m7 and reuses
   number 1 at m8/m10. A stack paired m7 G4 with m10 D5, producing a three-bar arc. The shared
   endpoint pairer (`scorepipe/core/pairing.py`) keeps every open start and picks the best valid stop

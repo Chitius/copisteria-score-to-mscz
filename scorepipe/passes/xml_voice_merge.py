@@ -71,19 +71,21 @@ def _merge(doc: Document, measure) -> bool:
         notes = [event for event in staff_events if not event.rest and event.element.find("pitch") is not None]
         if not notes:
             continue
-        protected = _protected_notes(notes, bar)
+        all_onsets = sorted({round(event.onset, 4) for event in notes})
+        if all_onsets[0] < -1e-6 or all_onsets[-1] >= bar - 1e-6:
+            continue
+        protected = _protected_notes(notes, all_onsets, bar)
         active = [event for event in notes if id(event.element) not in protected]
         if not active:
             continue
-        onsets = sorted({round(event.onset, 4) for event in active})
-        if onsets[0] < -1e-6 or onsets[-1] >= bar - 1e-6:
-            continue
+        active_onsets = sorted({round(event.onset, 4) for event in active})
         sequence: list[ElementTree.Element] = []
-        if onsets[0] > 1e-6:
-            sequence.append(_rest(onsets[0], divisions, staff))
-        for index, onset in enumerate(onsets):
-            following = onsets[index + 1] if index + 1 < len(onsets) else bar
-            duration = following - onset
+        cursor = 0.0
+        for onset in active_onsets:
+            if onset > cursor + 1e-6:
+                sequence.append(_rest(onset - cursor, divisions, staff))
+            boundary = next((value for value in all_onsets if value > onset + 1e-6), bar)
+            duration = boundary - onset
             pitches = []
             for event in active:
                 if abs(event.onset - onset) > 1e-6:
@@ -96,6 +98,9 @@ def _merge(doc: Document, measure) -> bool:
                 sequence.append(
                     _note(pitch, duration, divisions, staff, chord=position > 0, source=source)
                 )
+            cursor = onset + duration
+        if cursor < bar - 1e-6:
+            sequence.append(_rest(bar - cursor, divisions, staff))
         extras = _protected_blocks(
             [event for event in notes if id(event.element) in protected], bar, divisions, staff
         )
@@ -104,29 +109,31 @@ def _merge(doc: Document, measure) -> bool:
     return rebuilt
 
 
-def _protected_notes(notes, bar: float) -> set[int]:
-    """Ids of notes whose retimed duration would cross the filled/hollow boundary.
+def _protected_notes(notes, all_onsets: list[float], bar: float) -> set[int]:
+    """Notes whose proposed duration would cross the filled/hollow boundary.
 
-    A note that would turn a whole/half note into a quarter (or vice versa) keeps its original
-    duration and is excluded from the merge; the remaining notes are retimed again, so protection is
-    iterative.
+    The proposal is measured against **all** original onsets, including notes that are themselves
+    protected. A protected note keeps its slot as a gap, so it cannot stretch its neighbours (m29:
+    protecting the A2 halves used to turn the beat-2 quarter into a half and protect that too).
     """
     protected: set[int] = set()
-    while True:
-        active = [event for event in notes if id(event.element) not in protected]
-        onsets = sorted({round(event.onset, 4) for event in active})
-        added: set[int] = set()
-        for index, onset in enumerate(onsets):
-            following = onsets[index + 1] if index + 1 < len(onsets) else bar
-            duration = following - onset
-            for event in active:
-                if abs(event.onset - onset) > 1e-6:
-                    continue
-                if (event.duration >= 2.0 - 1e-6) != (duration >= 2.0 - 1e-6):
-                    added.add(id(event.element))
-        if not added - protected:
-            return protected
-        protected |= added
+    for index, onset in enumerate(all_onsets):
+        following = all_onsets[index + 1] if index + 1 < len(all_onsets) else bar
+        duration = following - onset
+        for event in notes:
+            if abs(event.onset - onset) > 1e-6:
+                continue
+            if (event.duration >= 2.0 - 1e-6) != (duration >= 2.0 - 1e-6):
+                protected.add(id(event.element))
+    return protected
+
+
+def _forward(duration: float, divisions: float, staff: str) -> ElementTree.Element:
+    element = ElementTree.Element("forward")
+    ElementTree.SubElement(element, "duration").text = str(int(round(duration * divisions)))
+    ElementTree.SubElement(element, "voice").text = "1"
+    ElementTree.SubElement(element, "staff").text = staff
+    return element
 
 
 def _protected_blocks(events: list, bar: float, divisions: float, staff: str) -> list[list]:

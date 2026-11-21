@@ -114,6 +114,35 @@ class MergeStaffVoicesTest(unittest.TestCase):
         self.assertEqual(whole.duration, 4.0)
         self.assertNotEqual(whole.voice, "1")
 
+    def test_protected_long_notes_do_not_stretch_the_merged_line(self):
+        rest = '<note><rest/><duration>4</duration><voice>{voice}</voice></note>'
+        chord = (
+            '<note><chord/><pitch><step>{step}</step><octave>3</octave></pitch>'
+            "<duration>4</duration><voice>2</voice></note>"
+        )
+        body = (
+            note("A", 2, 8, voice="1")
+            + note("A", 2, 8, voice="1")
+            + "<backup><duration>16</duration></backup>"
+            + rest.format(voice=2)
+            + note("E", 3, 4, voice="2")
+            + chord.format(step="A")
+            + chord.format(step="C")
+            + rest.format(voice=2)
+            + note("F", 3, 4, voice="2")
+            + chord.format(step="D")
+            + chord.format(step="B")
+        )
+        doc = Document(ElementTree.fromstring(PART.format(measures=measure(body) + LAST)))
+        MERGE_STAFF_VOICES.run(doc, Context())
+        events = [event for event in doc.events(doc.measures()[0]) if not event.rest]
+        a_notes = [e for e in events if e.element.findtext("pitch/step") == "A" and e.element.findtext("pitch/octave") == "2"]
+        chords = [e for e in events if e.element.findtext("pitch/step") in ("E", "F")]
+        self.assertEqual({e.duration for e in a_notes}, {2.0})
+        self.assertEqual(len({e.voice for e in a_notes}), 1)
+        self.assertEqual(len({e.voice for e in chords}), 1)
+        self.assertNotEqual(a_notes[0].voice, chords[0].voice)
+
 
 if __name__ == "__main__":
     unittest.main()
