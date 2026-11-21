@@ -97,49 +97,11 @@ def _restore_measure(measure, divisions: float) -> int:
 
 
 def _complete_run(run: list[dict], divisions: float) -> int:
-    beamed = [index for index, record in enumerate(run) if record["element"].findall("beam")]
-    targets: list[tuple[int, int]] = []
-    if not beamed:
-        targets.append((0, len(run)))
-    else:
-        first = beamed[0]
-        last = beamed[-1]
-        if first > 0:
-            group_end = next(
-                (
-                    index
-                    for index in range(first, len(run))
-                    if _has_beam(run[index]["element"], "end")
-                ),
-                last,
-            )
-            targets.append((0, group_end + 1))
-        if last < len(run) - 1:
-            group_start = _last_begin(run, last)
-            targets.append((group_start, len(run)))
-        for gap in range(first + 1, last):
-            if run[gap]["element"].findall("beam"):
-                continue
-            group_start = _last_begin(run, gap) or max(0, gap - 1)
-            group_end = next(
-                (
-                    index
-                    for index in range(gap + 1, len(run))
-                    if _has_beam(run[index]["element"], "end")
-                ),
-                last,
-            )
-            targets.append((group_start, group_end + 1))
-
-    merged: list[tuple[int, int]] = []
-    for start, end in sorted(targets):
-        if merged and start <= merged[-1][1]:
-            merged[-1] = (merged[-1][0], max(end, merged[-1][1]))
-        else:
-            merged.append((start, end))
-
+    # Rebuild the whole contiguous run. Keeping the old partial groups is what left the first
+    # eighth of laputa m51 on a separate `begin` while the next note also started a group.
+    targets = [(0, len(run))]
     changed = 0
-    for start, end in merged:
+    for start, end in targets:
         target = run[start:end]
         if len(target) < 2:
             continue

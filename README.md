@@ -211,7 +211,8 @@ cluster. This restores laputa m8 C5→m10 D5 while still refusing the old m7→m
 `reconcile_tie_slurs` then removes a slur duplicated by a tie, converts a tie that has another pitch
 between its endpoints into a slur, and converts a contiguous same-pitch slur into a tie.
 `restore_beams` runs after the voice merge and rebuilds beam groups for consecutive
-eighth-or-shorter notes, extending partial edge groups and filling internal gaps.
+eighth-or-shorter notes, rebuilding the whole contiguous run so a partial source group cannot
+leave a first note on a separate `begin`.
 
 ## Facts
 

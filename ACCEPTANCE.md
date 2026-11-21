@@ -137,11 +137,13 @@ scorepipe laputa.musicxml --check --report laputa.json
   slur; a contiguous same-pitch slur with nothing between its endpoints becomes a tie. The page
   restore records tie→slur conversions so the next round does not re-add the tie. m35's E5 tie is
   kept and its duplicate slur is gone; E4's tie is untouched (`test_tie_slurs.py`).
-- **Beam groups** (laputa m50): OMR left beams only on the G3 eighths in a separate voice; after
-  merging, the run had a beam on every other note and disconnected stems. `restore_beams` (ported
-  from the old skill's `restore_missing_beams`) groups consecutive eighth-or-shorter notes per
-  staff/voice, extends edge groups, fills internal gaps and writes the level structure. m50 bass is
-  now one eighth-note group from C3 to G3 (`test_beams.py`).
+- **Beam groups** (laputa m50–m51): OMR left beams only on some notes (m50: G3 eighths in a
+  separate voice; m51: the first eighth had a `begin` and the next note also started a group). After
+  merging, the runs had disconnected stems. `restore_beams` (ported from the old skill's
+  `restore_missing_beams`) groups consecutive eighth-or-shorter notes per staff/voice and rebuilds
+  the whole contiguous run, so a partial source group cannot leave a first note on a separate
+  `begin`. m50 bass is one eighth-note group from C3 to G3, and m51 starts with B2→G3 in the same
+  group (`test_beams.py`).
 - **Arpeggios belong to a chord**: `restore_page_arpeggios` used to copy the page mark to every
   note; after `merge_staff_voices` split F6 out of laputa m1's big chord, MuseScore promoted the
   mark on that single note and left the chord without an `Arpeggio`. The pass now collapses page
