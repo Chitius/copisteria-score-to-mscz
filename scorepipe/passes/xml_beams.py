@@ -32,11 +32,13 @@ class RestoreBeams:
         divisions = doc.divisions()
         changed = 0
         for _number, measure in doc.iter_measures():
-            changed += _restore_measure(measure, divisions)
+            changed += _restore_measure(
+                measure, divisions, doc.effective_time_signature(measure)
+            )
         return PassResult(changed=changed)
 
 
-def _restore_measure(measure, divisions: float) -> int:
+def _restore_measure(measure, divisions: float, meter: tuple[float, float]) -> int:
     by_voice: dict[tuple, list[dict]] = defaultdict(list)
     cursor = 0
     previous_start = None
@@ -92,11 +94,44 @@ def _restore_measure(measure, divisions: float) -> int:
         for run in runs:
             if len(run) < 2:
                 continue
-            chunks = _split_isolated_eighths(run)
-            for chunk in chunks:
-                if len(chunk) >= 2:
-                    changed += _complete_run(chunk, divisions)
+            for chunk in _split_by_beat(run, _beat_length(meter)):
+                for target in _split_isolated_eighths(chunk):
+                    if len(target) >= 2:
+                        changed += _complete_run(target, divisions)
     return changed
+
+
+def _beat_length(meter: tuple[float, float]) -> float:
+    beats, beat_type = meter
+    unit = 4.0 / beat_type
+    if beat_type == 8 and beats % 3 == 0:
+        return unit * 3.0
+    if beat_type == 8 and beats == 3:
+        return unit * 3.0
+    return unit
+
+
+def _split_by_beat(run: list[dict], beat_length: float) -> list[list[dict]]:
+    """Mixed note values may not share a beam across a beat boundary.
+
+    A run of one repeated value (laputa m50's eighths) keeps the old whole-run rebuild; once
+    sixteenths and eighths are mixed (Sincerely m3), grouping follows the beat grid.
+    """
+    if not run or len({record["level"] for record in run}) < 2:
+        return [run]
+    chunks: list[list[dict]] = []
+    chunk: list[dict] = []
+    current_beat = None
+    for record in run:
+        beat = int((record["start"] + 1e-6) // beat_length)
+        if chunk and beat != current_beat:
+            chunks.append(chunk)
+            chunk = []
+        chunk.append(record)
+        current_beat = beat
+    if chunk:
+        chunks.append(chunk)
+    return chunks
 
 
 def _split_isolated_eighths(run: list[dict]) -> list[list[dict]]:

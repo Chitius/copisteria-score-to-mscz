@@ -246,9 +246,10 @@ start/stop timing but lands on another chord member), converts a tie that has an
 between its endpoints into a slur, and converts a contiguous same-pitch slur into a tie.
 `merge_adjacent_slurs` joins two slurs whose stop note is the next slur's start note.
 `restore_beams` runs after the voice merge and rebuilds beam groups for consecutive
-eighth-or-shorter notes, rebuilding the whole contiguous run so a partial source group cannot
-leave a first note on a separate `begin`. An explicitly un-beamed eighth between 16th groups is
-kept separate rather than beamed into them.
+eighth-or-shorter notes, rebuilding a contiguous same-value run so a partial source group cannot
+leave a first note on a separate `begin`. Mixed eighth/sixteenth runs are split by the active beat
+grid, and an explicitly un-beamed eighth between 16th groups is kept separate rather than beamed
+into them.
 
 ## Facts
 
