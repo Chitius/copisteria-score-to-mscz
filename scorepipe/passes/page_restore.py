@@ -235,6 +235,19 @@ class RestorePageSlurs(PageRestoreMixin):
             # already carry a tie is the slur a duplicate. A slur may legitimately end on a tied note.
             if _has_tie(start_note, "start") and _has_tie(stop_note, "stop"):
                 continue
+            if _tied_span_covers(
+                index,
+                start_measure,
+                staff,
+                start_onset,
+                pitch,
+                stop_measure,
+                stop_onset,
+                stop_pitch,
+                start_note,
+                stop_note,
+            ):
+                continue
             pairs.append(
                 {
                     "start": start_note,
@@ -630,6 +643,31 @@ def _add_articulation(note, mark) -> bool:
             return False
     articulations.append(ElementTree.fromstring(ElementTree.tostring(mark)))
     return True
+
+
+def _tied_span_covers(
+    index,
+    start_measure,
+    staff,
+    start_onset,
+    start_pitch,
+    stop_measure,
+    stop_onset,
+    stop_pitch,
+    start_note,
+    stop_note,
+) -> bool:
+    """If one slur endpoint is a tie note and the other lands at the tie's other end, the slur
+    describes the same span as the tie (its other endpoint may be another chord member)."""
+    if _has_tie(start_note, "start"):
+        same_pitch_stop = index.get((stop_measure, staff, stop_onset, start_pitch))
+        if same_pitch_stop is not None and _has_tie(same_pitch_stop, "stop"):
+            return True
+    if _has_tie(stop_note, "stop"):
+        same_pitch_start = index.get((start_measure, staff, start_onset, stop_pitch))
+        if same_pitch_start is not None and _has_tie(same_pitch_start, "start"):
+            return True
+    return False
 
 
 def _has_tie(note, kind: str) -> bool:

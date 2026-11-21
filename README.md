@@ -211,7 +211,8 @@ cluster. This restores laputa m8 C5→m10 D5 while still refusing the old m7→m
 `restore_page_slurs`, `restore_page_ties`, `sanitize_slurs` and the MusicXML→mscx tie export.
 Tie propagation from a printed chord only applies to notes with the same duration at both endpoints,
 so a different rhythmic voice at the same onset does not inherit the tie.
-`reconcile_tie_slurs` then removes a slur duplicated by a tie, converts a tie that has another pitch
+`reconcile_tie_slurs` then removes a slur duplicated by a tie (including when it shares the tie
+start/stop timing but lands on another chord member), converts a tie that has another pitch
 between its endpoints into a slur, and converts a contiguous same-pitch slur into a tie.
 `merge_adjacent_slurs` joins two slurs whose stop note is the next slur's start note.
 `restore_beams` runs after the voice merge and rebuilds beam groups for consecutive

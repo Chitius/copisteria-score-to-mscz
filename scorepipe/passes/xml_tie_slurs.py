@@ -109,16 +109,43 @@ def _drop_slurs_under_ties(doc: Document) -> int:
     for slur_start, slur_stop in slur_pairs:
         start_note = slur_start.payload[1].element
         stop_note = slur_stop.payload[1].element
-        if not any(
-            tie_start.payload[1].element is start_note
-            and tie_stop.payload[1].element is stop_note
-            for tie_start, tie_stop in tie_pairs
+        if not _tie_covers_slur(
+            slur_start, slur_stop, tie_pairs
         ):
             continue
         _remove_slur(start_note, slur_start.payload[2])
         _remove_slur(stop_note, slur_stop.payload[2])
         removed += 1
     return removed
+
+
+def _tie_covers_slur(slur_start, slur_stop, tie_pairs) -> bool:
+    """A slur is the tie's duplicate when one endpoint is the tie note and the other endpoint
+    lands at the tie's other end (the chord may put the other endpoint on a different pitch)."""
+    slur_start_event = slur_start.payload[1]
+    slur_stop_event = slur_stop.payload[1]
+    slur_start_note = slur_start_event.element
+    slur_stop_note = slur_stop_event.element
+    start_position = (slur_start.payload[0], round(slur_start_event.onset, 4))
+    stop_position = (slur_stop.payload[0], round(slur_stop_event.onset, 4))
+    for tie_start, tie_stop in tie_pairs:
+        tie_start_event = tie_start.payload[1]
+        tie_stop_event = tie_stop.payload[1]
+        tie_start_position = (tie_start.payload[0], round(tie_start_event.onset, 4))
+        tie_stop_position = (tie_stop.payload[0], round(tie_stop_event.onset, 4))
+        if (
+            slur_start_note is tie_start_event.element
+            and slur_stop_event.staff == tie_stop_event.staff
+            and stop_position == tie_stop_position
+        ):
+            return True
+        if (
+            slur_stop_note is tie_stop_event.element
+            and slur_start_event.staff == tie_start_event.staff
+            and start_position == tie_start_position
+        ):
+            return True
+    return False
 
 
 def _ties_with_other_pitches_to_slurs(doc: Document, ctx: Context) -> int:

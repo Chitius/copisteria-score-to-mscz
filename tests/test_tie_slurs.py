@@ -15,19 +15,20 @@ PART = """
 """
 
 
-def note(step, octave, duration, *, tie=None, slur=None, voice="1"):
+def note(step, octave, duration, *, tie=None, slur=None, voice="1", chord=False):
     tie_tag = f'<tie type="{tie}"/>' if tie else ""
     slur_tag = f'<slur type="{slur}" number="1"/>' if slur else ""
     notations = f"<notations>{slur_tag}</notations>" if slur_tag else ""
+    chord_tag = "<chord/>" if chord else ""
     return (
-        f"<note><pitch><step>{step}</step><octave>{octave}</octave></pitch>"
+        f"<note>{chord_tag}<pitch><step>{step}</step><octave>{octave}</octave></pitch>"
         f"<duration>{duration}</duration>{tie_tag}<voice>{voice}</voice>{notations}</note>"
     )
 
 
-def measure(body):
+def measure(body, number=1):
     return (
-        '<measure number="1"><attributes><divisions>4</divisions>'
+        f'<measure number="{number}"><attributes><divisions>4</divisions>'
         "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
         + body
         + "</measure>"
@@ -35,7 +36,8 @@ def measure(body):
 
 
 def build(body):
-    return Document(ElementTree.fromstring(PART.format(measures=measure(body))))
+    measures = body if body.lstrip().startswith("<measure") else measure(body)
+    return Document(ElementTree.fromstring(PART.format(measures=measures)))
 
 
 class ReconcileTieSlursTest(unittest.TestCase):
@@ -64,6 +66,24 @@ class ReconcileTieSlursTest(unittest.TestCase):
         doc = build(note("C", 4, 8, slur="start") + note("C", 4, 8, slur="stop"))
         result = ReconcileTieSlurs().run(doc, Context())
         self.assertEqual(result.changed, 1)
+        self.assertEqual(len(list(doc.root.iter("slur"))), 0)
+        self.assertEqual(len(list(doc.root.iter("tie"))), 2)
+
+    def test_slur_sharing_the_tie_start_and_stop_time_is_removed(self):
+        doc = build(
+            measure(note("G", 4, 16, tie="start", slur="start"), 1)
+            + measure(note("G", 4, 16, tie="stop") + note("E", 4, 16, slur="stop", chord=True), 2)
+        )
+        self.assertEqual(ReconcileTieSlurs().run(doc, Context()).changed, 1)
+        self.assertEqual(len(list(doc.root.iter("slur"))), 0)
+        self.assertEqual(len(list(doc.root.iter("tie"))), 2)
+
+    def test_slur_sharing_the_tie_stop_and_start_time_is_removed(self):
+        doc = build(
+            measure(note("G", 4, 16, tie="start") + note("E", 4, 16, slur="start", chord=True), 1)
+            + measure(note("G", 4, 16, tie="stop", slur="stop"), 2)
+        )
+        self.assertEqual(ReconcileTieSlurs().run(doc, Context()).changed, 1)
         self.assertEqual(len(list(doc.root.iter("slur"))), 0)
         self.assertEqual(len(list(doc.root.iter("tie"))), 2)
 
