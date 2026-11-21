@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--musescore", help="MuseScore executable (default: MSCORE or common paths)")
     parser.add_argument("--title", help="title credit to inject (agent-recognised for scans)")
     parser.add_argument("--composer", help="composer credit to inject")
-    parser.add_argument("--max-rounds", type=int, default=8)
+    parser.add_argument("--max-rounds", type=int, default=32)
     args = parser.parse_args(argv)
 
     groups = {

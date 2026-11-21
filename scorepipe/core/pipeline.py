@@ -43,7 +43,7 @@ def run_phase(
     passes: list[Pass],
     ctx: Context,
     phase: Phase,
-    max_rounds: int = 8,
+    max_rounds: int = 32,
     trace: list[TraceEntry] | None = None,
     analysis: list[dict] | None = None,
 ) -> PhaseReport:
@@ -102,7 +102,7 @@ def run_display(
     ctx: Context,
     passes: list[Pass],
     verifiers: list | None = None,
-    max_rounds: int = 8,
+    max_rounds: int = 32,
 ) -> RunReport:
     """Display IR: one fixed-point loop, then read-only checks."""
     report = RunReport()
@@ -121,7 +121,7 @@ def run_pipeline(
     inject: list[Pass] | None = None,
     display: list[Pass] | None = None,
     verifiers: list | None = None,
-    max_rounds: int = 8,
+    max_rounds: int = 32,
     max_outer_rounds: int = 3,
 ) -> RunReport:
     """structural fixpoint -> inject fixpoint -> display fixpoint -> verify.

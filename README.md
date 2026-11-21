@@ -202,10 +202,9 @@ available to the restoration passes.
   numbering alignment.
 
 Gute Nacht is two parts (vocal + piano, 105 measures). Copisteria's partial output matches it at
-98.24% / 98.38% by part; the vocal part is also verifier-clean after the structural pipeline. The
-piano part now reaches a clean verifier, but its structural fixed point still reports changes at the
-round limit, so it remains an OMR-comparison/convergence case. See `tests/corpus/lieder/README.md`
-for provenance and rebuild commands.
+98.24% / 98.38% by part; both parts now pass the structural pipeline with a clean verifier. The
+piano part needs 22 fixed-point rounds (the default is 32) because its final measures cascade through
+rebase one bar per round. See `tests/corpus/lieder/README.md` for provenance and rebuild commands.
 
 ## Combined driver
 

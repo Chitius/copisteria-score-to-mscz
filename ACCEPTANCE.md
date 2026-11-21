@@ -90,11 +90,10 @@ scorepipe laputa.musicxml --check --report laputa.json
 - OpenScore Lieder `Gute Nacht` (`tests/corpus/lieder/gute_nacht`): the source MXL is the ground
   truth and a MuseScore-rendered A4 PDF is the synthetic OMR input. Copisteria's output matches the
   ground truth at 98.24% (vocal, 3 missing / 3 extra) and 98.38% (piano, 14 / 17). The vocal part
-  passes the structural pipeline cleanly with the same match; the piano part now also has a clean
-  verifier after the rebase/redundant-voice fixes, but its structural fixed point still reports
-  changes at the round limit and is kept as an OMR-comparison/convergence case. The corpus comparator
-  normalises active divisions and matches `(measure ordinal, onset, pitch, duration)` multisets
-  (`test_lieder_corpus.py`).
+  passes the structural pipeline cleanly with the same match; the piano part also reaches a clean
+  verifier and a stable fixed point, at 22 rounds (the default cap is 32) because the rebase tail
+  cascades one bar per round. The corpus comparator normalises active divisions and matches
+  `(measure ordinal, onset, pitch, duration)` multisets (`test_lieder_corpus.py`).
 - `laputa` **page directory** (copisteria output: 3 files, 26 / 23 / 14 measures): merged to one
   63-measure score by `merge_pages`, then verifier clean. On this run `restore_page_pedals`
   reported 36 adjustments and `restore_page_wedges` 20; the structural phase converged in 3 rounds.
