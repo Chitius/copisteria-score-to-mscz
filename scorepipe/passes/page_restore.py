@@ -224,8 +224,9 @@ class RestorePageSlurs(PageRestoreMixin):
             stop_note = index.get((stop_measure, staff, stop_onset, stop_pitch))
             if start_note is None or stop_note is None:
                 continue
-            # a page often records the same arc as both tie and slur; the tie is the specific one
-            if _has_tie(start_note, "start") or _has_tie(stop_note, "stop"):
+            # a page often records the same arc as both tie and slur; only when both endpoints
+            # already carry a tie is the slur a duplicate. A slur may legitimately end on a tied note.
+            if _has_tie(start_note, "start") and _has_tie(stop_note, "stop"):
                 continue
             pairs.append(
                 {

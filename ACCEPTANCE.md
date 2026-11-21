@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 143 tests
+Ran 144 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -125,8 +125,12 @@ scorepipe laputa.musicxml --check --report laputa.json
   the m35 start in voice 2, so document-order pairing left the start open and paired it with the
   m36 stop, creating a long cross-bar slur. `restore_page_slurs` now sorts endpoints by
   `(measure, onset, stop-before-start)`; m35 start 1.5 pairs with its own stop 2.0 and the long
-  m35→m36 slur is gone. The short remaining slur was the OMR's tie/ slur confusion; `reconcile_tie_slurs`
+  m35→m36 slur is gone. The short remaining slur was the OMR's tie/slur confusion; `reconcile_tie_slurs`
   now removes a slur whose endpoints already have a tie (m35 E5 keeps the tie, loses the slur).
+- **A slur may end on a tied note** (m33→m35): the page has `m33 G5 slur start → m35 E5 slur stop`,
+  while E5 also carries a real tie. The page slur pass now skips a copy only when **both** endpoints
+  already have ties, so the legitimate m33→m35 slur is restored and the duplicate E5 slur start is
+  still suppressed (`test_page_restore.py::test_a_slur_may_end_on_a_tied_note`).
 - **Tie/slur reconciliation**: `reconcile_tie_slurs` applies three rules: a tie duplicated by a slur
   wins (slur removed); a tie with another pitch between its endpoints in the same voice becomes a
   slur; a contiguous same-pitch slur with nothing between its endpoints becomes a tie. The page

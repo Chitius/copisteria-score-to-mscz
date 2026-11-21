@@ -42,6 +42,43 @@ class PageRestoreTest(unittest.TestCase):
         self.assertTrue(any(tie.get("type") == "start" for tie in start.findall("tie")))
         self.assertTrue(any(tie.get("type") == "stop" for tie in stop.findall("tie")))
 
+    def test_a_slur_may_end_on_a_tied_note(self):
+        work = Path(__file__).parent / ".runs" / "slur_tied_stop"
+        work.mkdir(parents=True, exist_ok=True)
+        page = work / "page1.musicxml"
+        page.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+            '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+            '<part id="P1">'
+            '<measure number="1"><attributes><divisions>4</divisions>'
+            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+            '<note><rest/><duration>12</duration><voice>1</voice></note>'
+            '<note><pitch><step>G</step><octave>5</octave></pitch><duration>4</duration>'
+            '<voice>1</voice><notations><slur type="start" number="1"/></notations></note></measure>'
+            '<measure number="2"><attributes><divisions>4</divisions></attributes>'
+            '<note><pitch><step>E</step><octave>5</octave></pitch><duration>8</duration>'
+            '<tie type="start"/><voice>1</voice><notations><tied type="start"/></notations></note>'
+            '<note><pitch><step>E</step><octave>5</octave></pitch><duration>8</duration>'
+            '<tie type="stop"/><voice>1</voice>'
+            '<notations><tied type="stop"/><slur type="stop" number="1"/></notations></note></measure>'
+            "</part></score-partwise>",
+            encoding="utf-8",
+        )
+        merged = merge_pages([page])
+        run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
+        starts = []
+        stops = []
+        for _number, measure in merged.document.iter_measures():
+            for event in merged.document.events(measure):
+                for slur in event.element.findall("notations/slur"):
+                    text = event.element.findtext("pitch/step")
+                    if slur.get("type") == "start":
+                        starts.append(text)
+                    else:
+                        stops.append(text)
+        self.assertIn("G", starts)
+        self.assertIn("E", stops)
+
     def test_pedal_directions_come_from_the_pages(self):
         doc, _ctx, _report = run()
         first = doc.measures()[0].findall(".//pedal")
