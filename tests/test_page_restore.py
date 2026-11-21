@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from xml.etree import ElementTree
 
+from scorepipe.core.document import Document
 from scorepipe.core.invariants import measure_lengths
 from scorepipe.core.pass_base import Context
 from scorepipe.core.pairing import Endpoint, pair_endpoints
 from scorepipe.core.pipeline import run_pipeline
 from scorepipe.loader import load_pages, merge_pages
 from scorepipe.passes import STRUCTURAL_PASSES
-from scorepipe.passes.page_restore import _musical_order
+from scorepipe.passes.page_restore import _musical_order, _slur_signature
 
 PAGES = Path(__file__).parent / "fixtures" / "pages_restore"
 
@@ -278,6 +280,11 @@ class PageRestoreTest(unittest.TestCase):
                 if note_element.find("notations/arpeggiate") is not None:
                     marked.append((note_element.findtext("pitch/step"), note_element.findtext("voice")))
         self.assertEqual(marked, [("D", "1")])
+
+    def test_slur_signature_uses_musical_position_not_element_identity(self):
+        doc, _ctx, _report = run()
+        clone = Document(ElementTree.fromstring(ElementTree.tostring(doc.root)))
+        self.assertEqual(_slur_signature(doc), _slur_signature(clone))
 
 
 if __name__ == "__main__":

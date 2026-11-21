@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 163 tests
+Ran 164 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -177,6 +177,10 @@ scorepipe laputa.musicxml --check --report laputa.json
   The m3 commentary is centered and fits above the staff instead of overflowing to the right
   (`test_facts.py`, `test_display_facts.py`). This is the first-pass style/fit; true width estimation
   for arbitrary boxes is still open.
+- **Slur signature is positional**: `restore_page_slurs` used to compare `id(note)`, so a merge that
+  rebuilt XML note elements made every page slur look different and forced a clear/re-add each round.
+  The signature is now `(measure, staff, onset, pitch, kind, number)`, so identical music has the
+  same signature and the pass can no-op (`test_page_restore.py`).
 - **Adjacent slur chains** (laputa m53–m55): OMR wrote `m53 G4→m54 A4` and `m54 A4→m55 E5` as two
   slurs sharing the A4 note. `restore_page_slurs` joins such unique shared-note chains before
   numbering (and `merge_adjacent_slurs` handles the same shape outside the page path), producing one

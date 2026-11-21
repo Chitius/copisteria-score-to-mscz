@@ -253,6 +253,10 @@ class RestorePageSlurs(PageRestoreMixin):
                     "start": start_note,
                     "stop": stop_note,
                     "start_key": (start_measure, round(start_onset, 4)),
+                    "stop_key": (stop_measure, round(stop_onset, 4)),
+                    "staff": staff,
+                    "start_pitch": start_pitch,
+                    "stop_pitch": stop_pitch,
                     "stop_measure": stop_measure,
                 }
             )
@@ -265,7 +269,7 @@ class RestorePageSlurs(PageRestoreMixin):
         current = _slur_signature(doc)
         if current == desired["signature"]:
             return PassResult()
-        removed = sum(len(slurs) for slurs in current.values())
+        removed = len(current)
         _clear_slurs(doc)
         changed = removed
         for note, kind, number in desired["entries"]:
@@ -755,6 +759,10 @@ def _merge_adjacent_pairs(pairs: list[dict]) -> list[dict]:
                 "start": first["start"],
                 "stop": last["stop"],
                 "start_key": first["start_key"],
+                "stop_key": last["stop_key"],
+                "staff": first["staff"],
+                "start_pitch": first["start_pitch"],
+                "stop_pitch": last["stop_pitch"],
                 "stop_measure": last["stop_measure"],
             }
         )
@@ -766,6 +774,7 @@ def _assign_slur_numbers(pairs: list[dict]) -> dict:
     ordered = sorted(pairs, key=lambda pair: (pair["start_key"], pair["stop_measure"]))
     active: dict[int, int] = {}
     entries: list[tuple] = []
+    signature: set[tuple] = set()
     seen: set[tuple] = set()
     for pair in ordered:
         identity = (id(pair["start"]), id(pair["stop"]))
@@ -778,24 +787,45 @@ def _assign_slur_numbers(pairs: list[dict]) -> dict:
         free = next((number for number in range(1, 17) if number not in active), None)
         if free is None:
             continue
+        number = str(free)
         active[free] = pair["stop_measure"]
-        entries.append((pair["start"], "start", str(free)))
-        entries.append((pair["stop"], "stop", str(free)))
-    signature: dict[int, set] = {}
-    for note, kind, number in entries:
-        signature.setdefault(id(note), set()).add((kind, number))
-    return {"entries": entries, "signature": {key: frozenset(value) for key, value in signature.items()}}
+        entries.append((pair["start"], "start", number))
+        entries.append((pair["stop"], "stop", number))
+        start_measure, start_onset = pair["start_key"]
+        stop_measure, stop_onset = pair["stop_key"]
+        signature.add((start_measure, pair["staff"], start_onset, pair["start_pitch"], "start", number))
+        signature.add((stop_measure, pair["staff"], stop_onset, pair["stop_pitch"], "stop", number))
+    return {"entries": entries, "signature": frozenset(signature)}
 
 
-def _slur_signature(doc: Document) -> dict[int, frozenset]:
-    signature: dict[int, set] = {}
-    for _number, measure in doc.iter_measures():
-        for note in measure.iter("note"):
-            for slur in note.findall("notations/slur"):
-                signature.setdefault(id(note), set()).add(
-                    (slur.get("type") or "", slur.get("number") or "1")
+def _slur_signature(doc: Document) -> frozenset[tuple]:
+    """Slurs keyed by musical position, not by XML element identity.
+
+    Merge/rebuild passes replace note elements even when the music is unchanged.  An id(note)-based
+    signature would then look different on every round and force the page pass to clear and re-add
+    every slur (laputa's page slurs oscillated).  Position + pitch lets a slur follow a note when its
+    voice changes.
+    """
+    signature: set[tuple] = set()
+    for number, measure in doc.iter_measures():
+        for event in doc.events(measure):
+            if event.rest:
+                continue
+            pitch = _pitch_name(event.element.find("pitch"))
+            if pitch is None:
+                continue
+            for slur in event.element.findall("notations/slur"):
+                signature.add(
+                    (
+                        number,
+                        event.staff,
+                        round(event.onset, 4),
+                        pitch,
+                        slur.get("type") or "",
+                        slur.get("number") or "1",
+                    )
                 )
-    return {key: frozenset(value) for key, value in signature.items()}
+    return frozenset(signature)
 
 
 def _clear_slurs(doc: Document) -> None:
