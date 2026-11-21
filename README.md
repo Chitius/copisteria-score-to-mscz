@@ -64,7 +64,7 @@ Implemented passes:
 | `drop_redundant_voices` | structural | `redundant-voices` | secondary voice that only repeats the primary |
 | `unhide_rests` | structural | `rest-visibility` | hidden rests |
 | `sanitize_slurs` | structural | `slur-endpoints` | unmatched / >N-bar endpoints |
-| `normalize_voice_numbers` | structural | `voice-numbers` | voice labels not 1..n by density |
+| `normalize_voice_numbers` | structural | `voice-numbers` | voice labels not canonical by density (1–4, 5–8, … per staff) |
 | `fill_short_measures` | structural | `rest-padding` | voices ending before the barline |
 | `drop_text_voice_rests` | display | `text-voice-rests` | rests inside text-only voices |
 | `unhide_real_rests` | display | `rest-visibility` | hidden non-measure rests |

@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 137 tests
+Ran 138 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -137,6 +137,12 @@ scorepipe laputa.musicxml --check --report laputa.json
   `Ottava`, `TextLine` and `Volta` endpoints to voice 1 at the same tick, then drops the now-empty
   rest carrier; Slur/Tie/Trill/Glissando endpoints are left alone because they depend on specific
   notes. m23 now has two voices and the HairPin sits in voice 1 (`test_display.py`).
+- **Staff ownership in the source** (m29): `normalize_voice_numbers` used to renumber each staff
+  from 1. On the lower staff this produced a third voice that MuseScore imported as a treble
+  cross-staff voice (`staff1 voice2 + staffMove=1`), so the real bass A2 looked like treble
+  material. Voice slots are now reserved four per staff (staff 1 → 1–4, staff 2 → 5–8), matching the
+  OMR page convention; MuseScore then imports m29's A2 into staff 2 normally, with no `staffMove`.
+  The mscx has one treble voice and three bass voices (`test_voices.py`).
 - **MuseScore's incomplete-measure warnings** (mscx `measure_lengths` verifier): the laputa mscz
   now reports **0** flagged measures. It started at 12: eleven were text-only/empty voice slots
   (moved into the chord voice or removed) and the last was m33's overlapping rests, which the

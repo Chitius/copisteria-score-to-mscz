@@ -14,8 +14,8 @@ class NormalizeVoiceNumbers:
         phase=Phase.STRUCTURAL,
         kind=Kind.MECHANICAL,
         owns=("voice-numbers",),
-        description="number voices 1..n per staff by note count; keeps the densest line as voice 1",
-        measure="voice labels that are not 1..n by density",
+        description="number voices per staff by note count with a 4-voice slot per staff",
+        measure="voice labels that are not canonical by density",
     )
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
@@ -28,7 +28,8 @@ class NormalizeVoiceNumbers:
             mapping: dict[tuple[str, str], str] = {}
             for staff, counts in by_staff.items():
                 ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
-                for position, (voice, _count) in enumerate(ordered, start=1):
+                first = 1 + 4 * (int(staff) - 1) if staff.isdigit() else 1
+                for position, (voice, _count) in enumerate(ordered, start=first):
                     mapping[(staff, voice)] = str(position)
             if all(old == new for (staff, old), new in mapping.items()):
                 continue
