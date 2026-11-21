@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 176 tests
+Ran 178 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -197,6 +197,13 @@ scorepipe laputa.musicxml --check --report laputa.json
   with a leading `<forward>` and removes the padding rests; the bar stays full and non-implicit, so
   no courtesy `4/4` is printed. `hide_pickup_leading_rest` hides the rest MuseScore re-creates for
   the forward gap (`test_pickup.py`, `test_display_facts.py`).
+- **Stray rests past the barline**: `rebase_measures` used to move padding rests whose onset was
+  already past the barline into the next measure. On Sincerely this cascaded m24's stray rests
+  through m25/m26 and deleted their second halves. Such rests are now dropped instead of moved, and
+  `drop_overflow_rests` cleans any created later (`test_rebase.py`).
+- **Initial courtesy time signature**: the initial 4/4 is now deleted from the display score when
+  the metre never changes, rather than left as an invisible object that MuseScore shows in grey
+  (`test_display_facts.py`).
 - **Absolute musical positions**: `_ties_with_other_pitches_to_slurs` and
   `_tie_shaped_slurs_to_ties` used to compare measure-local onsets across the whole score, so a note
   in m60 could look "between" two m59 D4s. Both now use `scorepipe.core.positions.between`, keyed by

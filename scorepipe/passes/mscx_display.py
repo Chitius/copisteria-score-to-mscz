@@ -373,6 +373,33 @@ class HidePickupLeadingRest:
         return PassResult(changed=changed)
 
 
+class DropFirstTimeSignature:
+    spec = PassSpec(
+        name="drop_first_time_signature",
+        phase=Phase.DISPLAY,
+        kind=Kind.MECHANICAL,
+        owns=("initial-time-signature",),
+        description="delete the initial courtesy 4/4 instead of leaving it invisible",
+        measure="initial time signature when the score never changes metre",
+    )
+
+    def run(self, doc: MsxcDocument, ctx: Context) -> PassResult:
+        staves = list(doc.root.iter("Staff"))
+        first_measures = [(staff, staff.find("Measure")) for staff in staves]
+        total = len(list(doc.root.iter("TimeSig")))
+        if total > len(staves):
+            return PassResult()  # keep an initial signature when the metre changes later
+        changed = 0
+        for _staff, measure in first_measures:
+            if measure is None:
+                continue
+            for voice in measure.findall("voice"):
+                for time_sig in list(voice.findall("TimeSig")):
+                    voice.remove(time_sig)
+                    changed += 1
+        return PassResult(changed=changed)
+
+
 DISPLAY_PASSES = [
     DropTextVoiceRests(),
     UnhideRealRests(),
@@ -381,6 +408,7 @@ DISPLAY_PASSES = [
     DropSecondaryVoiceRests(),
     NormalizeRangeSpanners(),
     HidePickupLeadingRest(),
+    DropFirstTimeSignature(),
 ]
 
 

@@ -49,6 +49,11 @@ class RebaseMeasures:
             removals: list[ElementTree.Element] = []
             for event in doc.events(measure):
                 if event.onset >= bar - 1e-6:
+                    if event.rest:
+                        # Stray padding rests after the barline are not musical overflow; moving
+                        # them into the next measure corrupts that measure (Sincerely m24→m25).
+                        removals.append(event.element)
+                        continue
                     groups.setdefault((event.staff, event.voice), []).append(event)
                     removals.append(event.element)
                 elif event.end > bar + 1e-6:
@@ -226,4 +231,44 @@ def _insertion_index(measure) -> int:
     return index
 
 
+class DropOverflowRests:
+    spec = PassSpec(
+        name="drop_overflow_rests",
+        phase=Phase.STRUCTURAL,
+        kind=Kind.MECHANICAL,
+        owns=("stray-rests",),
+        description="drop rests that start at or beyond the barline",
+        measure="rests beginning after the measure ends",
+    )
+
+    def run(self, doc: Document, ctx: Context) -> PassResult:
+        meter = (4.0, 4.0)
+        divisions = doc.divisions()
+        changed = 0
+        for measure in doc.measures():
+            declared = doc.time_signature(measure)
+            if declared is not None:
+                meter = declared
+            bar = meter[0] * 4.0 / meter[1]
+            touched = False
+            for event in list(doc.events(measure)):
+                if not event.rest:
+                    continue
+                if event.onset >= bar - 1e-6:
+                    if event.element in list(measure):
+                        measure.remove(event.element)
+                        changed += 1
+                        touched = True
+                elif event.end > bar + 1e-6:
+                    duration = event.element.find("duration")
+                    if duration is not None:
+                        duration.text = str(int(round((bar - event.onset) * divisions)))
+                        changed += 1
+                        touched = True
+            if touched:
+                _shrink_backups(measure)
+        return PassResult(changed=changed)
+
+
 REBASE_MEASURES = RebaseMeasures()
+DROP_OVERFLOW_RESTS = DropOverflowRests()

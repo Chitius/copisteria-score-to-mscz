@@ -158,6 +158,17 @@ class UpgradeTempoTest(unittest.TestCase):
         again = run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
         self.assertEqual(again.changes, 0)
 
+    def test_initial_time_signature_is_deleted_not_merely_hidden(self):
+        mscx = """
+        <museScore><Score><Staff id="1"><Measure><voice>
+          <TimeSig><visible>0</visible><sigN>4</sigN><sigD>4</sigD></TimeSig>
+          <Chord><durationType>whole</durationType><Note><pitch>60</pitch></Note></Chord>
+        </voice></Measure></Staff></Score></museScore>
+        """
+        doc = MsxcDocument(ElementTree.fromstring(mscx))
+        run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        self.assertEqual(list(doc.root.iter("TimeSig")), [])
+
 
 if __name__ == "__main__":
     unittest.main()

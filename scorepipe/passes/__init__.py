@@ -43,7 +43,7 @@ from .xml_measures import FILL_PASS, FillShortMeasures
 from .xml_merge import MERGE_ALIGNED_VOICES, MergeAlignedVoices
 from .xml_overflow import DROP_OVERFLOW_DUPLICATES, DropOverflowDuplicates
 from .xml_pickup import MARK_PICKUP, MarkPickup
-from .xml_rebase import REBASE_MEASURES, RebaseMeasures
+from .xml_rebase import DROP_OVERFLOW_RESTS, REBASE_MEASURES, RebaseMeasures
 from .xml_redundant_voices import DROP_REDUNDANT_VOICES, DropRedundantVoices
 from .xml_slurs import SLUR_PASS, SanitizeSlurs
 from .xml_tail import DROP_DUPLICATE_TAIL, DropTrailingDuplicateMeasure
@@ -79,6 +79,7 @@ STRUCTURAL_PASSES = (
         RESTORE_PAGE_WEDGES,
         MERGE_ADJACENT_SLURS,
         RECONCILE_TIE_SLURS,
+        DROP_OVERFLOW_RESTS,
         RESTORE_BEAMS,
     ]
     + ANALYSIS_PASSES

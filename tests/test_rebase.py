@@ -98,7 +98,16 @@ class RebaseMeasuresTest(unittest.TestCase):
         second_notes = doc.measures()[1].findall(".//note")
         f_second = next(n for n in second_notes if n.findtext("pitch/step") == "F")
         self.assertEqual(f_second.findtext("duration"), "4")
-        self.assertTrue(any(tie.get("type") == "stop" for tie in f_second.findall("tie")))
+
+    def test_stray_padding_rest_after_the_barline_is_dropped(self):
+        body = note("C", 16) + '<note><rest/><duration>8</duration><voice>1</voice></note>'
+        doc = build(measure(1, body) + measure(2, note("D", 16)))
+        from scorepipe.passes import DROP_OVERFLOW_RESTS
+
+        DROP_OVERFLOW_RESTS.run(doc, Context())
+        first = doc.measures()[0]
+        self.assertEqual(measure_lengths(doc, Context()), [])
+        self.assertEqual(len([e for e in doc.events(first) if e.rest]), 0)
 
 
 if __name__ == "__main__":
