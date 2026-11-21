@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 161 tests
+Ran 162 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -91,11 +91,13 @@ scorepipe laputa.musicxml --check --report laputa.json
   truth and a MuseScore-rendered A4 PDF is the synthetic OMR input. Copisteria's output matches the
   ground truth at 98.24% (vocal, 3 missing / 3 extra) and 98.38% (piano, 14 / 17). The vocal part
   passes the structural pipeline cleanly with the same match; the piano part converges in 2 rounds
-  with a clean verifier and matches at 97.44% after the pipeline. The earlier "22 rounds" symptom was
+  with a clean verifier and matches at 97.70% after the pipeline. The earlier "22 rounds" symptom was
   a meter bug: `merge_staff_voices` defaulted inherited 2/4 measures to 4/4 and padded them to four
-  beats; it now uses `Document.effective_time_signature`. The corpus comparator normalises active
-  divisions and matches `(measure ordinal, onset, pitch, duration)` multisets
-  (`test_lieder_corpus.py`).
+  beats; it now uses `Document.effective_time_signature`. The merge also protects a notated sustained
+  note in a sparse voice when the merge would shorten it into another voice's run (m5 D4); applying
+  that guard to every voice fixed the m2 duration too but made laputa's page slurs oscillate, so it is
+  deliberately sparse-only. The corpus comparator normalises active divisions and matches
+  `(measure ordinal, onset, pitch, duration)` multisets (`test_lieder_corpus.py`).
 - `laputa` **page directory** (copisteria output: 3 files, 26 / 23 / 14 measures): merged to one
   63-measure score by `merge_pages`, then verifier clean. On this run `restore_page_pedals`
   reported 36 adjustments and `restore_page_wedges` 20; the structural phase converged in 3 rounds.

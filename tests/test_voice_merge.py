@@ -168,6 +168,48 @@ class MergeStaffVoicesTest(unittest.TestCase):
         self.assertEqual(max(event.end for event in events), 2.0)
         self.assertEqual([event for event in events if event.rest], [])
 
+    def test_a_sustained_quarter_is_not_shortened_to_fit_a_run(self):
+        first = (
+            '<measure number="1"><attributes><divisions>4</divisions>'
+            "<time><beats>2</beats><beat-type>4</beat-type></time></attributes>"
+            '<note><pitch><step>C</step><octave>4</octave></pitch>'
+            "<duration>8</duration><voice>1</voice><type>half</type></note></measure>"
+        )
+        second = (
+            '<measure number="2"><attributes><divisions>4</divisions></attributes>'
+            '<note><pitch><step>A</step><octave>3</octave></pitch>'
+            '<duration>4</duration><voice>1</voice><type>quarter</type></note>'
+            '<note><chord/><pitch><step>D</step><octave>4</octave></pitch>'
+            '<duration>4</duration><voice>1</voice><type>quarter</type></note>'
+            '<note><chord/><pitch><step>F</step><octave>4</octave></pitch>'
+            '<duration>4</duration><voice>1</voice><type>quarter</type></note>'
+            '<note><chord/><pitch><step>A</step><octave>4</octave></pitch>'
+            '<duration>4</duration><voice>1</voice><type>quarter</type></note>'
+            + "".join(
+                f'<note><pitch><step>{step}</step><octave>4</octave></pitch>'
+                f"<duration>1</duration><voice>1</voice><type>16th</type></note>"
+                for step in ("G", "F", "E", "D")
+            )
+            + "<backup><duration>8</duration></backup>"
+            '<note><rest/><duration>4</duration><voice>2</voice><type>quarter</type></note>'
+            '<note><pitch><step>D</step><octave>4</octave></pitch>'
+            '<duration>4</duration><voice>2</voice><type>quarter</type></note>'
+            "</measure>"
+        )
+        doc = Document(ElementTree.fromstring(PART.format(measures=first + second)))
+        MERGE_STAFF_VOICES.run(doc, Context())
+        second_measure = doc.events(doc.measures()[1])
+        sustained = [
+            event
+            for event in second_measure
+            if not event.rest
+            and event.element.findtext("pitch/step") == "D"
+            and event.onset == 1.0
+            and event.duration == 1.0
+        ]
+        self.assertEqual(len(sustained), 1)
+        self.assertEqual(sustained[0].voice, "2")
+
 
 if __name__ == "__main__":
     unittest.main()

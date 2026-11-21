@@ -204,8 +204,12 @@ available to the restoration passes.
 Gute Nacht is two parts (vocal + piano, 105 measures). Copisteria's partial output matches it at
 98.24% / 98.38% by part; both parts now pass the structural pipeline with a clean verifier. The
 piano part initially looked non-convergent because `merge_staff_voices` defaulted an inherited 2/4
-measure to 4/4; after using the carried meter it converges in 2 rounds and its post-pipeline match is
-97.44%. See `tests/corpus/lieder/README.md` for provenance and rebuild commands.
+measure to 4/4; after using the carried meter it converges in 2 rounds. The merge now protects a
+properly notated sustained note in a sparse voice when the merge would shorten it into another
+voice's run (the m5 quarter note); with that guard the post-pipeline match is 97.70%. Applying the
+same protection to every voice fixed the m2 chord duration too, but made laputa's page slurs
+oscillate, so the guard is deliberately limited to sparse voices. See
+`tests/corpus/lieder/README.md` for provenance and rebuild commands.
 
 ## Combined driver
 

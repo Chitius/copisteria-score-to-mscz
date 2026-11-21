@@ -115,8 +115,17 @@ def _protected_notes(notes, all_onsets: list[float], bar: float) -> set[int]:
     The proposal is measured against **all** original onsets, including notes that are themselves
     protected. A protected note keeps its slot as a gap, so it cannot stretch its neighbours (m29:
     protecting the A2 halves used to turn the beat-2 quarter into a half and protect that too).
+
+    A second, directional guard protects a genuinely notated sustained note when merging would
+    shorten it into a run in another voice. OMR durations alone are not trusted: the note's
+    ``<type>`` must agree with its duration (m5: the voice-2 D4 quarter was being compressed to a
+    sixteenth because voice 1 has a run there). This is not applied to notes without a matching
+    type, so ordinary OMR duration drift can still be normalised.
     """
     protected: set[int] = set()
+    voice_sizes: dict[str, int] = {}
+    for event in notes:
+        voice_sizes[event.voice] = voice_sizes.get(event.voice, 0) + 1
     for index, onset in enumerate(all_onsets):
         following = all_onsets[index + 1] if index + 1 < len(all_onsets) else bar
         duration = following - onset
@@ -125,7 +134,37 @@ def _protected_notes(notes, all_onsets: list[float], bar: float) -> set[int]:
                 continue
             if (event.duration >= 2.0 - 1e-6) != (duration >= 2.0 - 1e-6):
                 protected.add(id(event.element))
+            elif voice_sizes.get(event.voice, 0) <= 2 and _would_shrink_notated_note(event, duration):
+                protected.add(id(event.element))
     return protected
+
+
+def _would_shrink_notated_note(event, proposed: float) -> bool:
+    if proposed >= event.duration - 1e-6:
+        return False
+    notated = _notated_duration(event.element)
+    if notated is None or abs(notated - event.duration) > 1e-6:
+        return False
+    return True
+
+
+def _notated_duration(note_element) -> float | None:
+    note_type = (note_element.findtext("type") or "").strip()
+    base = {
+        "whole": 4.0,
+        "half": 2.0,
+        "quarter": 1.0,
+        "eighth": 0.5,
+        "16th": 0.25,
+        "32nd": 0.125,
+        "64th": 0.0625,
+    }.get(note_type)
+    if base is None:
+        return None
+    dots = len(note_element.findall("dot"))
+    if dots:
+        base *= 2.0 - 0.5**dots
+    return base
 
 
 def _forward(duration: float, divisions: float, staff: str) -> ElementTree.Element:
