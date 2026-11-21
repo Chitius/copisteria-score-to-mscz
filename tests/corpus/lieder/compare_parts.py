@@ -74,6 +74,11 @@ def compare(ground_truth: Path, candidate: Path) -> dict:
         missing_total = sum(missing.values())
         extra_total = sum(extra.values())
         total = sum(expected.values())
+        sounding_expected = Counter({row: count for row, count in expected.items() if row[2] is not None})
+        sounding_actual = Counter({row: count for row, count in actual.items() if row[2] is not None})
+        sounding_missing = sum((sounding_expected - sounding_actual).values())
+        sounding_extra = sum((sounding_actual - sounding_expected).values())
+        sounding_total = sum(sounding_expected.values())
         result["parts"][part_id] = {
             "notes": expected_notes,
             "rests": expected_rests,
@@ -82,6 +87,11 @@ def compare(ground_truth: Path, candidate: Path) -> dict:
             "missing": missing_total,
             "extra": extra_total,
             "match": round(1 - (missing_total + extra_total) / max(total, 1), 4),
+            "sounding_missing": sounding_missing,
+            "sounding_extra": sounding_extra,
+            "sounding_match": round(
+                1 - (sounding_missing + sounding_extra) / max(sounding_total, 1), 4
+            ),
             "missing_examples": [list(row) + [count] for row, count in missing.most_common(5)],
             "extra_examples": [list(row) + [count] for row, count in extra.most_common(5)],
         }
