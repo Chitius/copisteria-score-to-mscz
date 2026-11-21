@@ -8,7 +8,7 @@
 | [`../references/omr.md`](../references/omr.md) | page contract and OMR integration |
 | [`../references/facts.md`](../references/facts.md) | facts schema and planned visual review |
 | [`../references/delivery.md`](../references/delivery.md) | delivery checklist and known limitations |
-| [`../DESIGN.md`](../DESIGN.md) | compiler-style pipeline architecture |
+| [`DESIGN.md`](DESIGN.md) | compiler-style pipeline architecture |
 | [`../SANITY.md`](../SANITY.md) | pass contracts and adversarial fixtures |
-| [`../ACCEPTANCE.md`](../ACCEPTANCE.md) | historical acceptance evidence |
+| [`ACCEPTANCE.md`](ACCEPTANCE.md) | historical acceptance evidence |
 | [`archive/`](archive/) | completed migration/change plans (do not treat as current roadmap) |

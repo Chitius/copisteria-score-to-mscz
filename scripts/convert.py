@@ -195,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         _run([musescore, "-f", "-o", str(pdf_out), str(mscz)], cwd=Path(__file__).resolve().parents[1])
 
     manifest = {
-        "skill": "score-omr",
+        "skill": "copisteria-to-mscz",
         "started": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(started)),
         "pdf": str(pdf),
         "outdir": str(outdir),

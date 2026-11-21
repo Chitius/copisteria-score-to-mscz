@@ -1,4 +1,4 @@
-"""Read-only environment probe for the score-omr skill.
+"""Read-only environment probe for the copisteria-to-mscz skill.
 
 It reports what is present, records resolved paths, and never installs or downloads anything.
 """
@@ -156,7 +156,7 @@ def probe(args: argparse.Namespace) -> list[Check]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Probe the score-omr environment without changing it")
+    parser = argparse.ArgumentParser(description="Probe the copisteria-to-mscz environment without changing it")
     parser.add_argument("--repo", help="copisteria source checkout")
     parser.add_argument("--converter", help="copisteria-to-musicxml/scripts/convert.py")
     parser.add_argument("--python", help="interpreter that imports scorepipe")

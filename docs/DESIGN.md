@@ -97,8 +97,8 @@ violation as:
 ## Migration plan
 
 The old-to-new migration is complete and archived in
-[`docs/archive/MIGRATION_PLAN.md`](docs/archive/MIGRATION_PLAN.md). Current work is tracked in
-[`docs/archive/CHANGE_PLAN.md`](docs/archive/CHANGE_PLAN.md); this document only describes the
+[`archive/MIGRATION_PLAN.md`](archive/MIGRATION_PLAN.md). Current work is tracked in
+[`archive/CHANGE_PLAN.md`](archive/CHANGE_PLAN.md); this document only describes the
 architecture.
 
 ## Pass lifecycle and failure policy

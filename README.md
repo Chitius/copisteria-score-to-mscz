@@ -1,6 +1,7 @@
-# score-omr
+# copisteria-to-mscz
 
-A skill for turning a printed score PDF into a reviewed MusicXML/MuseScore delivery.
+`copisteria-to-mscz` is a skill for turning a printed score PDF into a reviewed MusicXML/MuseScore
+delivery.
 
 The mechanical work lives in the `scorepipe` Python package: it merges per-page OMR output,
 repairs structure to a fixed point, applies explicit facts, produces a `.mscz`, and verifies both
@@ -74,7 +75,7 @@ per-page MusicXML
 
 The pipeline is a compiler-style fixed point: each mechanical pass declares what it owns and a
 monotone measure; the runner repeats until a full round changes nothing; read-only verifiers run
-afterwards. See [`DESIGN.md`](DESIGN.md) for the architecture and
+afterwards. See [`docs/DESIGN.md`](docs/DESIGN.md) for the architecture and
 [`SANITY.md`](SANITY.md) for the pass-contract audit.
 
 Useful commands:
@@ -154,11 +155,10 @@ scripts/convert.py       PDF -> OMR pages -> scorepipe -> mscz/pdf
 schemas/                 facts JSON schema
 scorepipe/               the Python pipeline
 references/              setup, OMR, facts, delivery references
+docs/                    architecture, acceptance evidence, archived plans
 docs/archive/            completed migration/change plans (provenance)
 tests/                   regression suite and Lieder corpus
-ACCEPTANCE.md            historical acceptance evidence
 SANITY.md                pass-contract audit
-DESIGN.md                compiler-style architecture
 ```
 
 ## Development
