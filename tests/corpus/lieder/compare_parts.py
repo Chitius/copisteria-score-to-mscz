@@ -1,9 +1,11 @@
 """Compare an OMR/exported MusicXML with the OpenScore ground-truth score.
 
 Both inputs may contain several parts (Lieder normally has a vocal part and a piano part).
-Notes are matched as a multiset of (measure ordinal, onset, pitch, duration) inside each part, so
-voice renumbering, chord layout, XML element order and pickup measure numbering do not matter.
-Rests are represented by a pitch of ``None``; they are counted separately from sounding notes.
+The primary score matches sounding notes as a multiset of (measure ordinal, onset, pitch, duration)
+inside each part, so voice renumbering, chord layout and XML element order do not matter.  Rests
+(``<rest>``, pitch ``None``) are reported separately as ``rest_missing`` / ``rest_extra`` but are not
+part of ``match``: secondary-voice rests can be intentionally hidden by the display layer, so a
+rest-only difference is not a visible notation error.
 """
 
 from __future__ import annotations
@@ -71,29 +73,45 @@ def compare(ground_truth: Path, candidate: Path) -> dict:
         actual, actual_notes, actual_rests = part_events(candidate_parts[part_id])
         missing = expected - actual
         extra = actual - expected
-        missing_total = sum(missing.values())
-        extra_total = sum(extra.values())
-        total = sum(expected.values())
+        overall_missing = sum(missing.values())
+        overall_extra = sum(extra.values())
+        overall_total = sum(expected.values())
         sounding_expected = Counter({row: count for row, count in expected.items() if row[2] is not None})
         sounding_actual = Counter({row: count for row, count in actual.items() if row[2] is not None})
-        sounding_missing = sum((sounding_expected - sounding_actual).values())
-        sounding_extra = sum((sounding_actual - sounding_expected).values())
+        sounding_missing = sounding_expected - sounding_actual
+        sounding_extra = sounding_actual - sounding_expected
+        sounding_missing_total = sum(sounding_missing.values())
+        sounding_extra_total = sum(sounding_extra.values())
         sounding_total = sum(sounding_expected.values())
+        rest_expected = Counter({row: count for row, count in expected.items() if row[2] is None})
+        rest_actual = Counter({row: count for row, count in actual.items() if row[2] is None})
+        rest_missing = rest_expected - rest_actual
+        rest_extra = rest_actual - rest_expected
         result["parts"][part_id] = {
             "notes": expected_notes,
             "rests": expected_rests,
             "candidate_notes": actual_notes,
             "candidate_rests": actual_rests,
-            "missing": missing_total,
-            "extra": extra_total,
-            "match": round(1 - (missing_total + extra_total) / max(total, 1), 4),
-            "sounding_missing": sounding_missing,
-            "sounding_extra": sounding_extra,
-            "sounding_match": round(
-                1 - (sounding_missing + sounding_extra) / max(sounding_total, 1), 4
+            "missing": sounding_missing_total,
+            "extra": sounding_extra_total,
+            "match": round(
+                1 - (sounding_missing_total + sounding_extra_total) / max(sounding_total, 1), 4
             ),
-            "missing_examples": [list(row) + [count] for row, count in missing.most_common(5)],
-            "extra_examples": [list(row) + [count] for row, count in extra.most_common(5)],
+            "overall_missing": overall_missing,
+            "overall_extra": overall_extra,
+            "overall_match": round(
+                1 - (overall_missing + overall_extra) / max(overall_total, 1), 4
+            ),
+            "rest_missing": sum(rest_missing.values()),
+            "rest_extra": sum(rest_extra.values()),
+            "rest_missing_examples": [
+                list(row) + [count] for row, count in rest_missing.most_common(5)
+            ],
+            "rest_extra_examples": [list(row) + [count] for row, count in rest_extra.most_common(5)],
+            "missing_examples": [
+                list(row) + [count] for row, count in sounding_missing.most_common(5)
+            ],
+            "extra_examples": [list(row) + [count] for row, count in sounding_extra.most_common(5)],
         }
     return result
 

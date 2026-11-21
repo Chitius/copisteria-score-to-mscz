@@ -202,13 +202,14 @@ available to the restoration passes.
   `(measure ordinal, onset, pitch, duration)`, with active-division normalisation and pickup
   numbering alignment.
 
-Gute Nacht is two parts (vocal + piano, 105 measures). Copisteria's partial output matches it at
-98.24% / 98.38% by part; both parts now pass the structural pipeline with a clean verifier. The
+Gute Nacht is two parts (vocal + piano, 105 measures). Copisteria's partial output scores 98.94% /
+99.0% on sounding notes (98.24% / 98.38% including rests); both parts pass the structural pipeline
+with a clean verifier. The
 piano part initially looked non-convergent because `merge_staff_voices` defaulted an inherited 2/4
 measure to 4/4; after using the carried meter it converges in 2 rounds. The merge protects a properly
 notated sustained note when the merge would shorten it into another voice's run (the m5 quarter note),
-and rest onsets are merge boundaries so an intentional rest is not deleted (m25); with those guards
-the post-pipeline match is 98.64%. On page runs `sanitize_slurs` is skipped because the page slur
+and rest onsets are merge boundaries so an intentional rest is not deleted (m25); the post-pipeline
+score is 99.0% on sounding notes (98.64% including rests). On page runs `sanitize_slurs` is skipped because the page slur
 restoration is authoritative; re-pairing page slurs there orphaned a valid laputa slur and caused a
 clear/re-add loop. See `tests/corpus/lieder/README.md` for provenance and rebuild commands.
 

@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 168 tests
+Ran 169 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -89,10 +89,11 @@ scorepipe laputa.musicxml --check --report laputa.json
   measure split (old baseline had m54=4, m55=2), not another division error; the showcase summer
   artifacts are now the full-pipeline result, with that one known violation.
 - OpenScore Lieder `Gute Nacht` (`tests/corpus/lieder/gute_nacht`): the source MXL is the ground
-  truth and a MuseScore-rendered A4 PDF is the synthetic OMR input. Copisteria's output matches the
-  ground truth at 98.24% (vocal, 3 missing / 3 extra) and 98.38% (piano, 14 / 17). The vocal part
-  passes the structural pipeline cleanly with the same match; the piano part converges in 2 rounds
-  with a clean verifier and matches at 98.64% overall / 99.0% on sounding notes after the pipeline. The earlier "22 rounds" symptom was
+  truth and a MuseScore-rendered A4 PDF is the synthetic OMR input. Copisteria's output scores
+  98.94% (vocal) and 99.0% (piano) on sounding notes (98.24% / 98.38% including rests). The vocal
+  part passes the structural pipeline cleanly with the same score; the piano part converges in 2
+  rounds with a clean verifier and scores 99.0% on sounding notes (98.64% including rests) after the
+  pipeline. The earlier "22 rounds" symptom was
   a meter bug: `merge_staff_voices` defaulted inherited 2/4 measures to 4/4 and padded them to four
   beats; it now uses `Document.effective_time_signature`. The merge also protects a notated sustained
   note when the merge would shorten it into another voice's run (m5 D4), and rest onsets are

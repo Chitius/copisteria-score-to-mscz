@@ -32,10 +32,14 @@ Each case directory contains `{case}.mxl`, `ground_truth.musicxml` and `input.pd
 Baseline comparison from one copisteria run of `input.pdf` (old converter exits after writing the
 MusicXML because the vocal part has no `<voice>` elements; the partial output is still readable):
 
-| part | notes | missing | extra | match |
-|---|---:|---:|---:|---:|
-| P1 vocal | 340 | 3 | 3 | 98.24% |
-| P2 piano | 1911 | 14 | 17 | 98.38% |
+| part | notes | missing | extra | sounding match | overall (incl. rests) |
+|---|---:|---:|---:|---:|---:|
+| P1 vocal | 340 | 3 | 3 | 98.94% | 98.24% |
+| P2 piano | 1911 | 14 | 17 | 99.0% | 98.38% |
+
+The corpus comparator's primary `match` scores sounding notes only; rest layout is reported
+separately (`rest_missing` / `rest_extra` / `overall_match`) because secondary-voice rests may be
+hidden by the display layer.
 
 A shorter additional run on `aus_meinen_traenen` gives a raw OMR baseline of 85.51% (vocal) and
 82.04% (piano); its source has a pickup measure numbered 0, which the comparator aligns by measure
