@@ -25,6 +25,7 @@ kept because they explain the current code; open items are the hand-off list for
 | Agent visual facts | page packet, evidence validation, page coverage, corrections review |
 | Constrained notation patches | `ottava` prototype compiles 8va/8vb to MusicXML octave-shift; render verified |
 | Delivery review loop | `scripts/review.py` blocks incomplete coverage/unresolved/corrections, runs pipeline and writes before/after review report |
+| Real 8va range correction | Sincerely OMR 8va was on staff 2/m28–m29; replaced with staff 1/m31 beat 1–4, covering the last five notes |
 
 ## Deferred / next
 

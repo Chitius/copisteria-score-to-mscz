@@ -19,11 +19,11 @@ Ottava spanner.
       "op": "ottava",
       "subtype": "8va",
       "staff": 1,
-      "start": {"measure": 30, "beat": 3.5},
-      "end": {"measure": 31, "beat": 0},
+      "start": {"measure": 31, "beat": 1},
+      "end": {"measure": 31, "beat": 4},
       "page": 2,
       "bbox": [820, 1260, 1020, 1310],
-      "evidence": "8va dashed bracket above the last system",
+      "evidence": "8va dashed bracket covers the last five notes of m31",
       "confidence": 0.72
     }
   ]
