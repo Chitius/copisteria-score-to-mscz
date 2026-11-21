@@ -48,6 +48,7 @@ from .xml_redundant_voices import DROP_REDUNDANT_VOICES, DropRedundantVoices
 from .xml_slurs import SLUR_PASS, SanitizeSlurs
 from .xml_tail import DROP_DUPLICATE_TAIL, DropTrailingDuplicateMeasure
 from .xml_voice_merge import MERGE_STAFF_VOICES, MergeStaffVoices
+from .xml_slur_chains import MERGE_ADJACENT_SLURS, MergeAdjacentSlurs
 from .xml_tie_slurs import RECONCILE_TIE_SLURS, ReconcileTieSlurs
 from .xml_voices import NORMALIZE_VOICES_PASS, NormalizeVoiceNumbers
 
@@ -76,6 +77,7 @@ STRUCTURAL_PASSES = (
         RESTORE_PAGE_ARPEGGIOS,
         RESTORE_PAGE_ARTICULATIONS,
         RESTORE_PAGE_WEDGES,
+        MERGE_ADJACENT_SLURS,
         RECONCILE_TIE_SLURS,
         RESTORE_BEAMS,
     ]

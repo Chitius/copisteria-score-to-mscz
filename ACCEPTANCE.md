@@ -6,11 +6,11 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 147 tests
+Ran 149 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
-78 passed
+79 passed
 ```
 
 Coverage:
@@ -30,6 +30,7 @@ Coverage:
 | page-level tie/slur/pedal restoration | `test_page_restore.py` |
 | endpoint pairing with reused slur numbers | `test_pairing.py`, `test_page_restore.py` |
 | tie/slur confusion reconciliation | `test_tie_slurs.py` |
+| adjacent slur-chain merging | `test_slur_chains.py` |
 | beam group restoration | `test_beams.py` |
 | page-level arpeggio/articulation/wedge restoration | `test_page_notation.py` |
 | external OMR command front-end | `test_omr.py` |
@@ -47,7 +48,7 @@ Coverage:
 | per-note fill protection when retiming | `test_voice_merge.py` |
 | empty staff measure rests | `test_empty_staves.py` |
 | golden-score comparison | `test_compare.py` |
-| pass sanity framework (78 pytest cases) | `test_sanity.py`, `test_pass_sanity.py` |
+| pass sanity framework (79 pytest cases) | `test_sanity.py`, `test_pass_sanity.py` |
 | multi-voice staff retiming / fill conflict | `test_voice_merge.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
@@ -64,7 +65,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-44 entries: 27 structural (26 mechanical + 1 analysis), 2 inject, 15 display. Every mechanical pass
+45 entries: 28 structural (27 mechanical + 1 analysis), 2 inject, 15 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -137,6 +138,10 @@ scorepipe laputa.musicxml --check --report laputa.json
   slur; a contiguous same-pitch slur with nothing between its endpoints becomes a tie. The page
   restore records tie→slur conversions so the next round does not re-add the tie. m35's E5 tie is
   kept and its duplicate slur is gone; E4's tie is untouched (`test_tie_slurs.py`).
+- **Adjacent slur chains** (laputa m53–m55): OMR wrote `m53 G4→m54 A4` and `m54 A4→m55 E5` as two
+  slurs sharing the A4 note. `restore_page_slurs` joins such unique shared-note chains before
+  numbering (and `merge_adjacent_slurs` handles the same shape outside the page path), producing one
+  `m53 G4→m55 E5` slur. A note with multiple starts/stops is left alone (`test_slur_chains.py`).
 - **Beam groups** (laputa m50–m51): OMR left beams only on some notes (m50: G3 eighths in a
   separate voice; m51: the first eighth had a `begin` and the next note also started a group). After
   merging, the runs had disconnected stems. `restore_beams` (ported from the old skill's

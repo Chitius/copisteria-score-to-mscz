@@ -76,6 +76,20 @@ def beam_run():
     return build(measure(1, notes))
 
 
+def adjacent_slurs():
+    return build(
+        measure(1, note("G", extra='<notations><slur type="start" number="1"/></notations>'))
+        + measure(
+            2,
+            note(
+                "A",
+                extra='<notations><slur type="stop" number="1"/><slur type="start" number="2"/></notations>',
+            ),
+        )
+        + measure(3, note("E", extra='<notations><slur type="stop" number="2"/></notations>'))
+    )
+
+
 def redundant_time():
     return build(measure(1, note("C")) + measure(2, note("D")))
 
@@ -192,6 +206,7 @@ FACTORIES = {
     "dedupe_ties": duplicate_ties,
     "reconcile_tie_slurs": tie_slur_pair,
     "restore_beams": beam_run,
+    "merge_adjacent_slurs": adjacent_slurs,
     "drop_redundant_time_signatures": redundant_time,
     "unhide_rests": hidden_rest,
     "drop_redundant_clefs": redundant_clef_key,
@@ -226,6 +241,7 @@ CONTRACTS = {
     "dedupe_ties": PassContract("dedupe_ties"),
     "reconcile_tie_slurs": PassContract("reconcile_tie_slurs"),
     "restore_beams": PassContract("restore_beams"),
+    "merge_adjacent_slurs": PassContract("merge_adjacent_slurs"),
     "drop_redundant_time_signatures": PassContract("drop_redundant_time_signatures"),
     "unhide_rests": PassContract("unhide_rests"),
     "drop_redundant_clefs": PassContract("drop_redundant_clefs"),

@@ -239,6 +239,8 @@ class RestorePageSlurs(PageRestoreMixin):
         # MuseScore resolves slur numbers document-wide, not per staff. Page numbers are only
         # unique within a staff, so they must be reassigned globally; otherwise the treble slur 1
         # pairs with the bass stop 1 and jumps staves (laputa m29-m30).
+        # Page OMR often splits one long phrase at a shared note; join those before numbering.
+        pairs = _merge_adjacent_pairs(pairs)
         desired = _assign_slur_numbers(pairs)
         current = _slur_signature(doc)
         if current == desired["signature"]:
@@ -663,6 +665,50 @@ def _slur_score(start, stop) -> float:
     if start_voice == stop_voice:
         score += 10.0
     return score
+
+
+def _merge_adjacent_pairs(pairs: list[dict]) -> list[dict]:
+    """Join slur pairs whose stop note is the next pair's start note."""
+    if len(pairs) < 2:
+        return pairs
+    starts: dict[int, list[int]] = {}
+    stops: dict[int, list[int]] = {}
+    for index, pair in enumerate(pairs):
+        starts.setdefault(id(pair["start"]), []).append(index)
+        stops.setdefault(id(pair["stop"]), []).append(index)
+    links: dict[int, int] = {}
+    for index, pair in enumerate(pairs):
+        note = id(pair["stop"])
+        if len(starts.get(note, [])) != 1 or len(stops.get(note, [])) != 1:
+            continue
+        following = starts[note][0]
+        if following != index and following not in links:
+            links[index] = following
+    incoming = set(links.values())
+    merged: list[dict] = []
+    visited: set[int] = set()
+    for index in range(len(pairs)):
+        if index in incoming or index in visited:
+            continue
+        chain = []
+        current = index
+        while current not in visited:
+            visited.add(current)
+            chain.append(current)
+            current = links.get(current, -1)
+            if current == -1:
+                break
+        first = pairs[chain[0]]
+        last = pairs[chain[-1]]
+        merged.append(
+            {
+                "start": first["start"],
+                "stop": last["stop"],
+                "start_key": first["start_key"],
+                "stop_measure": last["stop_measure"],
+            }
+        )
+    return merged
 
 
 def _assign_slur_numbers(pairs: list[dict]) -> dict:
