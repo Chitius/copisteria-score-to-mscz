@@ -30,7 +30,6 @@ class RebaseMeasures:
         divisions = doc.divisions()
         meter = (4.0, 4.0)
         moved = 0
-        touched: set[int] = set()
         for index, measure in enumerate(measures):
             declared = doc.time_signature(measure)
             if declared is not None:
@@ -83,15 +82,12 @@ class RebaseMeasures:
                 for fragment in fragments:
                     payload.extend(fragment)
                 next_measure[insertion:insertion] = payload
-            if removals:
-                touched.add(id(measure))
             for element in removals:
                 if element in list(measure):
                     measure.remove(element)
                     moved += 1
         for measure in measures:
-            if id(measure) in touched:
-                _shrink_backups(measure)
+            _shrink_backups(measure)
         return PassResult(changed=moved)
 
 

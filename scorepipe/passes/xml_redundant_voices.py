@@ -28,10 +28,23 @@ class DropRedundantVoices:
         changed = 0
         for _number, measure in doc.iter_measures():
             by_staff: dict[str, dict[str, list]] = {}
+            all_by_staff: dict[str, dict[str, list]] = {}
             for event in doc.events(measure):
+                all_by_staff.setdefault(event.staff, {}).setdefault(event.voice, []).append(event)
                 if event.rest:
                     continue
                 by_staff.setdefault(event.staff, {}).setdefault(event.voice, []).append(event)
+            for staff, all_voices in all_by_staff.items():
+                sounding = by_staff.get(staff, {})
+                if not sounding:
+                    continue
+                for voice, events in all_voices.items():
+                    if voice in sounding:
+                        continue
+                    if not events or not all(event.rest for event in events):
+                        continue
+                    if _remove_voice(measure, events):
+                        changed += 1
             for _staff, voices in by_staff.items():
                 if len(voices) < 2:
                     continue

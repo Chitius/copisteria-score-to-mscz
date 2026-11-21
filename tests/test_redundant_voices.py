@@ -50,6 +50,15 @@ class DropRedundantVoicesTest(unittest.TestCase):
         doc = build(measure(1, body) + measure(2, note("D")))
         self.assertEqual(DropRedundantVoices().run(doc, Context()).changed, 0)
 
+    def test_a_secondary_voice_of_only_rests_is_removed(self):
+        rest = "<note><rest/><duration>16</duration><voice>2</voice></note>"
+        body = note("C", 16) + "<backup><duration>16</duration></backup>" + rest
+        doc = build(measure(1, body) + measure(2, note("D")))
+        result = DropRedundantVoices().run(doc, Context())
+        self.assertEqual(result.changed, 1)
+        self.assertEqual({event.voice for event in doc.events(doc.measures()[0])}, {"1"})
+        self.assertEqual(measure_lengths(doc, Context()), [])
+
 
 if __name__ == "__main__":
     unittest.main()
