@@ -47,8 +47,13 @@ event lost. Its source has a pickup measure numbered 0, which the comparator ali
 rather than by the printed number.
 
 `die_wetterfahne` gives raw OMR 98.97% (vocal) and 97.75% (piano); the pipeline keeps both scores,
-is verifier-clean, and loses no correct sounding event (P2 adds two hidden rests). `der_lindenbaum`
-is the remaining case without an OMR run.
+is verifier-clean, and loses no correct sounding event (P2 adds two hidden rests).
+
+`der_lindenbaum` is the outlier: raw OMR is 99.51% (vocal) but only 50.89% (piano), and the P2
+pipeline drops further to 34.66% while still reporting a clean structural verifier (the mscz display
+verifier reports 86 measure-length issues). The raw P2 has many extra voices/rests and the merge path
+is not safe on that input; use `lindenbaum_omr_raw.mscz` for inspection rather than the P2 pipeline
+artifact until this case is repaired.
 
 The P1 pipeline (`scorepipe .../P1.musicxml`) is verifier-clean and keeps the same 98.94% sounding
 match.  The P2 piano part also converges (2 rounds, clean verifier) and matches the ground truth at
