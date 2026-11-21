@@ -42,13 +42,13 @@ class MergeStaffVoices:
         for number, measure in doc.iter_measures():
             if number in done:
                 continue
-            if _merge(doc, measure):
+            if _merge(doc, measure, allow_sustained=ctx.pages is None):
                 changed += 1
                 done.add(number)
         return PassResult(changed=changed)
 
 
-def _merge(doc: Document, measure) -> bool:
+def _merge(doc: Document, measure, allow_sustained: bool = True) -> bool:
     events = doc.events(measure)
     if not events:
         return False
@@ -74,7 +74,7 @@ def _merge(doc: Document, measure) -> bool:
         all_onsets = sorted({round(event.onset, 4) for event in staff_events})
         if all_onsets[0] < -1e-6 or all_onsets[-1] >= bar - 1e-6:
             continue
-        protected = _protected_notes(notes, all_onsets, bar)
+        protected = _protected_notes(notes, all_onsets, bar, allow_sustained)
         active = [event for event in notes if id(event.element) not in protected]
         if not active:
             continue
@@ -109,7 +109,7 @@ def _merge(doc: Document, measure) -> bool:
     return rebuilt
 
 
-def _protected_notes(notes, all_onsets: list[float], bar: float) -> set[int]:
+def _protected_notes(notes, all_onsets: list[float], bar: float, allow_sustained: bool = True) -> set[int]:
     """Notes whose proposed duration would cross the filled/hollow boundary.
 
     The proposal is measured against **all** original onsets, including notes that are themselves
@@ -123,9 +123,6 @@ def _protected_notes(notes, all_onsets: list[float], bar: float) -> set[int]:
     type, so ordinary OMR duration drift can still be normalised.
     """
     protected: set[int] = set()
-    voice_sizes: dict[str, int] = {}
-    for event in notes:
-        voice_sizes[event.voice] = voice_sizes.get(event.voice, 0) + 1
     for index, onset in enumerate(all_onsets):
         following = all_onsets[index + 1] if index + 1 < len(all_onsets) else bar
         duration = following - onset
@@ -134,7 +131,7 @@ def _protected_notes(notes, all_onsets: list[float], bar: float) -> set[int]:
                 continue
             if (event.duration >= 2.0 - 1e-6) != (duration >= 2.0 - 1e-6):
                 protected.add(id(event.element))
-            elif voice_sizes.get(event.voice, 0) <= 2 and _would_shrink_notated_note(event, duration):
+            elif allow_sustained and _would_shrink_notated_note(event, duration):
                 protected.add(id(event.element))
     return protected
 
