@@ -48,6 +48,32 @@ def _drop_orphan_slurs(doc: Document) -> int:
     return removed
 
 
+def _lies_between(
+    number: int,
+    onset: float,
+    start_measure: int,
+    start_onset: float,
+    stop_measure: int,
+    stop_onset: float,
+) -> bool:
+    """True when (number, onset) is strictly inside the endpoint span.
+
+    Onsets are measure-local, so comparing them without the measure number makes a note in the next
+    measure look like it lies between two notes of the current measure (laputa m59: it turned a
+    contiguous D4 tie into a slur because m60 had an onset between 0 and 2).
+    """
+    epsilon = 1e-6
+    if number < start_measure or number > stop_measure:
+        return False
+    if start_measure == stop_measure:
+        return number == start_measure and start_onset + epsilon < onset < stop_onset - epsilon
+    if number == start_measure:
+        return onset > start_onset + epsilon
+    if number == stop_measure:
+        return onset < stop_onset - epsilon
+    return True
+
+
 def _pitch(note) -> tuple | None:
     pitch = note.find("pitch")
     if pitch is None:
@@ -162,10 +188,17 @@ def _ties_with_other_pitches_to_slurs(doc: Document, ctx: Context) -> int:
             continue
         between = [
             event
-            for _number, event in events
+            for number, event in events
             if event.staff == start_event.staff
             and event.voice == start_event.voice
-            and start_event.onset + 1e-6 < event.onset < stop_event.onset - 1e-6
+            and _lies_between(
+                number,
+                event.onset,
+                start.payload[0],
+                start_event.onset,
+                stop.payload[0],
+                stop_event.onset,
+            )
             and _pitch(event.element) != pitch
         ]
         if not between:

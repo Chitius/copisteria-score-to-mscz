@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 164 tests
+Ran 165 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -154,8 +154,10 @@ scorepipe laputa.musicxml --check --report laputa.json
 - **Tie/slur reconciliation**: `reconcile_tie_slurs` applies three rules: a tie duplicated by a slur
   wins (slur removed); a tie with another pitch between its endpoints in the same voice becomes a
   slur; a contiguous same-pitch slur with nothing between its endpoints becomes a tie. The page
-  restore records tie→slur conversions so the next round does not re-add the tie. m35's E5 tie is
-  kept and its duplicate slur is gone; E4's tie is untouched (`test_tie_slurs.py`).
+  restore records tie→slur conversions so the next round does not re-add the tie. "Between" compares
+  `(measure, onset)`, not measure-local onsets alone; the old comparison treated a note in m60 as
+  lying between m59's D4 tie endpoints and turned a contiguous tie into a slur (`test_tie_slurs.py`).
+  m35's E5 tie is kept and its duplicate slur is gone; E4's tie is untouched (`test_tie_slurs.py`).
 - **Tie-span duplicate slurs** (laputa m60): the page has `G3 tie m60→m61` plus `G3 slur start →
   E3 slur stop` at the same two positions; the slur endpoint pitch differs, so the exact-endpoint
   rule missed it. `reconcile_tie_slurs` now also removes a slur when it shares the tie's start note

@@ -5,7 +5,7 @@ from xml.etree import ElementTree
 
 from scorepipe.core.document import Document
 from scorepipe.core.pass_base import Context
-from scorepipe.passes.xml_tie_slurs import ReconcileTieSlurs
+from scorepipe.passes.xml_tie_slurs import ReconcileTieSlurs, _lies_between
 
 PART = """
 <score-partwise version="4.0">
@@ -86,6 +86,11 @@ class ReconcileTieSlursTest(unittest.TestCase):
         self.assertEqual(ReconcileTieSlurs().run(doc, Context()).changed, 1)
         self.assertEqual(len(list(doc.root.iter("slur"))), 0)
         self.assertEqual(len(list(doc.root.iter("tie"))), 2)
+
+    def test_between_uses_measure_and_onset(self):
+        self.assertTrue(_lies_between(2, 1.0, 1, 0.0, 2, 2.0))
+        self.assertFalse(_lies_between(3, 1.0, 1, 0.0, 2, 2.0))
+        self.assertFalse(_lies_between(1, 0.0, 1, 0.0, 2, 2.0))
 
 
 if __name__ == "__main__":
