@@ -122,6 +122,34 @@ class PageRestoreTest(unittest.TestCase):
         self.assertEqual([pedal.get("type") for pedal in first], ["start"])
         self.assertEqual([pedal.get("type") for pedal in third], ["stop"])
 
+    def test_pedal_cursor_advances_over_notes(self):
+        work = Path(__file__).parent / ".runs" / "pedal_cursor"
+        work.mkdir(parents=True, exist_ok=True)
+        page = work / "page1.musicxml"
+        page.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+            '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+            '<part id="P1">'
+            '<measure number="1"><attributes><divisions>4</divisions>'
+            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+            '<note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration>'
+            '<voice>1</voice></note>'
+            '<direction placement="below"><direction-type><pedal type="start"/></direction-type>'
+            "<staff>2</staff></direction>"
+            "</measure>"
+            '<measure number="2"><attributes><divisions>4</divisions></attributes>'
+            '<note><pitch><step>D</step><octave>4</octave></pitch><duration>16</duration>'
+            '<voice>1</voice></note></measure>'
+            "</part></score-partwise>",
+            encoding="utf-8",
+        )
+        merged = merge_pages([page])
+        run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
+        directions = merged.document.measures()[0].findall("direction")
+        pedals = [d for d in directions if d.find("direction-type/pedal") is not None]
+        self.assertEqual(len(pedals), 1)
+        self.assertEqual(pedals[0].findtext("offset"), "16")
+
     def test_restoration_is_idempotent(self):
         doc, ctx, _report = run()
         again = run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, verifiers=[])

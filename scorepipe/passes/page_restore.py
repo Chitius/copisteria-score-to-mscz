@@ -294,6 +294,11 @@ class RestorePagePedals(PageRestoreMixin):
                         value = int(text)
                         cursor += -value if item.tag == "backup" else value
                         continue
+                    if item.tag == "note":
+                        text = item.findtext("duration")
+                        if text is not None and item.find("chord") is None:
+                            cursor += int(text)
+                        continue
                     if item.tag != "direction":
                         continue
                     pedal = item.find("direction-type/pedal")
