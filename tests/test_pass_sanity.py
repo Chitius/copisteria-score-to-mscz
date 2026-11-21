@@ -71,6 +71,11 @@ def tie_slur_pair():
     )
 
 
+def beam_run():
+    notes = "".join(note(step, duration=2) for step in ("C", "D", "E", "F", "G", "A", "B", "C"))
+    return build(measure(1, notes))
+
+
 def redundant_time():
     return build(measure(1, note("C")) + measure(2, note("D")))
 
@@ -186,6 +191,7 @@ INJECT = {pass_obj.spec.name: pass_obj for pass_obj in INJECT_PASSES}
 FACTORIES = {
     "dedupe_ties": duplicate_ties,
     "reconcile_tie_slurs": tie_slur_pair,
+    "restore_beams": beam_run,
     "drop_redundant_time_signatures": redundant_time,
     "unhide_rests": hidden_rest,
     "drop_redundant_clefs": redundant_clef_key,
@@ -219,6 +225,7 @@ FACTORIES = {
 CONTRACTS = {
     "dedupe_ties": PassContract("dedupe_ties"),
     "reconcile_tie_slurs": PassContract("reconcile_tie_slurs"),
+    "restore_beams": PassContract("restore_beams"),
     "drop_redundant_time_signatures": PassContract("drop_redundant_time_signatures"),
     "unhide_rests": PassContract("unhide_rests"),
     "drop_redundant_clefs": PassContract("drop_redundant_clefs"),

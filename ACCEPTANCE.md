@@ -6,11 +6,11 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 144 tests
+Ran 147 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
-77 passed
+78 passed
 ```
 
 Coverage:
@@ -30,6 +30,7 @@ Coverage:
 | page-level tie/slur/pedal restoration | `test_page_restore.py` |
 | endpoint pairing with reused slur numbers | `test_pairing.py`, `test_page_restore.py` |
 | tie/slur confusion reconciliation | `test_tie_slurs.py` |
+| beam group restoration | `test_beams.py` |
 | page-level arpeggio/articulation/wedge restoration | `test_page_notation.py` |
 | external OMR command front-end | `test_omr.py` |
 | PDF text layer, measure-box assignment | `test_pdf_producer.py` |
@@ -46,7 +47,7 @@ Coverage:
 | per-note fill protection when retiming | `test_voice_merge.py` |
 | empty staff measure rests | `test_empty_staves.py` |
 | golden-score comparison | `test_compare.py` |
-| pass sanity framework (77 pytest cases) | `test_sanity.py`, `test_pass_sanity.py` |
+| pass sanity framework (78 pytest cases) | `test_sanity.py`, `test_pass_sanity.py` |
 | multi-voice staff retiming / fill conflict | `test_voice_merge.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
@@ -63,7 +64,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-43 entries: 26 structural (25 mechanical + 1 analysis), 2 inject, 15 display. Every mechanical pass
+44 entries: 27 structural (26 mechanical + 1 analysis), 2 inject, 15 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -136,6 +137,11 @@ scorepipe laputa.musicxml --check --report laputa.json
   slur; a contiguous same-pitch slur with nothing between its endpoints becomes a tie. The page
   restore records tie→slur conversions so the next round does not re-add the tie. m35's E5 tie is
   kept and its duplicate slur is gone; E4's tie is untouched (`test_tie_slurs.py`).
+- **Beam groups** (laputa m50): OMR left beams only on the G3 eighths in a separate voice; after
+  merging, the run had a beam on every other note and disconnected stems. `restore_beams` (ported
+  from the old skill's `restore_missing_beams`) groups consecutive eighth-or-shorter notes per
+  staff/voice, extends edge groups, fills internal gaps and writes the level structure. m50 bass is
+  now one eighth-note group from C3 to G3 (`test_beams.py`).
 - **Arpeggios belong to a chord**: `restore_page_arpeggios` used to copy the page mark to every
   note; after `merge_staff_voices` split F6 out of laputa m1's big chord, MuseScore promoted the
   mark on that single note and left the chord without an `Arpeggio`. The pass now collapses page

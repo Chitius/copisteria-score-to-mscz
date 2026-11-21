@@ -88,6 +88,7 @@ Implemented passes:
 | `restore_page_ties` | structural | `page-ties` | page ties missing from the merged score |
 | `restore_page_slurs` | structural | `page-slurs` | page slurs missing from the merged score |
 | `reconcile_tie_slurs` | structural | `tie-slur-reconciliation` | ties/slurs that OMR confused |
+| `restore_beams` | structural | `beams` | unbeamed or partially beamed eighth-note runs |
 | `restore_page_pedals` | structural | `page-pedals` | pedal directions that differ from the page |
 | `restore_page_arpeggios` | structural | `page-arpeggios` | page arpeggio marks missing from the merged score |
 | `restore_page_articulations` | structural | `page-articulations` | page articulations missing from the merged score |
@@ -209,6 +210,8 @@ cluster. This restores laputa m8 C5→m10 D5 while still refusing the old m7→m
 `restore_page_slurs`, `restore_page_ties`, `sanitize_slurs` and the MusicXML→mscx tie export.
 `reconcile_tie_slurs` then removes a slur duplicated by a tie, converts a tie that has another pitch
 between its endpoints into a slur, and converts a contiguous same-pitch slur into a tie.
+`restore_beams` runs after the voice merge and rebuilds beam groups for consecutive
+eighth-or-shorter notes, extending partial edge groups and filling internal gaps.
 
 ## Facts
 

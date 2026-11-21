@@ -32,6 +32,7 @@ from .xml_basic import (
     DropRedundantTimeSignatures,
     UnhideRests,
 )
+from .xml_beams import RESTORE_BEAMS, RestoreBeams
 from .xml_clefs import DROP_REDUNDANT_CLEFS, DROP_REDUNDANT_KEYS, DropRedundantClefs, DropRedundantKeySignatures
 from .xml_duplicates import DROP_DUPLICATE_NOTES, DropDuplicateNotes
 from .xml_credits import INJECT_CREDITS, ApplyCreditsFacts
@@ -76,6 +77,7 @@ STRUCTURAL_PASSES = (
         RESTORE_PAGE_ARTICULATIONS,
         RESTORE_PAGE_WEDGES,
         RECONCILE_TIE_SLURS,
+        RESTORE_BEAMS,
     ]
     + ANALYSIS_PASSES
 )
