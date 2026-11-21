@@ -207,7 +207,7 @@ class RestorePageSlurs(PageRestoreMixin):
                             payload=(staff, _voice, global_measure, onset, pitch),
                         )
                     )
-        pairing = pair_endpoints(endpoints, max_span=MAX_SLUR_BARS, score=_slur_score)
+        pairing = pair_endpoints(_musical_order(endpoints), max_span=MAX_SLUR_BARS, score=_slur_score)
         pairs: list[dict] = []
         for start, stop in pairing.pairs:
             staff, _voice, start_measure, start_onset, start_pitch = start.payload
@@ -625,6 +625,14 @@ def _add_tie(note, kind: str) -> bool:
     if not any(tied.get("type") == kind for tied in notations.findall("tied")):
         ElementTree.SubElement(notations, "tied", {"type": kind})
     return True
+
+
+def _musical_order(endpoints: list[Endpoint]) -> list[Endpoint]:
+    """Pair by when the marks sound, not by XML block order (laputa m35 stop appears first)."""
+    return sorted(
+        endpoints,
+        key=lambda endpoint: (endpoint.position, 0 if endpoint.kind == "stop" else 1),
+    )
 
 
 def _slur_score(start, stop) -> float:

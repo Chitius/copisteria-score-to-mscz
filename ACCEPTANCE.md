@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 139 tests
+Ran 140 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -120,6 +120,12 @@ scorepipe laputa.musicxml --check --report laputa.json
   match (same pitch/voice first, then shortest span); the mscz now has `m7→m8` (same-pitch G4),
   `m8 C5→m10 D5` (the legitimate phrase), and `m10→m12`, with no m7→m10 arc. Regression pages cover
   both the restored pair and the refused arc (`test_pairing.py`, `test_page_restore.py`).
+- **Endpoint order vs XML order** (laputa m35–m36): the page writes the m35 stop in voice 1 before
+  the m35 start in voice 2, so document-order pairing left the start open and paired it with the
+  m36 stop, creating a long cross-bar slur. `restore_page_slurs` now sorts endpoints by
+  `(measure, onset, stop-before-start)`; m35 start 1.5 pairs with its own stop 2.0 and the long
+  m35→m36 slur is gone. The remaining short m35 slur is an OMR false positive (the PDF has no slur)
+  and is left for a semantic acceptance filter, not handled by the ordering fix.
 - **Arpeggios belong to a chord**: `restore_page_arpeggios` used to copy the page mark to every
   note; after `merge_staff_voices` split F6 out of laputa m1's big chord, MuseScore promoted the
   mark on that single note and left the chord without an `Arpeggio`. The pass now collapses page

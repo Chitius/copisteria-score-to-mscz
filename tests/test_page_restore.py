@@ -5,9 +5,11 @@ from pathlib import Path
 
 from scorepipe.core.invariants import measure_lengths
 from scorepipe.core.pass_base import Context
+from scorepipe.core.pairing import Endpoint, pair_endpoints
 from scorepipe.core.pipeline import run_pipeline
 from scorepipe.loader import load_pages, merge_pages
 from scorepipe.passes import STRUCTURAL_PASSES
+from scorepipe.passes.page_restore import _musical_order
 
 PAGES = Path(__file__).parent / "fixtures" / "pages_restore"
 
@@ -123,6 +125,18 @@ class PageRestoreTest(unittest.TestCase):
                         starts.append((number, event.element.findtext("pitch/step")))
         self.assertEqual(starts, [(1, "G"), (2, "C"), (4, "E")])
 
+    def test_slur_endpoints_are_ordered_by_music_not_by_xml_block(self):
+        endpoints = [
+            Endpoint(key=("1", "2"), position=(35, 2.0), kind="stop"),
+            Endpoint(key=("1", "2"), position=(35, 1.5), kind="start"),
+            Endpoint(key=("1", "2"), position=(36, 2.0), kind="stop"),
+        ]
+        pairing = pair_endpoints(_musical_order(endpoints))
+        self.assertEqual(
+            [(start.position, stop.position) for start, stop in pairing.pairs],
+            [((35, 1.5), (35, 2.0))],
+        )
+        self.assertEqual(len(pairing.orphans), 1)
 
     def test_arpeggio_is_one_mark_on_the_chord_not_on_a_split_note(self):
         work = Path(__file__).parent / ".runs" / "arpeggio_chord"
