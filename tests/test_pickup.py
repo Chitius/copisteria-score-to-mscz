@@ -50,6 +50,12 @@ class PickupTest(unittest.TestCase):
         run_pipeline(doc, Context(), structural=STRUCTURAL_PASSES, verifiers=[])
         self.assertIsNone(doc.measures()[0].get("implicit"))
 
+    def test_pickup_padded_with_rests_is_still_marked(self):
+        body = note("C", 1) + '<note><rest/><duration>15</duration><voice>1</voice></note>'
+        doc = build(measure(1, body) + measure(2, note("D", 16)))
+        run_pipeline(doc, Context(), structural=STRUCTURAL_PASSES, verifiers=[])
+        self.assertEqual(doc.measures()[0].get("implicit"), "yes")
+
     def test_second_run_is_a_no_op(self):
         doc = build(measure(1, note("C", 8)) + measure(2, note("D", 16)))
         ctx = Context()

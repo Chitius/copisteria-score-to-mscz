@@ -28,11 +28,12 @@ class MarkPickup:
         events = doc.events(first)
         if not events:
             return PassResult()
-        if all(event.rest for event in events):
+        sounding = [event for event in events if not event.rest]
+        if not sounding:
             return PassResult()
-        if min(event.onset for event in events) > 1e-6:
+        if min(event.onset for event in sounding) > 1e-6:
             return PassResult()  # starts with a rest: not a pickup
-        end = max(event.end for event in events)
+        end = max(event.end for event in sounding)
         if end >= bar - 1e-6:
             return PassResult()
         first.set("implicit", "yes")

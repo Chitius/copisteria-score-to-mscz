@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 174 tests
+Ran 175 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -192,6 +192,10 @@ scorepipe laputa.musicxml --check --report laputa.json
   one words direction with a `<sound tempo>` and no separate metronome. Arranger/transcriber credits
   are appended to the composer line rather than creating a second overlapping composer `Text`
   (`test_facts.py`, `test_display_facts.py`, `test_credits_display.py`).
+- **Padded pickup bars** (Sincerely): OMR writes the anacrusis as a short note followed by rests
+  that fill the printed 4/4 bar, so measuring the whole first bar hid the pickup. `mark_pickup` now
+  measures the sounding events only and marks the bar `implicit=yes` while leaving the padding rest
+  alone (`test_pickup.py`).
 - **Absolute musical positions**: `_ties_with_other_pitches_to_slurs` and
   `_tie_shaped_slurs_to_ties` used to compare measure-local onsets across the whole score, so a note
   in m60 could look "between" two m59 D4s. Both now use `scorepipe.core.positions.between`, keyed by
