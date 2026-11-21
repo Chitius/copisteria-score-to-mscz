@@ -1,9 +1,9 @@
 """Compare an OMR/exported MusicXML with the OpenScore ground-truth score.
 
 Both inputs may contain several parts (Lieder normally has a vocal part and a piano part).
-Notes are matched as a multiset of (measure, onset, pitch, duration) inside each part, so voice
-renumbering, chord layout and XML element order do not matter.  Rests are represented by a pitch of
-``None``; they are counted separately from sounding notes.
+Notes are matched as a multiset of (measure ordinal, onset, pitch, duration) inside each part, so
+voice renumbering, chord layout, XML element order and pickup measure numbering do not matter.
+Rests are represented by a pitch of ``None``; they are counted separately from sounding notes.
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ def part_events(part) -> tuple[Counter, int, int]:
     sounding = 0
     rests = 0
     divisions = 4
-    for measure in part.findall("measure"):
-        number = int(measure.get("number") or 0)
+    for ordinal, measure in enumerate(part.findall("measure"), start=1):
+        number = ordinal
         declared = measure.findtext("attributes/divisions")
         if declared:
             divisions = int(declared)

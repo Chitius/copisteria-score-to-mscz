@@ -198,7 +198,8 @@ available to the restoration passes.
 - `input.pdf` — a MuseScore 4 render of that source, used as synthetic OMR input;
 - `build_case.py` — extract the MXL rootfile and render the PDF;
 - `compare_parts.py` — compare multi-part OMR output to the ground truth by
-  `(measure, onset, pitch, duration)`, with active-division normalisation.
+  `(measure ordinal, onset, pitch, duration)`, with active-division normalisation and pickup
+  numbering alignment.
 
 Gute Nacht is two parts (vocal + piano, 105 measures). Copisteria's partial output matches it at
 98.24% / 98.38% by part; the vocal part is also verifier-clean after the structural pipeline. The

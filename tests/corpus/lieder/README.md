@@ -37,6 +37,10 @@ MusicXML because the vocal part has no `<voice>` elements; the partial output is
 | P1 vocal | 340 | 3 | 3 | 98.24% |
 | P2 piano | 1911 | 14 | 17 | 98.38% |
 
+A shorter additional run on `aus_meinen_traenen` gives a raw OMR baseline of 85.51% (vocal) and
+82.04% (piano); its source has a pickup measure numbered 0, which the comparator aligns by measure
+ordinal rather than by the printed number.
+
 The P1 pipeline (`scorepipe .../P1.musicxml`) is verifier-clean and keeps the same 98.24% note
 match.  The P2 piano part still makes the structural fixed point unstable at its final measure, so
 treat P2 as an OMR-comparison case until that is fixed.
