@@ -231,7 +231,7 @@ class PageRestoreTest(unittest.TestCase):
                 for slur in event.element.findall("notations/slur"):
                     if slur.get("type") == "start":
                         starts.append((number, event.element.findtext("pitch/step")))
-        self.assertEqual(starts, [(2, "C"), (4, "E")])
+        self.assertEqual(starts, [(1, "G"), (2, "C"), (4, "E")])
 
     def test_slur_endpoints_are_ordered_by_music_not_by_xml_block(self):
         endpoints = [

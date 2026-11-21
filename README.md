@@ -224,6 +224,10 @@ scorepipe score.musicxml --mscz-out score.mscz
 
 ## Endpoint pairing
 
+MusicXML onsets are measure-local. Any pass comparing two positions across measures must use
+`scorepipe.core.positions.between((measure, onset), ...)`; comparing raw onsets alone can make a note
+in a later measure look "between" two notes of an earlier one.
+
 Slurs and ties are written as separate start/stop marks, and OMR files reuse numbers. A plain stack
 pairs the oldest open start with a much later stop (the laputa m7→m10 three-bar slur). 
 Page endpoints are first sorted by musical position `(measure, onset, stop-before-start)`, so XML

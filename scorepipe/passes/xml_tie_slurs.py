@@ -16,6 +16,7 @@ from xml.etree import ElementTree
 from ..core.document import Document
 from ..core.pairing import Endpoint, pair_endpoints
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
+from ..core.positions import between
 
 
 class ReconcileTieSlurs:
@@ -58,20 +59,11 @@ def _lies_between(
 ) -> bool:
     """True when (number, onset) is strictly inside the endpoint span.
 
-    Onsets are measure-local, so comparing them without the measure number makes a note in the next
-    measure look like it lies between two notes of the current measure (laputa m59: it turned a
-    contiguous D4 tie into a slur because m60 had an onset between 0 and 2).
+    Delegates to the shared absolute-position contract; comparing measure-local onsets alone makes
+    a note in the next measure look like it lies between two notes of the current measure (laputa
+    m59: it turned a contiguous D4 tie into a slur because m60 had an onset between 0 and 2).
     """
-    epsilon = 1e-6
-    if number < start_measure or number > stop_measure:
-        return False
-    if start_measure == stop_measure:
-        return number == start_measure and start_onset + epsilon < onset < stop_onset - epsilon
-    if number == start_measure:
-        return onset > start_onset + epsilon
-    if number == stop_measure:
-        return onset < stop_onset - epsilon
-    return True
+    return between(number, onset, start_measure, start_onset, stop_measure, stop_onset)
 
 
 def _pitch(note) -> tuple | None:
@@ -236,10 +228,17 @@ def _tie_shaped_slurs_to_ties(doc: Document) -> int:
             continue
         between = [
             event
-            for _number, event in events
+            for number, event in events
             if event.staff == start_event.staff
             and event.voice == start_event.voice
-            and start_event.onset + 1e-6 < event.onset < stop_event.onset - 1e-6
+            and _lies_between(
+                number,
+                event.onset,
+                start.payload[0],
+                start_event.onset,
+                stop.payload[0],
+                stop_event.onset,
+            )
         ]
         if between:
             continue

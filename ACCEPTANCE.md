@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 165 tests
+Ran 168 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -34,6 +34,7 @@ Coverage:
 | beam group restoration | `test_beams.py` |
 | facts text styling / alignment | `test_facts.py`, `test_display_facts.py` |
 | OpenScore Lieder ground-truth corpus | `test_lieder_corpus.py` |
+| absolute musical-position contract | `test_positions.py` |
 | page-level arpeggio/articulation/wedge restoration | `test_page_notation.py` |
 | external OMR command front-end | `test_omr.py` |
 | PDF text layer, measure-box assignment | `test_pdf_producer.py` |
@@ -179,6 +180,11 @@ scorepipe laputa.musicxml --check --report laputa.json
   The m3 commentary is centered and fits above the staff instead of overflowing to the right
   (`test_facts.py`, `test_display_facts.py`). This is the first-pass style/fit; true width estimation
   for arbitrary boxes is still open.
+- **Absolute musical positions**: `_ties_with_other_pitches_to_slurs` and
+  `_tie_shaped_slurs_to_ties` used to compare measure-local onsets across the whole score, so a note
+  in m60 could look "between" two m59 D4s. Both now use `scorepipe.core.positions.between`, keyed by
+  `(measure, onset)`. An audit of the other passes found their onset comparisons are within one
+  measure or already keyed with a measure number (`test_positions.py`, `test_tie_slurs.py`).
 - **Slur signature is positional**: `restore_page_slurs` used to compare `id(note)`, so a merge that
   rebuilt XML note elements made every page slur look different and forced a clear/re-add each round.
   The signature is now `(measure, staff, onset, pitch, kind, number)`, so identical music has the
