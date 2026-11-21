@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 169 tests
+Ran 170 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -101,6 +101,12 @@ scorepipe laputa.musicxml --check --report laputa.json
   the page slur restoration owns those slurs, and re-pairing there orphaned a valid m54 slur and
   caused a clear/re-add loop. The corpus comparator normalises active divisions and matches
   `(measure ordinal, onset, pitch, duration)` multisets (`test_lieder_corpus.py`).
+- Other Lieder OMR runs: `aus_meinen_traenen` 91.38% / 90.10% sounding and `die_wetterfahne`
+  98.97% / 97.75%, both verifier-clean and losing no correct sounding event. `der_lindenbaum` P2 is
+  the outlier (raw 50.89%); its first pipeline run fell to 34.66% because `merge_staff_voices`
+  rebuilt 16th-triplets as fallback quarters and dropped `<time-modification>`. Tuplet measures are
+  now skipped by the merge; P2 is 51.44% with 70 display measure-length warnings (raw was 64, previous
+  pipeline 86). The raw piano remains poor and is kept as an OMR-comparison case.
 - `laputa` **page directory** (copisteria output: 3 files, 26 / 23 / 14 measures): merged to one
   63-measure score by `merge_pages`, then verifier clean. On this run `restore_page_pedals`
   reported 36 adjustments and `restore_page_wedges` 20; the structural phase converged in 3 rounds.

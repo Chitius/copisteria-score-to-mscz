@@ -49,11 +49,12 @@ rather than by the printed number.
 `die_wetterfahne` gives raw OMR 98.97% (vocal) and 97.75% (piano); the pipeline keeps both scores,
 is verifier-clean, and loses no correct sounding event (P2 adds two hidden rests).
 
-`der_lindenbaum` is the outlier: raw OMR is 99.51% (vocal) but only 50.89% (piano), and the P2
-pipeline drops further to 34.66% while still reporting a clean structural verifier (the mscz display
-verifier reports 86 measure-length issues). The raw P2 has many extra voices/rests and the merge path
-is not safe on that input; use `lindenbaum_omr_raw.mscz` for inspection rather than the P2 pipeline
-artifact until this case is repaired.
+`der_lindenbaum` is the outlier: raw OMR is 99.51% (vocal) but only 50.89% (piano). The first P2
+pipeline run dropped to 34.66% because `merge_staff_voices` rebuilt tuplet measures: a 16th-triplet
+(duration 1680/10080) got the fallback type `quarter` and lost its `<time-modification>`, so MuseScore
+laid the measure out as 4.875 beats instead of 3. The merge now skips any staff with tuplets; P2
+settles at 51.44% (slightly above raw OMR) with 70 display measure-length warnings instead of 86.
+The raw piano is still poor; use `lindenbaum_omr_raw.mscz` for inspection.
 
 The P1 pipeline (`scorepipe .../P1.musicxml`) is verifier-clean and keeps the same 98.94% sounding
 match.  The P2 piano part also converges (2 rounds, clean verifier) and matches the ground truth at

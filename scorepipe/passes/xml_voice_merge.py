@@ -71,6 +71,11 @@ def _merge(doc: Document, measure, allow_sustained: bool = True) -> bool:
         notes = [event for event in staff_events if not event.rest and event.element.find("pitch") is not None]
         if not notes:
             continue
+        if _has_tuplets(staff_events):
+            # Rebuilding a tuplet line with plain durations loses <time-modification> and turns
+            # 16th-triplets into quarters (Lindenbaum m1). Leave the source voices alone until the
+            # merge can preserve tuplet ratios.
+            continue
         all_onsets = sorted({round(event.onset, 4) for event in staff_events})
         if all_onsets[0] < -1e-6 or all_onsets[-1] >= bar - 1e-6:
             continue
@@ -134,6 +139,15 @@ def _protected_notes(notes, all_onsets: list[float], bar: float, allow_sustained
             elif allow_sustained and _would_shrink_notated_note(event, duration):
                 protected.add(id(event.element))
     return protected
+
+
+def _has_tuplets(events) -> bool:
+    for event in events:
+        if event.element.find("time-modification") is not None:
+            return True
+        if event.element.find("notations/tuplet") is not None:
+            return True
+    return False
 
 
 def _would_shrink_notated_note(event, proposed: float) -> bool:

@@ -210,6 +210,27 @@ class MergeStaffVoicesTest(unittest.TestCase):
         self.assertEqual(len(sustained), 1)
         self.assertEqual(sustained[0].voice, "2")
 
+    def test_a_tuplet_measure_is_left_alone(self):
+        measure = (
+            '<measure number="1"><attributes><divisions>10080</divisions>'
+            "<time><beats>3</beats><beat-type>4</beat-type></time></attributes>"
+            '<note><pitch><step>G</step><octave>4</octave></pitch><duration>1680</duration>'
+            "<voice>1</voice><type>16th</type>"
+            "<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes>"
+            "<normal-type>16th</normal-type></time-modification></note>"
+            '<note><pitch><step>A</step><octave>4</octave></pitch><duration>1680</duration>'
+            "<voice>1</voice><type>16th</type>"
+            "<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes>"
+            "<normal-type>16th</normal-type></time-modification></note>"
+            "<backup><duration>3360</duration></backup>"
+            '<note><pitch><step>B</step><octave>3</octave></pitch><duration>3360</duration>'
+            "<voice>2</voice></note></measure>"
+        )
+        doc = Document(ElementTree.fromstring(PART.format(measures=measure)))
+        result = MERGE_STAFF_VOICES.run(doc, Context())
+        self.assertEqual(result.changed, 0)
+        self.assertEqual(len(list(doc.root.iter("time-modification"))), 2)
+
     def test_a_rest_between_notes_stops_the_previous_note(self):
         first = (
             '<measure number="1"><attributes><divisions>4</divisions>'
