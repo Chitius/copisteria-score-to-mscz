@@ -96,11 +96,10 @@ violation as:
 
 ## Migration plan
 
-1. Core: document, pass base, runner, trace, verifier. (this commit)
-2. Port structural passes one by one, each with a fixture that fails before and passes after.
-3. Port display passes onto `.mscx`, with a re-save idempotence test.
-4. Port fact producers (text layer, agent JSON).
-5. Only then port the OMR conversion front-end (copisteria invocation) as the loader.
+The old-to-new migration is complete and archived in
+[`docs/archive/MIGRATION_PLAN.md`](docs/archive/MIGRATION_PLAN.md). Current work is tracked in
+[`docs/archive/CHANGE_PLAN.md`](docs/archive/CHANGE_PLAN.md); this document only describes the
+architecture.
 
 ## Pass lifecycle and failure policy
 

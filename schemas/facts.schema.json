@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/score-omr/facts.schema.json",
+  "title": "score-omr facts",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "credits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "text"],
+        "additionalProperties": true,
+        "properties": {
+          "type": {"type": "string", "enum": ["title", "subtitle", "composer", "arranger", "transcriber", "lyricist"]},
+          "text": {"type": "string", "minLength": 1},
+          "page": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "marks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["measure"],
+        "additionalProperties": true,
+        "properties": {
+          "measure": {"type": "integer", "minimum": 1},
+          "beat": {"type": "number", "minimum": 0},
+          "placement": {"type": "string", "enum": ["above", "below"]},
+          "text": {"type": "string"},
+          "rehearsal": {"type": "string"},
+          "tempo": {"type": "number", "exclusiveMinimum": 0},
+          "metronome": {"type": "number", "exclusiveMinimum": 0},
+          "beat_unit": {"type": "string", "enum": ["whole", "half", "quarter", "eighth", "16th", "32nd"]},
+          "italic": {"type": "boolean"},
+          "font_size": {"type": "number"},
+          "justify": {"type": "string"}
+        },
+        "anyOf": [
+          {"required": ["text"]},
+          {"required": ["rehearsal"]},
+          {"required": ["tempo"]},
+          {"required": ["metronome"]}
+        ]
+      }
+    }
+  }
+}
