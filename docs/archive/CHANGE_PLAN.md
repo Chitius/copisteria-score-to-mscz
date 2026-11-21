@@ -22,6 +22,8 @@ kept because they explain the current code; open items are the hand-off list for
 | Stray post-barline rests dropped | m24 no longer cascades into m25/m26 and deletes their second halves |
 | `drop_overflow_rests` cleanup | late padding rests no longer fail measure-length verification |
 | Skill packaging | SKILL.md, preflight, end-to-end wrapper, references |
+| Agent visual facts | page packet, evidence validation, page coverage, corrections review |
+| Constrained notation patches | `ottava` prototype compiles 8va/8vb to MusicXML octave-shift; render verified |
 
 ## Deferred / next
 

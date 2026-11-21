@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/copisteria-to-mscz/notation-patches.schema.json",
+  "title": "copisteria-to-mscz notation patches",
+  "type": "object",
+  "required": ["patches"],
+  "properties": {
+    "patches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["op", "subtype", "staff", "start", "end", "page"],
+        "properties": {
+          "op": {"const": "ottava"},
+          "subtype": {"enum": ["8va", "8vb"]},
+          "staff": {"type": "integer", "minimum": 1},
+          "start": {"$ref": "#/$defs/anchor"},
+          "end": {"$ref": "#/$defs/anchor"},
+          "page": {"type": "integer", "minimum": 1},
+          "bbox": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+          "bbox_space": {"enum": ["pdf-points", "image-px"]},
+          "crop": {"type": "string"},
+          "evidence": {"type": "string", "minLength": 1},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "anchor": {
+      "type": "object",
+      "required": ["measure", "beat"],
+      "properties": {
+        "measure": {"type": "integer", "minimum": 1},
+        "beat": {"type": "number", "minimum": 0}
+      }
+    }
+  }
+}

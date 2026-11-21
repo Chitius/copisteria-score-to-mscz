@@ -89,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--musescore", help="MuseScore executable")
     parser.add_argument("--pages", help="reuse an existing page directory; skip OMR")
     parser.add_argument("--facts", help="facts JSON for credits/marks")
+    parser.add_argument("--patches", help="constrained notation patches JSON (ottava prototype)")
     parser.add_argument("--title")
     parser.add_argument("--composer")
     parser.add_argument("--arranger")
@@ -161,6 +162,8 @@ def main(argv: list[str] | None = None) -> int:
     ]
     if args.facts:
         score_command.extend(["--facts", str(Path(args.facts).resolve())])
+    if args.patches:
+        score_command.extend(["--patches", str(Path(args.patches).resolve())])
     if args.title:
         score_command.extend(["--title", args.title])
     if args.composer:

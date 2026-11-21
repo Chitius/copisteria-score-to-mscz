@@ -17,6 +17,7 @@ from .core.registry import validate_all
 from .facts import validate_facts
 from .loader import load_pages, merge_pages
 from .mscz_export import export_and_display
+from .notation_patches import apply_patches, load_patches, validate_patches
 from .omr import run_omr
 from .passes import DISPLAY_PASSES, INJECT_PASSES, STRUCTURAL_PASSES
 from .producers import resolve as resolve_producer
@@ -39,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--omr-dir", help="directory for the OMR page output (default: <pdf>_omr)")
     parser.add_argument("--mscz-out", help="also convert to .mscz and run the display phase")
+    parser.add_argument("--patches", help="constrained notation patches JSON (ottava prototype)")
     parser.add_argument("--musescore", help="MuseScore executable (default: MSCORE or common paths)")
     parser.add_argument("--title", help="title credit to inject (agent-recognised for scans)")
     parser.add_argument("--composer", help="composer credit to inject")
@@ -101,6 +103,15 @@ def main(argv: list[str] | None = None) -> int:
         pages = merged
     else:
         doc = Document.load(path)
+    if args.patches:
+        patches = load_patches(args.patches)
+        problems = validate_patches(patches, doc)
+        if problems:
+            for problem in problems:
+                print(f"patches: {problem}")
+            return 1
+        changed = apply_patches(doc, patches)
+        print(f"patches: {changed} octave direction(s)")
     ctx = Context(facts=facts, pages=pages)
     report = run_pipeline(
         doc,

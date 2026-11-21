@@ -122,13 +122,28 @@ Every agent credit/mark must carry `page`, `evidence`, and `bbox`/`crop`; ambigu
 `unresolved`. `merge` strips printed role labels (`Original Artist:TRUE` → `TRUE`) and keeps the
 original wording in evidence. See [`references/facts.md`](references/facts.md).
 
+### Constrained notation patches
+
+Long-tail symbols are not forced into facts. The prototype supports `ottava` (`8va`/`8vb`) as a
+musical-anchor patch; the compiler writes MusicXML `<octave-shift>` and MuseScore builds the
+spanner:
+
+```bash
+python scripts/notation_patches.py map --input out/score.musicxml -o review/score-map.json
+python -m scorepipe.cli pages/ -o out/score.musicxml --mscz-out out/score.mscz \
+  --patches review/patches.json
+```
+
+See [`references/notation-patches.md`](references/notation-patches.md). The patch compiler enforces
+start/end staff and order; the rendered bracket still needs visual confirmation.
+
 ## Current status (2026-11-21)
 
 Tests:
 
 ```text
-python -m unittest discover -s tests   # 187 tests
-python -m pytest tests -q              # 267 tests
+python -m unittest discover -s tests   # 190 tests
+python -m pytest tests -q              # 270 tests
 ```
 
 Corpus (sounding-note match; rests excluded from the primary score):
@@ -153,6 +168,8 @@ Recent Sincerely-specific fixes:
 - Agent/vision fact extraction has page preparation, coverage checking, evidence validation, merge,
   and a separate corrections review; real delivery still needs per-page review and resolving
   `unresolved`/`corrections`.
+- The notation-patch compiler currently supports `ottava` only; pedal/hairpin/dynamic operations are
+  future work.
 - Same-value beam runs are still rebuilt as one group; a full compound-metre `BeamGrouper` is
   future work.
 - Voice merge skips tuplet measures rather than preserving nested ratios.
@@ -169,7 +186,8 @@ SKILL.md                 skill operator contract
 scripts/preflight.py     read-only environment probe
 scripts/convert.py       PDF -> OMR pages -> scorepipe -> mscz/pdf
 scripts/agent_facts.py   prepare/validate/merge agent visual facts
-schemas/                 facts JSON schema
+scripts/notation_patches.py  map anchors / apply constrained notation patches
+schemas/                 facts and notation-patch JSON schemas
 scorepipe/               the Python pipeline
 references/              setup, OMR, facts, delivery references
 docs/                    architecture, acceptance evidence, archived plans

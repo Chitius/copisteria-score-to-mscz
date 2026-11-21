@@ -128,6 +128,21 @@ python scripts/convert.py "score.pdf" --pages path/to/omr-pages \
 
 没有新渲染，不要说视觉问题已修复。
 
+### 4b. 受约束的谱面符号 patch
+
+facts 不适合承载 8va、pedal、hairpin 这类谱面对象。原型用“音符锚点 + 操作”而不是直接改 mscz：
+
+```bash
+python scripts/notation_patches.py map --input out/score.musicxml -o review/score-map.json
+python -m scorepipe.cli pages/ -o out/score.musicxml --mscz-out out/score.mscz \
+  --patches review/patches.json
+```
+
+当前只支持 `ottava`（8va/8vb），编译成 MusicXML `<octave-shift>`，由 MuseScore 生成 spanner。
+起止点必须落在真实 staff/measure/beat 上，end 必须晚于 start；像素 bbox 只作为证据，不决定范围。
+渲染后必须检查 8va 的实际覆盖范围；范围不确定就保持 unresolved，不要自动扩展。
+详见 `references/notation-patches.md`。
+
 ### 5. 交付
 
 按 `references/delivery.md` 执行。交付 MusicXML + `.mscz` + PDF + report，说明 verifier
@@ -140,8 +155,9 @@ SKILL.md                 本操作契约
 scripts/preflight.py     只读环境探测，不安装
 scripts/convert.py       PDF -> OMR pages -> scorepipe -> mscz/pdf
 scripts/agent_facts.py   prepare/validate/merge agent 视觉 facts
-schemas/                 facts JSON schema
-scorepipe/               Python pipeline（子模块，含 agent_facts 校验）
+scripts/notation_patches.py  音符锚点 map / 受限谱面 patch
+schemas/                 facts 与 notation-patch JSON schema
+scorepipe/               Python pipeline（子模块，含 agent_facts/notation_patches）
 tests/                   回归测试和 Lieder corpus
 docs/                    架构、验收证据、归档计划
 references/              skill 操作参考
@@ -150,7 +166,7 @@ SANITY.md                pass 契约审计
 
 ## 当前状态（2026-11）
 
-- `unittest`：187 个测试；`pytest`：267 个测试。
+- `unittest`：190 个测试；`pytest`：270 个测试。
 - Gute Nacht：sounding notes 98.94% / 99.0%（vocal/piano），verifier clean。
 - `aus_meinen_traenen`：91.38% / 90.10%；`die_wetterfahne`：98.97% / 97.75%。
 - `der_lindenbaum` P2 仍是 OMR 质量异常项（约 51%）。
