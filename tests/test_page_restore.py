@@ -31,11 +31,16 @@ class PageRestoreTest(unittest.TestCase):
         self.assertTrue(any(tie.get("type") == "start" for tie in start.findall("tie")))
         self.assertTrue(any(tie.get("type") == "stop" for tie in stop.findall("tie")))
 
-    def test_slur_crosses_the_page_boundary(self):
+    def test_slur_duplicating_a_tie_is_removed(self):
         doc, _ctx, _report = run()
         slurs = [(slur.get("type"), slur.get("number")) for slur in doc.root.iter("slur")]
-        self.assertIn(("start", "1"), slurs)
-        self.assertIn(("stop", "1"), slurs)
+        self.assertNotIn(("start", "1"), slurs)
+        self.assertNotIn(("stop", "1"), slurs)
+        third = doc.measures()[2]
+        start = next(note for note in doc.measures()[1].iter("note") if note.findtext("pitch/step") == "C")
+        stop = next(note for note in third.iter("note") if note.findtext("pitch/step") == "C")
+        self.assertTrue(any(tie.get("type") == "start" for tie in start.findall("tie")))
+        self.assertTrue(any(tie.get("type") == "stop" for tie in stop.findall("tie")))
 
     def test_pedal_directions_come_from_the_pages(self):
         doc, _ctx, _report = run()
@@ -123,7 +128,7 @@ class PageRestoreTest(unittest.TestCase):
                 for slur in event.element.findall("notations/slur"):
                     if slur.get("type") == "start":
                         starts.append((number, event.element.findtext("pitch/step")))
-        self.assertEqual(starts, [(1, "G"), (2, "C"), (4, "E")])
+        self.assertEqual(starts, [(2, "C"), (4, "E")])
 
     def test_slur_endpoints_are_ordered_by_music_not_by_xml_block(self):
         endpoints = [

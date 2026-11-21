@@ -145,9 +145,15 @@ class RestorePageTies(PageRestoreMixin):
                     )
         pairing = pair_endpoints(endpoints)
         restored = 0
+        tie_to_slur = ctx.options.get("tie_to_slur") or set()
         for start_endpoint, stop_endpoint in pairing.pairs:
             staff, start_measure, start_onset, pitch = start_endpoint.payload
             _staff, stop_measure, stop_onset, stop_pitch = stop_endpoint.payload
+            start_key = (start_measure, staff, round(start_onset, 4), pitch)
+            stop_key = (stop_measure, staff, round(stop_onset, 4), stop_pitch)
+            if start_key in tie_to_slur and stop_key in tie_to_slur:
+                # this tie was deliberately converted to a slur by reconcile_tie_slurs
+                continue
             start_note = index.get((start_measure, staff, start_onset, pitch))
             stop_note = index.get((stop_measure, staff, stop_onset, stop_pitch))
             if start_note is None or stop_note is None:
@@ -218,6 +224,9 @@ class RestorePageSlurs(PageRestoreMixin):
             stop_note = index.get((stop_measure, staff, stop_onset, stop_pitch))
             if start_note is None or stop_note is None:
                 continue
+            # a page often records the same arc as both tie and slur; the tie is the specific one
+            if _has_tie(start_note, "start") or _has_tie(stop_note, "stop"):
+                continue
             pairs.append(
                 {
                     "start": start_note,
@@ -230,10 +239,12 @@ class RestorePageSlurs(PageRestoreMixin):
         # unique within a staff, so they must be reassigned globally; otherwise the treble slur 1
         # pairs with the bass stop 1 and jumps staves (laputa m29-m30).
         desired = _assign_slur_numbers(pairs)
-        if not pairs or _slur_signature(doc) == desired["signature"]:
+        current = _slur_signature(doc)
+        if current == desired["signature"]:
             return PassResult()
+        removed = sum(len(slurs) for slurs in current.values())
         _clear_slurs(doc)
-        changed = 0
+        changed = removed
         for note, kind, number in desired["entries"]:
             _add_slur(note, kind, number)
             changed += 1
@@ -604,6 +615,12 @@ def _add_articulation(note, mark) -> bool:
             return False
     articulations.append(ElementTree.fromstring(ElementTree.tostring(mark)))
     return True
+
+
+def _has_tie(note, kind: str) -> bool:
+    if any(tie.get("type") == kind for tie in note.findall("tie")):
+        return True
+    return any(tied.get("type") == kind for tied in note.findall("notations/tied"))
 
 
 def _note_ties(note) -> list[str]:

@@ -60,6 +60,17 @@ def duplicate_ties():
     return build(measure(1, note("C", tie="start", extra='<tie type="start"/>')) + measure(2, note("D")))
 
 
+def tie_slur_pair():
+    return build(
+        measure(
+            1,
+            note("C", duration=8, tie="start", extra='<notations><slur type="start" number="1"/></notations>')
+            + note("C", duration=8, tie="stop", extra='<notations><slur type="stop" number="1"/></notations>'),
+        )
+        + measure(2, note("D"))
+    )
+
+
 def redundant_time():
     return build(measure(1, note("C")) + measure(2, note("D")))
 
@@ -174,6 +185,7 @@ INJECT = {pass_obj.spec.name: pass_obj for pass_obj in INJECT_PASSES}
 
 FACTORIES = {
     "dedupe_ties": duplicate_ties,
+    "reconcile_tie_slurs": tie_slur_pair,
     "drop_redundant_time_signatures": redundant_time,
     "unhide_rests": hidden_rest,
     "drop_redundant_clefs": redundant_clef_key,
@@ -206,6 +218,7 @@ FACTORIES = {
 # verifier violations.
 CONTRACTS = {
     "dedupe_ties": PassContract("dedupe_ties"),
+    "reconcile_tie_slurs": PassContract("reconcile_tie_slurs"),
     "drop_redundant_time_signatures": PassContract("drop_redundant_time_signatures"),
     "unhide_rests": PassContract("unhide_rests"),
     "drop_redundant_clefs": PassContract("drop_redundant_clefs"),

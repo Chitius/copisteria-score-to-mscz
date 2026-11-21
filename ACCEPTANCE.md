@@ -6,11 +6,11 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 140 tests
+Ran 143 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
-76 passed
+77 passed
 ```
 
 Coverage:
@@ -29,6 +29,7 @@ Coverage:
 | page merging and page-directory CLI | `test_loader.py` |
 | page-level tie/slur/pedal restoration | `test_page_restore.py` |
 | endpoint pairing with reused slur numbers | `test_pairing.py`, `test_page_restore.py` |
+| tie/slur confusion reconciliation | `test_tie_slurs.py` |
 | page-level arpeggio/articulation/wedge restoration | `test_page_notation.py` |
 | external OMR command front-end | `test_omr.py` |
 | PDF text layer, measure-box assignment | `test_pdf_producer.py` |
@@ -45,7 +46,7 @@ Coverage:
 | per-note fill protection when retiming | `test_voice_merge.py` |
 | empty staff measure rests | `test_empty_staves.py` |
 | golden-score comparison | `test_compare.py` |
-| pass sanity framework (76 pytest cases) | `test_sanity.py`, `test_pass_sanity.py` |
+| pass sanity framework (77 pytest cases) | `test_sanity.py`, `test_pass_sanity.py` |
 | multi-voice staff retiming / fill conflict | `test_voice_merge.py` |
 | mscx display passes | `test_display.py` |
 | mscz archive roundtrip + re-open idempotence | `test_archive.py` |
@@ -62,7 +63,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-42 entries: 25 structural (24 mechanical + 1 analysis), 2 inject, 15 display. Every mechanical pass
+43 entries: 26 structural (25 mechanical + 1 analysis), 2 inject, 15 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -124,8 +125,13 @@ scorepipe laputa.musicxml --check --report laputa.json
   the m35 start in voice 2, so document-order pairing left the start open and paired it with the
   m36 stop, creating a long cross-bar slur. `restore_page_slurs` now sorts endpoints by
   `(measure, onset, stop-before-start)`; m35 start 1.5 pairs with its own stop 2.0 and the long
-  m35→m36 slur is gone. The remaining short m35 slur is an OMR false positive (the PDF has no slur)
-  and is left for a semantic acceptance filter, not handled by the ordering fix.
+  m35→m36 slur is gone. The short remaining slur was the OMR's tie/ slur confusion; `reconcile_tie_slurs`
+  now removes a slur whose endpoints already have a tie (m35 E5 keeps the tie, loses the slur).
+- **Tie/slur reconciliation**: `reconcile_tie_slurs` applies three rules: a tie duplicated by a slur
+  wins (slur removed); a tie with another pitch between its endpoints in the same voice becomes a
+  slur; a contiguous same-pitch slur with nothing between its endpoints becomes a tie. The page
+  restore records tie→slur conversions so the next round does not re-add the tie. m35's E5 tie is
+  kept and its duplicate slur is gone; E4's tie is untouched (`test_tie_slurs.py`).
 - **Arpeggios belong to a chord**: `restore_page_arpeggios` used to copy the page mark to every
   note; after `merge_staff_voices` split F6 out of laputa m1's big chord, MuseScore promoted the
   mark on that single note and left the chord without an `Arpeggio`. The pass now collapses page

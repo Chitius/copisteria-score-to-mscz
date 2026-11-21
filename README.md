@@ -87,6 +87,7 @@ Implemented passes:
 | `merge_aligned_voices` | structural | `voice-merge` | mergeable secondary voices |
 | `restore_page_ties` | structural | `page-ties` | page ties missing from the merged score |
 | `restore_page_slurs` | structural | `page-slurs` | page slurs missing from the merged score |
+| `reconcile_tie_slurs` | structural | `tie-slur-reconciliation` | ties/slurs that OMR confused |
 | `restore_page_pedals` | structural | `page-pedals` | pedal directions that differ from the page |
 | `restore_page_arpeggios` | structural | `page-arpeggios` | page arpeggio marks missing from the merged score |
 | `restore_page_articulations` | structural | `page-articulations` | page articulations missing from the merged score |
@@ -206,6 +207,8 @@ the shortest span wins, with the latest start as tie-break. A start that is afte
 longer than `max_span`, is rejected; unpaired endpoints become orphans instead of deleting a whole
 cluster. This restores laputa m8 C5→m10 D5 while still refusing the old m7→m10 arc. It is shared by
 `restore_page_slurs`, `restore_page_ties`, `sanitize_slurs` and the MusicXML→mscx tie export.
+`reconcile_tie_slurs` then removes a slur duplicated by a tie, converts a tie that has another pitch
+between its endpoints into a slur, and converts a contiguous same-pitch slur into a tie.
 
 ## Facts
 
