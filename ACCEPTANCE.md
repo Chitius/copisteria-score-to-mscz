@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 149 tests
+Ran 150 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -138,6 +138,11 @@ scorepipe laputa.musicxml --check --report laputa.json
   slur; a contiguous same-pitch slur with nothing between its endpoints becomes a tie. The page
   restore records tie→slur conversions so the next round does not re-add the tie. m35's E5 tie is
   kept and its duplicate slur is gone; E4's tie is untouched (`test_tie_slurs.py`).
+- **Tie propagation respects duration** (laputa m61): OMR has a C4 whole tied across m61→m62, and a
+  separate C5 eighth on the same onset. The page chord map used to be pitch-only, so the tie was
+  copied onto C5 as well. It now stores `(pitch, duration)` and propagates only to members matching
+  the tie endpoints' durations; m61 C5 no longer gets a tie, while m35's E4/E5 (same durations) still
+  do (`test_page_restore.py::test_tie_propagation_respects_note_duration`).
 - **Adjacent slur chains** (laputa m53–m55): OMR wrote `m53 G4→m54 A4` and `m54 A4→m55 E5` as two
   slurs sharing the A4 note. `restore_page_slurs` joins such unique shared-note chains before
   numbering (and `merge_adjacent_slurs` handles the same shape outside the page path), producing one

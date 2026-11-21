@@ -120,15 +120,17 @@ class RestorePageTies(PageRestoreMixin):
             return PassResult()
         index = _merged_index(doc)
         offsets = _offsets(model)
-        page_chords: dict[tuple, set] = {}
+        page_chords: dict[tuple, dict[str, set[float]]] = {}
         endpoints: list[Endpoint] = []
         for page_index, path in enumerate(model.pages):
             root = ElementTree.parse(str(path)).getroot()
-            for measure_index, staff, _voice, onset, _duration, pitch, _element in _page_events(root):
+            for measure_index, staff, _voice, onset, duration, pitch, _element in _page_events(root):
                 if pitch is not None:
                     global_measure = offsets[page_index] + measure_index
-                    page_chords.setdefault((global_measure, staff, round(onset, 4)), set()).add(pitch)
-            for measure_index, staff, voice, onset, _duration, pitch, element in _page_events(root):
+                    page_chords.setdefault((global_measure, staff, round(onset, 4)), {}).setdefault(
+                        pitch, set()
+                    ).add(round(duration, 4))
+            for measure_index, staff, voice, onset, duration, pitch, element in _page_events(root):
                 if pitch is None:
                     continue
                 global_measure = offsets[page_index] + measure_index
@@ -140,15 +142,15 @@ class RestorePageTies(PageRestoreMixin):
                             key=(staff, voice, pitch),
                             position=(global_measure, round(onset, 4)),
                             kind=tie,
-                            payload=(staff, global_measure, onset, pitch),
+                            payload=(staff, global_measure, onset, round(duration, 4), pitch),
                         )
                     )
         pairing = pair_endpoints(endpoints)
         restored = 0
         tie_to_slur = ctx.options.get("tie_to_slur") or set()
         for start_endpoint, stop_endpoint in pairing.pairs:
-            staff, start_measure, start_onset, pitch = start_endpoint.payload
-            _staff, stop_measure, stop_onset, stop_pitch = stop_endpoint.payload
+            staff, start_measure, start_onset, start_duration, pitch = start_endpoint.payload
+            _staff, stop_measure, stop_onset, stop_duration, stop_pitch = stop_endpoint.payload
             start_key = (start_measure, staff, round(start_onset, 4), pitch)
             stop_key = (stop_measure, staff, round(stop_onset, 4), stop_pitch)
             if start_key in tie_to_slur and stop_key in tie_to_slur:
@@ -158,12 +160,17 @@ class RestorePageTies(PageRestoreMixin):
             stop_note = index.get((stop_measure, staff, stop_onset, stop_pitch))
             if start_note is None or stop_note is None:
                 continue
-            # a tie between two printed chords applies to every pitch they share
-            start_set = page_chords.get((start_measure, staff, round(start_onset, 4)))
-            stop_set = page_chords.get((stop_measure, staff, round(stop_onset, 4)))
-            common = {pitch}
-            if start_set and stop_set:
-                common = start_set & stop_set or {pitch}
+            # a tie between two printed chords applies to every member that has the same duration
+            # at both ends; a different-duration voice at the same onset is not a chord member
+            start_set = page_chords.get((start_measure, staff, round(start_onset, 4))) or {}
+            stop_set = page_chords.get((stop_measure, staff, round(stop_onset, 4))) or {}
+            start_members = {
+                member for member, durations in start_set.items() if start_duration in durations
+            }
+            stop_members = {
+                member for member, durations in stop_set.items() if stop_duration in durations
+            }
+            common = start_members & stop_members or {pitch}
             applied = 0
             for member in sorted(common):
                 member_start = index.get((start_measure, staff, start_onset, member))

@@ -209,6 +209,8 @@ the shortest span wins, with the latest start as tie-break. A start that is afte
 longer than `max_span`, is rejected; unpaired endpoints become orphans instead of deleting a whole
 cluster. This restores laputa m8 C5→m10 D5 while still refusing the old m7→m10 arc. It is shared by
 `restore_page_slurs`, `restore_page_ties`, `sanitize_slurs` and the MusicXML→mscx tie export.
+Tie propagation from a printed chord only applies to notes with the same duration at both endpoints,
+so a different rhythmic voice at the same onset does not inherit the tie.
 `reconcile_tie_slurs` then removes a slur duplicated by a tie, converts a tie that has another pitch
 between its endpoints into a slur, and converts a contiguous same-pitch slur into a tie.
 `merge_adjacent_slurs` joins two slurs whose stop note is the next slur's start note.

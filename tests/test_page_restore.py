@@ -79,6 +79,42 @@ class PageRestoreTest(unittest.TestCase):
         self.assertIn("G", starts)
         self.assertIn("E", stops)
 
+    def test_tie_propagation_respects_note_duration(self):
+        work = Path(__file__).parent / ".runs" / "tie_duration"
+        work.mkdir(parents=True, exist_ok=True)
+        page = work / "page1.musicxml"
+        page.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+            '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'            '<part id="P1">'
+            '<measure number="1"><attributes><divisions>4</divisions>'
+            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+            '<note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration>'
+            '<voice>1</voice><type>eighth</type></note>'
+            '<note><rest/><duration>14</duration><voice>1</voice></note>'
+            "<backup><duration>16</duration></backup>"
+            '<note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration>'
+            '<tie type="start"/><voice>2</voice><notations><tied type="start"/></notations></note>'
+            "</measure>"
+            '<measure number="2"><attributes><divisions>4</divisions></attributes>'
+            '<note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration>'
+            '<voice>1</voice><type>eighth</type></note>'
+            '<note><rest/><duration>14</duration><voice>1</voice></note>'
+            "<backup><duration>16</duration></backup>"
+            '<note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration>'
+            '<tie type="stop"/><voice>2</voice><notations><tied type="stop"/></notations></note>'
+            "</measure></part></score-partwise>",
+            encoding="utf-8",
+        )
+        merged = merge_pages([page])
+        run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
+        for _number, measure in merged.document.iter_measures():
+            for event in merged.document.events(measure):
+                octave = event.element.findtext("pitch/octave")
+                if event.element.findtext("pitch/step") == "C" and octave == "5":
+                    self.assertEqual([tie.get("type") for tie in event.element.findall("tie")], [])
+                if event.element.findtext("pitch/step") == "C" and octave == "4":
+                    self.assertTrue(event.element.findall("tie"))
+
     def test_pedal_directions_come_from_the_pages(self):
         doc, _ctx, _report = run()
         first = doc.measures()[0].findall(".//pedal")
