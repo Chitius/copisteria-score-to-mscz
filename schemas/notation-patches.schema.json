@@ -12,6 +12,7 @@
         "required": ["op", "subtype", "staff", "start", "end", "page"],
         "properties": {
           "op": {"const": "ottava"},
+          "mode": {"enum": ["add", "replace", "remove"]},
           "subtype": {"enum": ["8va", "8vb"]},
           "staff": {"type": "integer", "minimum": 1},
           "start": {"$ref": "#/$defs/anchor"},

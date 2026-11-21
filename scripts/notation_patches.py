@@ -19,31 +19,13 @@ from scorepipe.core.document import Document  # noqa: E402
 from scorepipe.notation_patches import (  # noqa: E402
     apply_patches,
     load_patches,
+    score_map,
     validate_patches,
 )
 
 
 def make_map(doc: Document) -> dict:
-    measures = []
-    for number, measure in doc.iter_measures():
-        staves: dict[str, list[dict]] = {}
-        for event in doc.events(measure):
-            if event.rest:
-                continue
-            pitch = event.element.findtext("pitch/step")
-            octave = event.element.findtext("pitch/octave")
-            if not pitch or not octave:
-                continue
-            staves.setdefault(event.staff, []).append(
-                {
-                    "voice": event.voice,
-                    "onset": round(event.onset, 4),
-                    "duration": round(event.duration, 4),
-                    "pitch": f"{pitch}{octave}",
-                }
-            )
-        measures.append({"number": number, "staves": staves})
-    return {"measures": measures}
+    return score_map(doc)
 
 
 def main(argv: list[str] | None = None) -> int:

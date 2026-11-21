@@ -137,13 +137,24 @@ python -m scorepipe.cli pages/ -o out/score.musicxml --mscz-out out/score.mscz \
 See [`references/notation-patches.md`](references/notation-patches.md). The patch compiler enforces
 start/end staff and order; the rendered bracket still needs visual confirmation.
 
+### Delivery review
+
+```bash
+python scripts/review.py score.pdf --pages path/to/omr-pages \
+  --facts-dir review/facts --patches review/patches.json --outdir review/score
+```
+
+The review stops before the pipeline when pages are missing, unresolved claims or proposed
+corrections remain. `--allow-unresolved` / `--allow-corrections` are explicit interim overrides;
+the report still lists what was overridden. See [`references/review.md`](references/review.md).
+
 ## Current status (2026-11-21)
 
 Tests:
 
 ```text
-python -m unittest discover -s tests   # 190 tests
-python -m pytest tests -q              # 270 tests
+python -m unittest discover -s tests   # 192 tests
+python -m pytest tests -q              # 272 tests
 ```
 
 Corpus (sounding-note match; rests excluded from the primary score):
@@ -187,6 +198,7 @@ scripts/preflight.py     read-only environment probe
 scripts/convert.py       PDF -> OMR pages -> scorepipe -> mscz/pdf
 scripts/agent_facts.py   prepare/validate/merge agent visual facts
 scripts/notation_patches.py  map anchors / apply constrained notation patches
+scripts/review.py        page review -> pipeline -> render report
 schemas/                 facts and notation-patch JSON schemas
 scorepipe/               the Python pipeline
 references/              setup, OMR, facts, delivery references

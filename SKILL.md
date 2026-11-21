@@ -143,6 +143,17 @@ python -m scorepipe.cli pages/ -o out/score.musicxml --mscz-out out/score.mscz \
 渲染后必须检查 8va 的实际覆盖范围；范围不确定就保持 unresolved，不要自动扩展。
 详见 `references/notation-patches.md`。
 
+### 4c. 交付 review 闭环
+
+```bash
+python scripts/review.py "score.pdf" --pages path/to/omr-pages \
+  --facts-dir review/facts --patches review/patches.json --outdir review/score
+```
+
+缺页、unresolved、proposed correction 或 patch 校验失败时，默认在 pipeline 前停止并写
+`review-report.json`。`--allow-unresolved` / `--allow-corrections` 只用于临时试跑，报告仍会
+列出被覆盖的项。review 成功后检查 `rendered/` 和 `score.pdf`，再交付。
+
 ### 5. 交付
 
 按 `references/delivery.md` 执行。交付 MusicXML + `.mscz` + PDF + report，说明 verifier
@@ -156,6 +167,7 @@ scripts/preflight.py     只读环境探测，不安装
 scripts/convert.py       PDF -> OMR pages -> scorepipe -> mscz/pdf
 scripts/agent_facts.py   prepare/validate/merge agent 视觉 facts
 scripts/notation_patches.py  音符锚点 map / 受限谱面 patch
+scripts/review.py       逐页 review → pipeline → 渲染报告
 schemas/                 facts 与 notation-patch JSON schema
 scorepipe/               Python pipeline（子模块，含 agent_facts/notation_patches）
 tests/                   回归测试和 Lieder corpus
@@ -166,7 +178,7 @@ SANITY.md                pass 契约审计
 
 ## 当前状态（2026-11）
 
-- `unittest`：190 个测试；`pytest`：270 个测试。
+- `unittest`：192 个测试；`pytest`：272 个测试。
 - Gute Nacht：sounding notes 98.94% / 99.0%（vocal/piano），verifier clean。
 - `aus_meinen_traenen`：91.38% / 90.10%；`die_wetterfahne`：98.97% / 97.75%。
 - `der_lindenbaum` P2 仍是 OMR 质量异常项（约 51%）。

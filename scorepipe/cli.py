@@ -103,15 +103,14 @@ def main(argv: list[str] | None = None) -> int:
         pages = merged
     else:
         doc = Document.load(path)
+    patches_payload = None
     if args.patches:
-        patches = load_patches(args.patches)
-        problems = validate_patches(patches, doc)
+        patches_payload = load_patches(args.patches)
+        problems = validate_patches(patches_payload, doc)
         if problems:
             for problem in problems:
                 print(f"patches: {problem}")
             return 1
-        changed = apply_patches(doc, patches)
-        print(f"patches: {changed} octave direction(s)")
     ctx = Context(facts=facts, pages=pages)
     report = run_pipeline(
         doc,
@@ -123,6 +122,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     _print_report(report, args.trace)
     _write_report(report, args.report)
+    if patches_payload is not None:
+        changed = apply_patches(doc, patches_payload)
+        print(f"patches: {changed} octave direction(s)")
     if args.output and not args.check:
         doc.save(args.output)
     if args.compare_golden:

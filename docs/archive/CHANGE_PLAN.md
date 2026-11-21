@@ -24,6 +24,7 @@ kept because they explain the current code; open items are the hand-off list for
 | Skill packaging | SKILL.md, preflight, end-to-end wrapper, references |
 | Agent visual facts | page packet, evidence validation, page coverage, corrections review |
 | Constrained notation patches | `ottava` prototype compiles 8va/8vb to MusicXML octave-shift; render verified |
+| Delivery review loop | `scripts/review.py` blocks incomplete coverage/unresolved/corrections, runs pipeline and writes before/after review report |
 
 ## Deferred / next
 

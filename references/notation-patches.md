@@ -33,6 +33,19 @@ Ottava spanner.
 `start`/`end` are 1-based measure numbers and 0-based quarter-note beats. Both anchors must exist
 and `end` must be after `start`. `page` and `bbox`/`crop` are required evidence fields.
 
+## Modes
+
+`mode` is optional; the default is `add`.
+
+| mode | behavior |
+|---|---|
+| `add` | add a new spanner |
+| `replace` | remove all octave shifts on the target staff, then add this one |
+| `remove` | remove all octave shifts on the target staff |
+
+For a wrong OMR 8va on the bass staff, use `remove` on staff 2 and `add` on staff 1. Do not let a
+single patch silently move a spanner between staves.
+
 ## Workflow
 
 ```bash

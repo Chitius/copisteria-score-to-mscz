@@ -16,6 +16,30 @@ from .core.document import Document
 OTTAAVA_SUBTYPES = {"8va": "up", "8vb": "down"}
 
 
+def score_map(doc: Document) -> dict:
+    """Stable note anchors for an agent choosing patch start/end positions."""
+    measures = []
+    for number, measure in doc.iter_measures():
+        staves: dict[str, list[dict]] = {}
+        for event in doc.events(measure):
+            if event.rest:
+                continue
+            pitch = event.element.findtext("pitch/step")
+            octave = event.element.findtext("pitch/octave")
+            if not pitch or not octave:
+                continue
+            staves.setdefault(event.staff, []).append(
+                {
+                    "voice": event.voice,
+                    "onset": round(event.onset, 4),
+                    "duration": round(event.duration, 4),
+                    "pitch": f"{pitch}{octave}",
+                }
+            )
+        measures.append({"number": number, "staves": staves})
+    return {"measures": measures}
+
+
 def load_patches(path: str | Path | None) -> dict:
     if not path:
         return {"patches": []}
@@ -36,6 +60,8 @@ def validate_patches(payload: dict, doc: Document | None = None) -> list[str]:
         if patch.get("op") != "ottava":
             problems.append(f"{prefix}: unsupported op {patch.get('op')!r}")
             continue
+        if patch.get("mode") not in (None, "add", "replace", "remove"):
+            problems.append(f"{prefix}: mode must be add/replace/remove")
         if patch.get("subtype") not in OTTAAVA_SUBTYPES:
             problems.append(f"{prefix}: subtype must be 8va or 8vb")
         if not isinstance(patch.get("staff"), int) or patch["staff"] < 1:
@@ -75,6 +101,11 @@ def apply_patches(doc: Document, payload: dict) -> int:
         end = patch["end"]
         subtype = patch["subtype"]
         staff = str(patch["staff"])
+        mode = patch.get("mode") or "add"
+        if mode in ("replace", "remove"):
+            changed += remove_octave_shifts(doc, staff)
+        if mode == "remove":
+            continue
         number = str(patch.get("number") or next_number)
         next_number += 1
         start_measure = measures[start["measure"] - 1]
@@ -99,6 +130,40 @@ def apply_patches(doc: Document, payload: dict) -> int:
         )
         changed += 2
     return changed
+
+
+def remove_octave_shifts(doc: Document, staff: str) -> int:
+    """Remove all octave-shift directions on one staff; returns directions removed."""
+    removed = 0
+    for measure in doc.measures():
+        for direction in list(measure.findall("direction")):
+            if direction.find("direction-type/octave-shift") is None:
+                continue
+            if (direction.findtext("staff") or "1") != staff:
+                continue
+            measure.remove(direction)
+            removed += 1
+    return removed
+
+
+def list_octave_shifts(doc: Document) -> list[dict]:
+    """Read back the octave shifts so a review can compare them with the page."""
+    result = []
+    for number, measure in doc.iter_measures():
+        for direction in measure.findall("direction"):
+            shift = direction.find("direction-type/octave-shift")
+            if shift is None:
+                continue
+            result.append(
+                {
+                    "measure": number,
+                    "staff": direction.findtext("staff") or "1",
+                    "type": shift.get("type"),
+                    "size": shift.get("size"),
+                    "number": shift.get("number"),
+                }
+            )
+    return result
 
 
 def _insert_octave(measure, beat: float, staff: str, kind: str, direction: str, number: str, divisions: float) -> None:
