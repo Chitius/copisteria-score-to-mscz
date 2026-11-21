@@ -190,6 +190,21 @@ scorepipe scan.pdf --omr 'python -m copisteria.cli {pdf} {outdir}' --omr-dir out
 the directory is merged exactly like `--omr` pages / a page directory, and the page model is
 available to the restoration passes.
 
+## OpenScore Lieder corpus
+
+`tests/corpus/lieder` holds an OpenScore Lieder case with both directions of the test:
+
+- `gute_nacht.mxl` / `ground_truth.musicxml` — the human-transcribed source score;
+- `input.pdf` — a MuseScore 4 render of that source, used as synthetic OMR input;
+- `build_case.py` — extract the MXL rootfile and render the PDF;
+- `compare_parts.py` — compare multi-part OMR output to the ground truth by
+  `(measure, onset, pitch, duration)`, with active-division normalisation.
+
+Gute Nacht is two parts (vocal + piano, 105 measures). Copisteria's partial output matches it at
+98.24% / 98.38% by part; the vocal part is also verifier-clean after the structural pipeline. The
+piano part still makes the structural fixed point unstable at its last measure, so it remains an
+OMR-comparison case. See `tests/corpus/lieder/README.md` for provenance and rebuild commands.
+
 ## Combined driver
 
 `--mscz-out` runs the whole chain in one command: structural fixpoint on MusicXML, MuseScore

@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 156 tests
+Ran 159 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -33,6 +33,7 @@ Coverage:
 | adjacent slur-chain merging | `test_slur_chains.py` |
 | beam group restoration | `test_beams.py` |
 | facts text styling / alignment | `test_facts.py`, `test_display_facts.py` |
+| OpenScore Lieder ground-truth corpus | `test_lieder_corpus.py` |
 | page-level arpeggio/articulation/wedge restoration | `test_page_notation.py` |
 | external OMR command front-end | `test_omr.py` |
 | PDF text layer, measure-box assignment | `test_pdf_producer.py` |
@@ -85,7 +86,14 @@ scorepipe laputa.musicxml --check --report laputa.json
   now rescales every page to the LCM divisions and the full structural run is stable with **1**
   remaining violation (m54: 6 beats in 4/4) and a 12.97% mismatch. m54 looks like a genuine 4+2
   measure split (old baseline had m54=4, m55=2), not another division error; the showcase summer
-  artifacts remain display-only from the stable baseline until measure splitting is implemented.
+  artifacts are now the full-pipeline result, with that one known violation.
+- OpenScore Lieder `Gute Nacht` (`tests/corpus/lieder/gute_nacht`): the source MXL is the ground
+  truth and a MuseScore-rendered A4 PDF is the synthetic OMR input. Copisteria's output matches the
+  ground truth at 98.24% (vocal, 3 missing / 3 extra) and 98.38% (piano, 14 / 17). The vocal part
+  passes the structural pipeline cleanly with the same match; the piano part still makes the
+  structural fixed point unstable at its final measure and is kept as an OMR-comparison case. The
+  corpus comparator normalises active divisions and matches `(measure, onset, pitch, duration)`
+  multisets (`test_lieder_corpus.py`).
 - `laputa` **page directory** (copisteria output: 3 files, 26 / 23 / 14 measures): merged to one
   63-measure score by `merge_pages`, then verifier clean. On this run `restore_page_pedals`
   reported 36 adjustments and `restore_page_wedges` 20; the structural phase converged in 3 rounds.

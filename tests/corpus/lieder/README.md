@@ -1,0 +1,42 @@
+# OpenScore Lieder corpus cases
+
+These cases use the public [OpenScore Lieder](https://github.com/OpenScore/Lieder) transcriptions as
+**ground truth**.  The original `.mxl` is kept unchanged; `ground_truth.musicxml` is its root
+MusicXML extracted from the MXL container; `input.pdf` is rendered by MuseScore 4 and is the
+synthetic OMR input.  This is a clean-render benchmark, not a scan benchmark: it tests the symbolic
+pipeline and OMR on ideal engraving, not paper noise or skew.
+
+The OpenScore score page for Gute Nacht says "OpenScore (CC0)"; check the upstream repository's
+current licence before redistributing a larger corpus.
+
+## Gute Nacht (Schubert, Winterreise D.911 No.1)
+
+- source: `lc5015378.mxl` from OpenScore Lieder
+- score: 2 parts (vocal + piano), 105 measures
+- files:
+  - `gute_nacht.mxl` — original compressed MusicXML
+  - `ground_truth.musicxml` — extracted source MusicXML
+  - `input.pdf` — 4-page A4 render used as OMR input
+
+Baseline comparison from one copisteria run of `input.pdf` (old converter exits after writing the
+MusicXML because the vocal part has no `<voice>` elements; the partial output is still readable):
+
+| part | notes | missing | extra | match |
+|---|---:|---:|---:|---:|
+| P1 vocal | 340 | 3 | 3 | 98.24% |
+| P2 piano | 1911 | 14 | 17 | 98.38% |
+
+The P1 pipeline (`scorepipe .../P1.musicxml`) is verifier-clean and keeps the same 98.24% note
+match.  The P2 piano part still makes the structural fixed point unstable at its final measure, so
+treat P2 as an OMR-comparison case until that is fixed.
+
+## Rebuild
+
+```powershell
+python tests/corpus/lieder/build_case.py path/to/lc5015378.mxl tests/corpus/lieder/gute_nacht
+python tests/corpus/lieder/compare_parts.py \
+  tests/corpus/lieder/gute_nacht/ground_truth.musicxml omr-output.musicxml
+```
+
+The comparator normalises each part to beats and matches notes by
+`(measure, onset, pitch, duration)`, so chord layout and voice numbering do not affect the score.
