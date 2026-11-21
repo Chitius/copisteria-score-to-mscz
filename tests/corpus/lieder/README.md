@@ -46,6 +46,10 @@ A shorter run on `aus_meinen_traenen` gives raw OMR sounding matches of 91.38% (
 event lost. Its source has a pickup measure numbered 0, which the comparator aligns by measure ordinal
 rather than by the printed number.
 
+`die_wetterfahne` gives raw OMR 98.97% (vocal) and 97.75% (piano); the pipeline keeps both scores,
+is verifier-clean, and loses no correct sounding event (P2 adds two hidden rests). `der_lindenbaum`
+is the remaining case without an OMR run.
+
 The P1 pipeline (`scorepipe .../P1.musicxml`) is verifier-clean and keeps the same 98.94% sounding
 match.  The P2 piano part also converges (2 rounds, clean verifier) and matches the ground truth at
 98.64% overall / 99.0% on sounding notes after the pipeline; `merge_staff_voices` protects a notated
