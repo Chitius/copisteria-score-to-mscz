@@ -41,11 +41,12 @@ The corpus comparator's primary `match` scores sounding notes only; rest layout 
 separately (`rest_missing` / `rest_extra` / `overall_match`) because secondary-voice rests may be
 hidden by the display layer.
 
-A shorter additional run on `aus_meinen_traenen` gives a raw OMR baseline of 85.51% (vocal) and
-82.04% (piano); its source has a pickup measure numbered 0, which the comparator aligns by measure
-ordinal rather than by the printed number.
+A shorter run on `aus_meinen_traenen` gives raw OMR sounding matches of 91.38% (vocal) and 89.58%
+(piano); after the pipeline they are 91.38% and 90.10% with clean verifiers and no correct sounding
+event lost. Its source has a pickup measure numbered 0, which the comparator aligns by measure ordinal
+rather than by the printed number.
 
-The P1 pipeline (`scorepipe .../P1.musicxml`) is verifier-clean and keeps the same 98.24% note
+The P1 pipeline (`scorepipe .../P1.musicxml`) is verifier-clean and keeps the same 98.94% sounding
 match.  The P2 piano part also converges (2 rounds, clean verifier) and matches the ground truth at
 98.64% overall / 99.0% on sounding notes after the pipeline; `merge_staff_voices` protects a notated
 sustained note when merging would shorten it into another voice's run (m5 D4), and treats rest onsets
