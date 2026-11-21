@@ -210,6 +210,34 @@ class MergeStaffVoicesTest(unittest.TestCase):
         self.assertEqual(len(sustained), 1)
         self.assertEqual(sustained[0].voice, "2")
 
+    def test_a_rest_between_notes_stops_the_previous_note(self):
+        first = (
+            '<measure number="1"><attributes><divisions>4</divisions>'
+            "<time><beats>2</beats><beat-type>4</beat-type></time></attributes>"
+            '<note><pitch><step>C</step><octave>4</octave></pitch>'
+            "<duration>8</duration><voice>1</voice></note></measure>"
+        )
+        second = (
+            '<measure number="2"><attributes><divisions>4</divisions></attributes>'
+            '<note><pitch><step>A</step><octave>3</octave></pitch>'
+            '<duration>4</duration><voice>1</voice><type>quarter</type></note>'
+            '<note><rest/><duration>4</duration><voice>1</voice><type>quarter</type></note>'
+            "<backup><duration>8</duration></backup>"
+            "<forward><duration>4</duration></forward>"
+            '<note><pitch><step>A</step><octave>4</octave></pitch>'
+            '<duration>2</duration><voice>2</voice><type>eighth</type></note>'
+            '<note><rest/><duration>2</duration><voice>2</voice><type>eighth</type></note>'
+            "</measure>"
+        )
+        doc = Document(ElementTree.fromstring(PART.format(measures=first + second)))
+        MERGE_STAFF_VOICES.run(doc, Context())
+        events = doc.events(doc.measures()[1])
+        a4 = [event for event in events if not event.rest and event.element.findtext("pitch/octave") == "4"]
+        rests = [event for event in events if event.rest]
+        self.assertEqual([event.duration for event in a4], [0.5])
+        self.assertEqual([event.onset for event in rests], [1.5])
+        self.assertEqual([event.duration for event in rests], [0.5])
+
 
 if __name__ == "__main__":
     unittest.main()

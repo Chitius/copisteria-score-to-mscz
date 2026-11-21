@@ -71,7 +71,7 @@ def _merge(doc: Document, measure) -> bool:
         notes = [event for event in staff_events if not event.rest and event.element.find("pitch") is not None]
         if not notes:
             continue
-        all_onsets = sorted({round(event.onset, 4) for event in notes})
+        all_onsets = sorted({round(event.onset, 4) for event in staff_events})
         if all_onsets[0] < -1e-6 or all_onsets[-1] >= bar - 1e-6:
             continue
         protected = _protected_notes(notes, all_onsets, bar)

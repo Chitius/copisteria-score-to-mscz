@@ -43,8 +43,9 @@ ordinal rather than by the printed number.
 
 The P1 pipeline (`scorepipe .../P1.musicxml`) is verifier-clean and keeps the same 98.24% note
 match.  The P2 piano part also converges (2 rounds, clean verifier) and matches the ground truth at
-97.70% after the pipeline; `merge_staff_voices` protects a notated sustained note in a sparse voice
-when merging would shorten it into another voice's run (m5 D4).
+97.96% after the pipeline; `merge_staff_voices` protects a notated sustained note in a sparse voice
+when merging would shorten it into another voice's run (m5 D4), and treats rest onsets as merge
+boundaries so an intentional rest is not deleted (m25).
 
 ## Rebuild
 

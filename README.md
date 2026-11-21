@@ -206,10 +206,11 @@ Gute Nacht is two parts (vocal + piano, 105 measures). Copisteria's partial outp
 piano part initially looked non-convergent because `merge_staff_voices` defaulted an inherited 2/4
 measure to 4/4; after using the carried meter it converges in 2 rounds. The merge now protects a
 properly notated sustained note in a sparse voice when the merge would shorten it into another
-voice's run (the m5 quarter note); with that guard the post-pipeline match is 97.70%. Applying the
-same protection to every voice fixed the m2 chord duration too, but made laputa's page slurs
-oscillate, so the guard is deliberately limited to sparse voices. See
-`tests/corpus/lieder/README.md` for provenance and rebuild commands.
+voice's run (the m5 quarter note), and rest onsets are merge boundaries so an intentional rest is not
+deleted (m25); with those guards the post-pipeline match is 97.96%. Applying the sustained-note guard
+to every voice fixed the m2 chord duration too, but made laputa's page slurs oscillate, so it is
+deliberately limited to sparse voices. See `tests/corpus/lieder/README.md` for provenance and rebuild
+commands.
 
 ## Combined driver
 
