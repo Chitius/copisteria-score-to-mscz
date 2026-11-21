@@ -116,6 +116,8 @@ python scripts/convert.py "score.pdf" --pages path/to/omr-pages \
   --facts review/facts/facts.json --outdir "out/score"
 ```
 
+`merge --pages N` 会检查所有页是否都已复核；缺页默认拒绝。`merge` 同时写出
+`facts-corrections.json`（音高/时值疑点，不会自动注入）和 `facts-report.json`。
 看不清的内容放进 `unresolved`，不要猜。视觉复核至少渲染 `.mscz` 为 PDF 并栅格化，检查：
 
 - 首尾系统、页缝；
@@ -148,9 +150,9 @@ SANITY.md                pass 契约审计
 
 ## 当前状态（2026-11）
 
-- `unittest`：185 个测试；`pytest`：265 个测试。
+- `unittest`：187 个测试；`pytest`：267 个测试。
 - Gute Nacht：sounding notes 98.94% / 99.0%（vocal/piano），verifier clean。
 - `aus_meinen_traenen`：91.38% / 90.10%；`die_wetterfahne`：98.97% / 97.75%。
 - `der_lindenbaum` P2 仍是 OMR 质量异常项（约 51%）。
-- 已知交付阶段缺口：agent/视觉 facts 已有 prepare/validate/merge 和证据校验；真实交付还需要
-  逐页视觉复核和人工确认 unresolved 项。
+- 已知交付阶段缺口：agent/视觉 facts 已有 prepare/validate/merge、页面覆盖检查、unresolved 和
+  独立 correction review；真实交付还需要逐页复核并人工处理 unresolved/corrections。

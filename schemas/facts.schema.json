@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/score-omr/facts.schema.json",
-  "title": "score-omr facts",
+  "$id": "https://example.invalid/copisteria-to-mscz/facts.schema.json",
+  "title": "copisteria-to-mscz facts",
   "type": "object",
   "additionalProperties": true,
   "properties": {
@@ -54,6 +54,29 @@
           {"required": ["tempo"]},
           {"required": ["metronome"]}
         ]
+      }
+    },
+    "corrections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["measure", "from", "to"],
+        "additionalProperties": true,
+        "properties": {
+          "measure": {"type": "integer", "minimum": 1},
+          "beat": {"type": "number", "minimum": 0},
+          "staff": {"type": "integer", "minimum": 1},
+          "voice": {"type": "integer", "minimum": 1},
+          "from": {"type": "string", "minLength": 1},
+          "to": {"type": "string", "minLength": 1},
+          "status": {"type": "string", "enum": ["proposed", "accepted", "rejected"]},
+          "page": {"type": "integer", "minimum": 1},
+          "bbox": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+          "bbox_space": {"type": "string", "enum": ["pdf-points", "image-px"]},
+          "crop": {"type": "string"},
+          "evidence": {"type": "string", "minLength": 1},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
       }
     }
   }

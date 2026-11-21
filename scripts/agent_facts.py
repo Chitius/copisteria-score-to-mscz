@@ -87,17 +87,23 @@ def _instructions(payload: dict) -> str:
   ],
   "unresolved": [
     {{"page": 1, "measure": 3, "reason": "text is clipped; cannot decide whether it is a tempo term"}}
+  ],
+  "corrections": [
+    {{"measure": 30, "beat": 3.5, "staff": 1, "from": "C8", "to": "C7",
+     "page": 1, "bbox": [x0, y0, x1, y1], "evidence": "ledger-line octave looks one too high",
+     "confidence": 0.4, "status": "proposed"}}
   ]
 }}
 ```
 
 要求：
 
-- 每个 credit/mark 必须有 `page`、`evidence`，以及 PDF 坐标 `bbox` 或裁图 `crop`；
+- 每个 credit/mark/correction 必须有 `page`、`evidence`，以及 PDF 坐标 `bbox` 或裁图 `crop`；
 - `confidence` 是 0–1 的小数；
 - `measure` 从 1 开始，`beat` 从 0 开始；
 - 不存在的标记不要编造；看不清就放 `unresolved`；
-- 先只提取文字/速度/排练号/credit，不做音高或时值修改。
+- 音高疑点只能放 `corrections`，不要写进 `marks`；默认 `status="proposed"`，不要自行声称已批准；
+- 每一页都要在 `producer.pages` 中声明；`merge --pages N` 默认要求全部页覆盖。
 
 ## 命令
 
@@ -149,7 +155,9 @@ def validate(args: argparse.Namespace) -> int:
     for problem in problems:
         print(problem)
     print(f"agent facts: {len(payload.get('credits') or [])} credits, "
-          f"{len(payload.get('marks') or [])} marks, {len(payload.get('unresolved') or [])} unresolved")
+          f"{len(payload.get('marks') or [])} marks, "
+          f"{len(payload.get('corrections') or [])} corrections, "
+          f"{len(payload.get('unresolved') or [])} unresolved")
     return 0 if not problems else 1
 
 
@@ -167,7 +175,35 @@ def merge(args: argparse.Namespace) -> int:
     destination = Path(args.output)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    covered = sorted(merged["producer"].get("pages") or [])
+    missing_pages = []
+    if args.pages:
+        missing_pages = [page for page in range(1, args.pages + 1) if page not in covered]
+    corrections_path = destination.with_name(destination.stem + "-corrections.json")
+    corrections_path.write_text(
+        json.dumps(merged.get("corrections") or [], ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    report = {
+        "expected_pages": args.pages,
+        "covered_pages": covered,
+        "missing_pages": missing_pages,
+        "credits": len(merged.get("credits") or []),
+        "marks": len(merged.get("marks") or []),
+        "unresolved": merged.get("unresolved") or [],
+        "corrections": merged.get("corrections") or [],
+        "complete": not missing_pages and not merged.get("unresolved"),
+    }
+    report_path = destination.with_name(destination.stem + "-report.json")
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"wrote {destination}")
+    print(f"corrections: {corrections_path}")
+    print(f"review report: {report_path}")
+    if missing_pages:
+        print(f"missing reviewed pages: {missing_pages}")
+        if not args.allow_missing_pages:
+            print("refusing incomplete page coverage (use --allow-missing-pages to override)")
+            return 1
     return 0
 
 
@@ -193,6 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     combine.add_argument("-o", "--output", required=True)
     combine.add_argument("--pages", type=int)
     combine.add_argument("--measures", type=int)
+    combine.add_argument("--allow-missing-pages", action="store_true")
     combine.set_defaults(func=merge)
 
     args = parser.parse_args(argv)

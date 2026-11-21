@@ -66,7 +66,7 @@ def validate_agent_facts(
     producer = payload.get("producer")
     if producer is not None and not isinstance(producer, dict):
         problems.append("producer must be an object")
-    for field in ("credits", "marks", "unresolved"):
+    for field in ("credits", "marks", "unresolved", "corrections"):
         value = payload.get(field)
         if value is not None and not isinstance(value, list):
             problems.append(f"{field} must be an array")
@@ -93,6 +93,24 @@ def validate_agent_facts(
         beat = mark.get("beat")
         if beat is not None and (not isinstance(beat, (int, float)) or beat < 0):
             problems.append(f"{prefix}: beat must be a non-negative number")
+
+    for index, correction in enumerate(payload.get("corrections") or []):
+        prefix = f"corrections[{index}]"
+        _common_evidence(correction, prefix, problems, page_count)
+        if not isinstance(correction.get("measure"), int) or correction["measure"] < 1:
+            problems.append(f"{prefix}: measure must be a positive integer")
+        elif measure_count is not None and correction["measure"] > measure_count:
+            problems.append(f"{prefix}: measure {correction['measure']} exceeds {measure_count}")
+        old = correction.get("from")
+        new = correction.get("to")
+        if not isinstance(old, str) or not old.strip():
+            problems.append(f"{prefix}: from must be a non-empty pitch")
+        if not isinstance(new, str) or not new.strip():
+            problems.append(f"{prefix}: to must be a non-empty pitch")
+        if old and new and old.strip().upper() == new.strip().upper():
+            problems.append(f"{prefix}: from and to are identical")
+        if correction.get("status") not in (None, "proposed", "accepted", "rejected"):
+            problems.append(f"{prefix}: status must be proposed/accepted/rejected")
 
     for index, item in enumerate(payload.get("unresolved") or []):
         prefix = f"unresolved[{index}]"
@@ -147,10 +165,12 @@ def merge_agent_facts(parts: list[dict]) -> dict:
         "credits": [],
         "marks": [],
         "unresolved": [],
+        "corrections": [],
     }
     pages: set[int] = set()
     seen_credits: set[tuple] = set()
     seen_marks: set[tuple] = set()
+    seen_corrections: set[tuple] = set()
     for part in parts:
         part = normalize_agent_facts(part)
         producer = part.get("producer") or {}
@@ -175,6 +195,19 @@ def merge_agent_facts(parts: list[dict]) -> dict:
                 continue
             seen_marks.add(key)
             merged["marks"].append(mark)
+        for correction in part.get("corrections") or []:
+            key = (
+                correction.get("measure"),
+                round(float(correction.get("beat") or 0), 4),
+                correction.get("staff"),
+                correction.get("voice"),
+                (correction.get("from") or "").strip().upper(),
+                (correction.get("to") or "").strip().upper(),
+            )
+            if key in seen_corrections:
+                continue
+            seen_corrections.add(key)
+            merged["corrections"].append(correction)
         merged["unresolved"].extend(part.get("unresolved") or [])
     merged["producer"]["pages"] = sorted(pages)
     return merged

@@ -27,7 +27,7 @@ kept because they explain the current code; open items are the hand-off list for
 
 | Item | Why it is deferred |
 |---|---|
-| Agent/vision facts extraction | workflow skeleton exists (prepare/validate/merge); page-by-page vision and unresolved review still delivery work |
+| Agent/vision facts extraction | workflow exists (prepare/validate/merge/coverage/corrections); page-by-page review and resolution UX are the remaining delivery work |
 | Full `BeamGrouper` | same-value runs still rebuild as one run; compound metre and source boundaries need a dedicated model |
 | Tuplet-preserving voice merge | current safe behavior skips tuplet measures; proper ratios/nested tuplets are a separate design |
 | Lindenbaum P2 | raw OMR is ~51%; pipeline currently ~51.4%; not a converter regression |

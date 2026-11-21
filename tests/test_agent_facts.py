@@ -66,6 +66,44 @@ class AgentFactsTest(unittest.TestCase):
         self.assertTrue(any("exceeds 2" in problem for problem in problems))
         self.assertTrue(any("exceeds 31" in problem for problem in problems))
 
+    def test_valid_correction_is_accepted_but_not_a_mark(self):
+        data = payload(
+            corrections=[
+                {
+                    "measure": 30,
+                    "beat": 3.5,
+                    "staff": 1,
+                    "from": "C8",
+                    "to": "C7",
+                    "page": 1,
+                    "bbox": [1, 2, 3, 4],
+                    "evidence": "ledger-line octave looks one too high",
+                    "confidence": 0.4,
+                    "status": "proposed",
+                }
+            ]
+        )
+        self.assertEqual(validate_agent_facts(data, page_count=1, measure_count=31), [])
+        merged = merge_agent_facts([data])
+        self.assertEqual(len(merged["corrections"]), 1)
+        self.assertEqual(len(merged["marks"]), 1)
+
+    def test_identical_pitch_correction_is_rejected(self):
+        data = payload(
+            corrections=[
+                {
+                    "measure": 30,
+                    "from": "C8",
+                    "to": "C8",
+                    "page": 1,
+                    "bbox": [1, 2, 3, 4],
+                    "evidence": "no change",
+                }
+            ]
+        )
+        problems = validate_agent_facts(data)
+        self.assertTrue(any("identical" in problem for problem in problems))
+
     def test_merge_deduplicates_same_claim(self):
         merged = merge_agent_facts([payload(), payload()])
         self.assertEqual(len(merged["credits"]), 1)

@@ -108,6 +108,43 @@ python scripts/convert.py score.pdf --pages path/to/omr-pages \
   --facts review/facts/facts.json --outdir out/score
 ```
 
+`merge` writes three files:
+
+- `facts.json` — credits/marks for injection (corrections are also retained for audit);
+- `facts-corrections.json` — a separate pitch/rhythm correction review;
+- `facts-report.json` — covered pages, missing pages, unresolved claims and counts.
+
+Pitch corrections are **never injected automatically**. A correction has `from`, `to`, page,
+bbox and evidence; it starts as `"status": "proposed"`. Review it with a human before applying
+anything.
+
+### 4. Page coverage
+
+`merge --pages N` refuses incomplete coverage by default. Use `--allow-missing-pages` only for a
+partial/interim review, and keep `missing_pages` in the report.
+
+### 5. Correction review
+
+A visible pitch/rhythm anomaly belongs in a separate `corrections` array, never in `marks`:
+
+```json
+{
+  "measure": 30,
+  "beat": 3.5,
+  "staff": 1,
+  "from": "C8",
+  "to": "C7",
+  "status": "proposed",
+  "page": 2,
+  "bbox": [100, 900, 140, 940],
+  "evidence": "ledger-line octave looks one too high",
+  "confidence": 0.4
+}
+```
+
+`merge` writes `facts-corrections.json`. It is a review queue: it is not injected into the score
+automatically, and `status` must be `proposed` until a human accepts or rejects it.
+
 Re-render after injection. A fact is not finished until the credit/mark appears in the expected
 place. Keep unresolved claims in the report; do not turn them into guessed facts.
 

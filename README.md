@@ -127,8 +127,8 @@ original wording in evidence. See [`references/facts.md`](references/facts.md).
 Tests:
 
 ```text
-python -m unittest discover -s tests   # 185 tests
-python -m pytest tests -q              # 265 tests
+python -m unittest discover -s tests   # 187 tests
+python -m pytest tests -q              # 267 tests
 ```
 
 Corpus (sounding-note match; rests excluded from the primary score):
@@ -150,8 +150,9 @@ Recent Sincerely-specific fixes:
 
 ## Known limitations
 
-- Agent/vision fact extraction has page preparation, evidence validation and merge; real delivery
-  still needs per-page review and resolving `unresolved` claims.
+- Agent/vision fact extraction has page preparation, coverage checking, evidence validation, merge,
+  and a separate corrections review; real delivery still needs per-page review and resolving
+  `unresolved`/`corrections`.
 - Same-value beam runs are still rebuilt as one group; a full compound-metre `BeamGrouper` is
   future work.
 - Voice merge skips tuplet measures rather than preserving nested ratios.
