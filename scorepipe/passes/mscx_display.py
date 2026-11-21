@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from xml.etree import ElementTree
 
 from ..core.mscx import MsxcDocument, has_text, note_count
@@ -103,6 +104,74 @@ class DropPaddingVoices:
         return PassResult(changed=changed)
 
 
+class DropSecondaryVoiceRests:
+    spec = PassSpec(
+        name="drop_secondary_voice_rests",
+        phase=Phase.DISPLAY,
+        kind=Kind.MECHANICAL,
+        owns=("secondary-voice-rests",),
+        description="drop rests on secondary voices; voice 1 already defines the measure's beats",
+        measure="rests on voices other than the primary voice",
+    )
+
+    def run(self, doc: MsxcDocument, ctx: Context) -> PassResult:
+        changed = 0
+        for _staff, _index, measure in doc.iter_measures():
+            voices = doc.voices(measure)
+            if len(voices) < 2:
+                continue
+            primary = next((voice for voice in voices if voice.findall("Chord")), None)
+            if primary is None:
+                continue
+            for voice in voices:
+                if voice is primary or has_text(voice):
+                    continue
+                if not voice.findall("Chord"):
+                    continue
+                changed += _hide_secondary_rests(voice)
+        return PassResult(changed=changed)
+
+
+def _hide_secondary_rests(voice) -> int:
+    """Rests before a later chord become <location> gaps; rests after the last chord disappear."""
+    children = list(voice)
+    last_chord = max((index for index, child in enumerate(children) if child.tag == "Chord"), default=-1)
+    changed = 0
+    for index, child in enumerate(children):
+        if child.tag != "Rest":
+            continue
+        if index > last_chord:
+            voice.remove(child)
+            changed += 1
+            continue
+        length = _rest_beats(child)
+        if length <= 0:
+            continue
+        location = ElementTree.Element("location")
+        fraction = Fraction(int(round(length * 4)), 16).limit_denominator(64)
+        ElementTree.SubElement(location, "fractions").text = f"{fraction.numerator}/{fraction.denominator}"
+        position = list(voice).index(child)
+        voice.remove(child)
+        voice.insert(position, location)
+        changed += 1
+    return changed
+
+
+def _rest_beats(rest) -> float:
+    base = {
+        "breve": 8.0,
+        "whole": 4.0,
+        "half": 2.0,
+        "quarter": 1.0,
+        "eighth": 0.5,
+        "16th": 0.25,
+        "32nd": 0.125,
+        "64th": 0.0625,
+    }.get(rest.findtext("durationType"), 0.0)
+    dots = len(rest.findall("dot"))
+    return base * (2.0 - 1.0 / (2**dots)) if dots else base
+
+
 class CanonicalVoiceOrder:
     spec = PassSpec(
         name="canonical_voice_order",
@@ -136,4 +205,5 @@ class CanonicalVoiceOrder:
         return PassResult(changed=changed)
 
 
-DISPLAY_PASSES = [DropTextVoiceRests(), UnhideRealRests(), DropPaddingVoices(), CanonicalVoiceOrder()]
+DISPLAY_PASSES = [DropTextVoiceRests(), UnhideRealRests(), DropPaddingVoices(), CanonicalVoiceOrder(), DropSecondaryVoiceRests()]
+

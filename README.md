@@ -69,6 +69,7 @@ Implemented passes:
 | `drop_text_voice_rests` | display | `text-voice-rests` | rests inside text-only voices |
 | `unhide_real_rests` | display | `rest-visibility` | hidden non-measure rests |
 | `drop_padding_voices` | display | `padding-voices` | rest-only voices next to a chord voice |
+| `drop_secondary_voice_rests` | display | `secondary-voice-rests` | rests on voices other than voice 1 |
 | `canonical_voice_order` | display | `voice-order` | voice slots out of canonical order |
 | `dedupe_pedal_spanners` | display | `pedal-spanners` | duplicate pedal spanners |
 | `dedupe_text_objects` | display | `display-text-duplicates` | duplicate text objects in a measure |

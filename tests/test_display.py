@@ -126,3 +126,22 @@ class PaddingVoiceContentTest(unittest.TestCase):
         self.assertEqual(len(measure.findall('voice')), 1)
         self.assertEqual(len(measure.findall('.//Rest')), 0)
         self.assertEqual(len(measure.findall('.//Clef')), 1)
+
+    def test_secondary_voice_rests_become_gaps(self):
+        doc = MsxcDocument(ElementTree.fromstring('''
+          <museScore><Score><Staff id="1"><Measure>
+            <voice><Chord><durationType>whole</durationType><Note><pitch>60</pitch></Note></Chord></voice>
+            <voice>
+              <Rest><durationType>quarter</durationType></Rest>
+              <Chord><durationType>quarter</durationType><Note><pitch>67</pitch></Note></Chord>
+              <Rest><durationType>half</durationType></Rest>
+            </voice>
+          </Measure></Staff></Score></museScore>'''))
+        run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        measure = doc.root.find('Score/Staff/Measure')
+        secondary = next(voice for voice in measure.findall('voice') if voice.find('.//Note[pitch="67"]') is not None)
+        self.assertEqual(len(secondary.findall('Rest')), 0)
+        self.assertEqual(secondary.find('location/fractions').text, '1/4')
+        self.assertEqual(len(measure.findall('voice')), 2)
+        again = run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        self.assertEqual(again.changes, 0)

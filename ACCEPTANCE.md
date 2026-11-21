@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 135 tests
+Ran 136 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -62,7 +62,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-40 entries: 25 structural (24 mechanical + 1 analysis), 2 inject, 13 display. Every mechanical pass
+41 entries: 25 structural (24 mechanical + 1 analysis), 2 inject, 14 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -125,6 +125,12 @@ scorepipe laputa.musicxml --check --report laputa.json
   mark on its base note, and removes marks from single-note fragments. The m1 mscx now has
   `Arpeggio = True` on the 7-note chord and none on F6 (`test_page_restore.py`,
   `test_page_notation.py`).
+- **Secondary-voice rests** (display): voice 1 defines the bar, so rests on later voices are
+  redundant glyphs. `drop_secondary_voice_rests` replaces a secondary rest before a later chord with
+  a `<location>` gap (timing unchanged) and removes rests after the last chord. The old skill had the
+  narrower `hide_covered_rests`, which only hid a rest fully covered by another voice's sound; m29's
+  trailing bass rest was outside that rule. The generated m29 now matches the hand-edited mscz:
+  voice 2 is `<location>1/4</location> + chord`, no rest (`test_display.py`).
 - **MuseScore's incomplete-measure warnings** (mscx `measure_lengths` verifier): the laputa mscz
   now reports **0** flagged measures. It started at 12: eleven were text-only/empty voice slots
   (moved into the chord voice or removed) and the last was m33's overlapping rests, which the
