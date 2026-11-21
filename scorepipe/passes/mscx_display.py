@@ -1,4 +1,4 @@
-"""Mechanical passes on the MuseScore display form (.mscx)."""
+﻿"""Mechanical passes on the MuseScore display form (.mscx)."""
 
 from __future__ import annotations
 
@@ -172,6 +172,130 @@ def _rest_beats(rest) -> float:
     return base * (2.0 - 1.0 / (2**dots)) if dots else base
 
 
+RANGE_SPANNER_TYPES = {
+    "HairPin",
+    "Pedal",
+    "GradualTempoChange",
+    "Ottava",
+    "TextLine",
+    "Volta",
+}
+
+
+class NormalizeRangeSpanners:
+    spec = PassSpec(
+        name="normalize_range_spanners",
+        phase=Phase.DISPLAY,
+        kind=Kind.MECHANICAL,
+        owns=("range-spanner-anchors",),
+        description="anchor time-range spanners on the primary voice instead of a rest carrier",
+        measure="range-spanner endpoints on secondary voices",
+    )
+
+    def run(self, doc: MsxcDocument, ctx: Context) -> PassResult:
+        changed = 0
+        for _staff, _index, measure in doc.iter_measures():
+            voices = doc.voices(measure)
+            if len(voices) < 2:
+                continue
+            primary = next((voice for voice in voices if voice.findall("Chord")), None)
+            if primary is None:
+                continue
+            targets = _anchor_map(primary)
+            for voice in voices:
+                if voice is primary or has_text(voice):
+                    continue
+                moved = 0
+                for spanner in list(voice.findall("Spanner")):
+                    if spanner.get("type") not in RANGE_SPANNER_TYPES:
+                        continue
+                    anchor = _next_anchor(voice, spanner)
+                    if anchor is None:
+                        continue
+                    target = targets.get(round(_anchor_tick(voice, anchor), 4))
+                    if target is None:
+                        continue
+                    voice.remove(spanner)
+                    primary.insert(list(primary).index(target), spanner)
+                    moved += 1
+                if moved:
+                    changed += moved
+                    _drop_rest_carrier(voice, measure)
+        return PassResult(changed=changed)
+
+
+def _element_beats(element) -> float:
+    base = {
+        "breve": 8.0,
+        "whole": 4.0,
+        "half": 2.0,
+        "quarter": 1.0,
+        "eighth": 0.5,
+        "16th": 0.25,
+        "32nd": 0.125,
+        "64th": 0.0625,
+    }.get(element.findtext("durationType"), 0.0)
+    dots = len(element.findall("dot"))
+    return base * (2.0 - 1.0 / (2**dots)) if dots else base
+
+
+def _location_beats(location) -> float:
+    text = location.findtext("fractions") or ""
+    if "/" not in text:
+        return 0.0
+    numerator, denominator = text.split("/", 1)
+    try:
+        return float(numerator) / float(denominator) * 4.0
+    except (ValueError, ZeroDivisionError):
+        return 0.0
+
+
+def _anchor_map(voice) -> dict[float, object]:
+    anchors = {}
+    cursor = 0.0
+    for child in voice:
+        if child.tag == "location":
+            cursor += _location_beats(child)
+        elif child.tag in ("Chord", "Rest"):
+            anchors.setdefault(round(cursor, 4), child)
+            cursor += _element_beats(child)
+    return anchors
+
+
+def _anchor_tick(voice, anchor) -> float:
+    cursor = 0.0
+    for child in voice:
+        if child is anchor:
+            return cursor
+        if child.tag == "location":
+            cursor += _location_beats(child)
+        elif child.tag in ("Chord", "Rest"):
+            cursor += _element_beats(child)
+    return cursor
+
+
+def _next_anchor(voice, spanner):
+    children = list(voice)
+    start = children.index(spanner) + 1
+    for child in children[start:]:
+        if child.tag in ("Chord", "Rest"):
+            return child
+    return None
+
+
+def _drop_rest_carrier(voice, measure) -> None:
+    if voice.findall("Chord") or has_text(voice):
+        return
+    remaining = [
+        child
+        for child in voice
+        if child.tag not in ("Rest", "location", "Clef", "KeySig", "TimeSig")
+    ]
+    if remaining:
+        return
+    measure.remove(voice)
+
+
 class CanonicalVoiceOrder:
     spec = PassSpec(
         name="canonical_voice_order",
@@ -205,5 +329,6 @@ class CanonicalVoiceOrder:
         return PassResult(changed=changed)
 
 
-DISPLAY_PASSES = [DropTextVoiceRests(), UnhideRealRests(), DropPaddingVoices(), CanonicalVoiceOrder(), DropSecondaryVoiceRests()]
+DISPLAY_PASSES = [DropTextVoiceRests(), UnhideRealRests(), DropPaddingVoices(), CanonicalVoiceOrder(), DropSecondaryVoiceRests(), NormalizeRangeSpanners()]
+
 

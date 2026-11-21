@@ -6,7 +6,7 @@ Date: 2026-11-20. Commands run from the project root with the system Python.
 
 ```
 python -m unittest discover -s tests
-Ran 136 tests
+Ran 137 tests
 OK
 
 python -m pytest tests/test_sanity.py tests/test_pass_sanity.py -q -p no:cacheprovider
@@ -62,7 +62,7 @@ Coverage:
 scorepipe --list-passes
 ```
 
-41 entries: 25 structural (24 mechanical + 1 analysis), 2 inject, 14 display. Every mechanical pass
+42 entries: 25 structural (24 mechanical + 1 analysis), 2 inject, 15 display. Every mechanical pass
 declares an `owns` property and a monotone measure; `validate_registry` fails the run with exit
 code 2 if that is violated.
 
@@ -131,6 +131,12 @@ scorepipe laputa.musicxml --check --report laputa.json
   narrower `hide_covered_rests`, which only hid a rest fully covered by another voice's sound; m29's
   trailing bass rest was outside that rule. The generated m29 now matches the hand-edited mscz:
   voice 2 is `<location>1/4</location> + chord`, no rest (`test_display.py`).
+- **Range spanners on carrier voices**: m23 had voice 3 = `Spanner HairPin (prev) + Rest measure
+  (visible=0)`, the invisible anchor MuseScore creates for a `rit.`/wedge endpoint that does not
+  fall on a chord. `normalize_range_spanners` re-anchors `HairPin`, `Pedal`, `GradualTempoChange`,
+  `Ottava`, `TextLine` and `Volta` endpoints to voice 1 at the same tick, then drops the now-empty
+  rest carrier; Slur/Tie/Trill/Glissando endpoints are left alone because they depend on specific
+  notes. m23 now has two voices and the HairPin sits in voice 1 (`test_display.py`).
 - **MuseScore's incomplete-measure warnings** (mscx `measure_lengths` verifier): the laputa mscz
   now reports **0** flagged measures. It started at 12: eleven were text-only/empty voice slots
   (moved into the chord voice or removed) and the last was m33's overlapping rests, which the

@@ -145,3 +145,21 @@ class PaddingVoiceContentTest(unittest.TestCase):
         self.assertEqual(len(measure.findall('voice')), 2)
         again = run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
         self.assertEqual(again.changes, 0)
+
+    def test_range_spanner_carrier_voice_is_removed(self):
+        doc = MsxcDocument(ElementTree.fromstring('''
+          <museScore><Score><Staff id="1"><Measure>
+            <voice><Chord><durationType>whole</durationType><Note><pitch>60</pitch></Note></Chord></voice>
+            <voice>
+              <Spanner type="HairPin"><prev><location><measures>-1</measures>
+                <fractions>3/8</fractions></location></prev></Spanner>
+              <Rest><visible>0</visible><durationType>measure</durationType><duration>4/4</duration></Rest>
+            </voice>
+          </Measure></Staff></Score></museScore>'''))
+        run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        measure = doc.root.find('Score/Staff/Measure')
+        self.assertEqual(len(measure.findall('voice')), 1)
+        self.assertEqual(len(list(measure.iter('Spanner'))), 1)
+        self.assertIsNotNone(measure.find('.//Note'))
+        again = run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        self.assertEqual(again.changes, 0)
