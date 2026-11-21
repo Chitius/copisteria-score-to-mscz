@@ -208,9 +208,9 @@ piano part initially looked non-convergent because `merge_staff_voices` defaulte
 measure to 4/4; after using the carried meter it converges in 2 rounds. The merge protects a properly
 notated sustained note when the merge would shorten it into another voice's run (the m5 quarter note),
 and rest onsets are merge boundaries so an intentional rest is not deleted (m25); with those guards
-the post-pipeline match is 98.64%. The sustained-note guard is disabled when a page model is present,
-because applying it during laputa's page-slur restoration makes the slurs oscillate. See
-`tests/corpus/lieder/README.md` for provenance and rebuild commands.
+the post-pipeline match is 98.64%. On page runs `sanitize_slurs` is skipped because the page slur
+restoration is authoritative; re-pairing page slurs there orphaned a valid laputa slur and caused a
+clear/re-add loop. See `tests/corpus/lieder/README.md` for provenance and rebuild commands.
 
 ## Combined driver
 

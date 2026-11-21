@@ -96,10 +96,10 @@ scorepipe laputa.musicxml --check --report laputa.json
   a meter bug: `merge_staff_voices` defaulted inherited 2/4 measures to 4/4 and padded them to four
   beats; it now uses `Document.effective_time_signature`. The merge also protects a notated sustained
   note when the merge would shorten it into another voice's run (m5 D4), and rest onsets are
-  boundaries (m25's eighth rest is no longer deleted). The sustained-note guard is disabled when a
-  page model is present, because it makes laputa's page slurs oscillate. The corpus comparator
-  normalises active divisions and matches `(measure ordinal, onset, pitch, duration)` multisets
-  (`test_lieder_corpus.py`).
+  boundaries (m25's eighth rest is no longer deleted). On page runs `sanitize_slurs` is skipped;
+  the page slur restoration owns those slurs, and re-pairing there orphaned a valid m54 slur and
+  caused a clear/re-add loop. The corpus comparator normalises active divisions and matches
+  `(measure ordinal, onset, pitch, duration)` multisets (`test_lieder_corpus.py`).
 - `laputa` **page directory** (copisteria output: 3 files, 26 / 23 / 14 measures): merged to one
   63-measure score by `merge_pages`, then verifier clean. On this run `restore_page_pedals`
   reported 36 adjustments and `restore_page_wedges` 20; the structural phase converged in 3 rounds.
@@ -189,6 +189,10 @@ scorepipe laputa.musicxml --check --report laputa.json
   rebuilt XML note elements made every page slur look different and forced a clear/re-add each round.
   The signature is now `(measure, staff, onset, pitch, kind, number)`, so identical music has the
   same signature and the pass can no-op (`test_page_restore.py`).
+- **Page slurs own page slurs**: `sanitize_slurs` is skipped when a page model is present. Its
+  generic staff/number re-pairing orphaned a valid m54 page slur, which `restore_page_slurs` then
+  re-added every round; the page pass already enforces the 6-bar span. With this split, the broad
+  sustained-note guard runs on page inputs and laputa is `5 rounds stable, verifier clean`.
 - **Adjacent slur chains** (laputa m53–m55): OMR wrote `m53 G4→m54 A4` and `m54 A4→m55 E5` as two
   slurs sharing the A4 note. `restore_page_slurs` joins such unique shared-note chains before
   numbering (and `merge_adjacent_slurs` handles the same shape outside the page path), producing one

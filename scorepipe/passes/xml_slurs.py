@@ -18,6 +18,11 @@ class SanitizeSlurs:
     )
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
+        if getattr(ctx, "pages", None) is not None:
+            # The page slurs are authoritative on a page run: re-pairing them here with the generic
+            # staff/number pairing can orphan a valid page slur, which restore_page_slurs then
+            # re-adds forever (laputa m54).
+            return PassResult()
         max_bars = int(ctx.options.get("max_slur_bars", 6))
         endpoints: list[Endpoint] = []
         for number, measure in doc.iter_measures():

@@ -42,7 +42,7 @@ class MergeStaffVoices:
         for number, measure in doc.iter_measures():
             if number in done:
                 continue
-            if _merge(doc, measure, allow_sustained=ctx.pages is None):
+            if _merge(doc, measure, allow_sustained=True):
                 changed += 1
                 done.add(number)
         return PassResult(changed=changed)
