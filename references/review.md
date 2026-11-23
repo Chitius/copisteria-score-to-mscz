@@ -82,11 +82,12 @@ mechanical baseline and the reviewed output, with `introduced` and `resolved` li
 the bar line so the measure can be opened and edited in MuseScore. It is **not** semantically
 authoritative (`semantic_authority: false`); `truncation-report.json` lists every removed or
 shortened rest/note and the review report includes the same operations. Shortened elements may use
-an explicit `<duration>`; operations carry `[explicit-duration]` and must be inspected in the
-rendered PDF. The default is to create this forced copy; use `--no-forced-truncation` only for a
-diagnostic run that intentionally omits the editable repair tree (the review then records that
-artifact as missing). If the forced copy is not verifier-clean or has `UNRESOLVED` operations, the
-review is blocked.
+an explicit `<duration>`; `irregular_durations` lists those operations, and `spanner_risks` lists
+removed/shortened chords that carried a Tie/Slur/Spanner. Both must be inspected in the rendered
+PDF. The default is to create this forced copy; use `--no-forced-truncation` only for a diagnostic
+run that intentionally omits the editable repair tree (the review then records that artifact as
+missing). If the forced copy is not verifier-clean or has `UNRESOLVED` operations, the review is
+blocked.
 
 If the reviewed pipeline fails after producing an MSCZ, review still renders and rasterises that
 draft when possible, then writes the report with `ready: false`; the failed run remains

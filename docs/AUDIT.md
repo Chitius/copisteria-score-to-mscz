@@ -36,8 +36,8 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 | A4 | P0 | The staff in the report is an Element repr with a memory address. | `mscx_truncate.py:41,83,86`; `scorepipe/core/mscx.py:47-50`; `zen_forced/forced-truncation/truncation-report.json` | Use staff index + `staff.get("id")`; machine-readable ints, no formatted floats | fixed (batch1) |
 | A5 | P0 | `--truncate-overfull` is a no-op without `--mscz-out`, and review still reports a ready forced copy. With `--no-mscz`, forced MusicXML is identical to reviewed. | `scorepipe/cli.py:129`; `scorepipe/mscz_export.py:79`; `scripts/review.py:341-402`; `references/review.md:84-86` | Reject the flag without an mscz output, or implement it structurally; report applied/skipped/failed explicitly | fixed (batch1) |
 | A6 | P0 | Display-final reports hardcoded `rounds=1`, `stable=True`, `TraceEntry(round=1)` even when two rounds ran; dead `final_result`. | `scorepipe/mscz_export.py:84-105` | Accumulate real rounds; stable only after a zero-change, zero-unresolved round | fixed (batch1) |
-| A7 | P1 | `_shorten` keeps the original `durationType` and `dots` while adding an explicit `<duration>`, producing inconsistent notation (dotted 32nd lasting 1/6 beat; half rest lasting 2.75). No MuseScore round-trip proof. | `mscx_truncate.py:107-115`; forced mscz m75/m222 | Emit valid notation or a documented irregular representation; add a MuseScore re-import/render assertion | in progress (documented) |
-| A8 | P1 | Chord deletion reports only “removed chord N beats”; no pitches/onsets; can leave dangling ties/slurs/spanners. | `mscx_truncate.py:66-81` | Report deleted pitches/onsets; prune/flag spanners; prefer shortening over deletion | in progress (batch2) |
+| A7 | P1 | `_shorten` keeps the original `durationType` and `dots` while adding an explicit `<duration>`, producing inconsistent notation (dotted 32nd lasting 1/6 beat; half rest lasting 2.75). No MuseScore round-trip proof. | `mscx_truncate.py:107-115`; forced mscz m75/m222 | Emit valid notation or a documented irregular representation; add a MuseScore re-import/render assertion | fixed (documented) |
+| A8 | P1 | Chord deletion reports only “removed chord N beats”; no pitches/onsets; can leave dangling ties/slurs/spanners. | `mscx_truncate.py:66-81` | Report deleted pitches/onsets; prune/flag spanners; prefer shortening over deletion | fixed (reported/flagged) |
 | A9 | P1 | The intermediate MusicXML path can overwrite and then delete a user file: `destination.with_suffix(".musicxml")` is unlinked when `work_musicxml` is not passed. | `scorepipe/mscz_export.py:68,111-113` | Use an isolated temp directory; only delete files the function created | fixed (batch1) |
 | A10 | P1 | Meter model ignores `Measure@len`/pickup metadata and keys signatures only by measure index across all staves. | `mscx_truncate.py:28-42`; `mscx_invariants.py:125-141` | Read `Measure@len`/pickup, keep meter per staff, add pickup fixture | in progress (batch2) |
 
@@ -136,13 +136,14 @@ unchanged with no forced operations.
 
 Scope: B1, B3–B7, C1–C4, C6, C9, A7, A8, A10.
 
-**Progress 2026-11-23:** B1, B3–B7, C1, C2, C6 fixed; C3/C4/C9/A10 in progress; A7/A8 remain.
+**Progress 2026-11-23:** B1, B3–B7, C1, C2, C4, C6, A7, A8, A10 fixed; C3/C9 remain.
 `verify_patches` now checks ottava type/size/measure/number and tuplet onset span, bracket and
 duration; MSCX length checks all overfull voices while allowing short secondary voices; explicit
 `<visible>1</visible>` is no longer treated as hidden; pass fixtures now assert an actual effect and
 the sanity framework compares state hashes and verifier details/multiplicity; display pass inventory
-and idempotence are tested; truncation has multi-voice/3-4/len tests. Verification: 242 unittest /
-326 pytest.
+and idempotence are tested; truncation tests cover multi-voice, 3/4, `Measure@len`, tuplets,
+unresolved and spanner risk; explicit-duration and spanner-risk operations are surfaced as separate
+fields. Verification: 243 unittest / 327 pytest.
 
 - Strengthen `verify_patches` and add five drift tests.
 - Check every voice; fix hidden-rest semantics; add empty/implicit/multipart/grace cases.

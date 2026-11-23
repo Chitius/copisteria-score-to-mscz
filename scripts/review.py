@@ -401,6 +401,8 @@ def main(argv: list[str] | None = None) -> int:
                 "dir": str(forced_dir),
                 "operations": [],
                 "unresolved": [],
+                "irregular_durations": [],
+                "spanner_risks": [],
                 "ready": False,
             }
             report["forced_truncation"] = forced
@@ -437,6 +439,8 @@ def main(argv: list[str] | None = None) -> int:
             forced_exit = _run(forced_command, ROOT)
             operations = _truncation_notes(forced_report)
             unresolved = [note for note in operations if note.startswith("UNRESOLVED")]
+            irregular = [note for note in operations if "[explicit-duration]" in note]
+            spanner_risks = [note for note in operations if "[spanner-risk:" in note]
             forced_pdf = None
             forced_render_exit = None
             if forced_mscz.is_file() and not args.no_pdf and musescore:
@@ -468,6 +472,8 @@ def main(argv: list[str] | None = None) -> int:
                 "render_exit": forced_render_exit,
                 "operations": operations,
                 "unresolved": unresolved,
+                "irregular_durations": irregular,
+                "spanner_risks": spanner_risks,
                 "verifier_count": _verifier_count(forced_report),
             }
             forced["ready"] = (
