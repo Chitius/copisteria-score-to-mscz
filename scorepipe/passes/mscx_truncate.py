@@ -324,7 +324,7 @@ def normalize_explicit_durations(doc: MsxcDocument) -> int:
             for dot in element.findall("NoteDot"):
                 for visible in dot.findall("visible"):
                     dot.remove(visible)
-    changed += canonicalize(doc, {114, 115, 116, 222})
+    changed += canonicalize(doc)
     return changed
 
 
