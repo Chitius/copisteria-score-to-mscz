@@ -199,6 +199,9 @@ def main(argv: list[str] | None = None) -> int:
         _write_report(report, args.report)
         if display_report.verifier:
             status = 1
+        elif args.truncate_overfull and not patch_failed:
+            # The pre-display overfull measure is the condition the forced pass exists to repair.
+            status = 0
     return status
 
 
