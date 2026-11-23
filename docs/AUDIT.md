@@ -59,7 +59,7 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 |---|---|---|---|---|---|
 | C1 | P0 | Pass-sanity never asserts an effect. Replacing all 32 structural/inject passes with no-ops still gives ok=True; 8 fixtures are already `changed=0`. | `tests/test_pass_sanity.py:343-357`; fixtures at `:74-119,259-264` | Assert exact `changed` and element postconditions; add a meta no-op mutation test; fix the eight fixtures | fixed (batch2) |
 | C2 | P0 | Idempotence and contracts cannot see unreported or non-note mutation: only `second.changed` is checked; snapshots cover notes only, not slurs/ties/beams/text. | `scorepipe/sanity.py:651-661,268-307,492-531` | Compare state hash after the second run; add element inventory; negative mutation tests | fixed (batch2) |
-| C3 | P0 | Display mechanical passes (18) and the analysis pass have no pass contract/idempotence coverage. | `tests/test_pass_sanity.py:330-340` | Add a display/analysis contract registry or explicit exemption list, plus mutation tests | open |
+| C3 | P0 | Display mechanical passes (18) and the analysis pass have no pass contract/idempotence coverage. | `tests/test_pass_sanity.py:330-340` | Add a display/analysis contract registry or explicit exemption list, plus mutation tests | in progress (batch2) |
 | C4 | P1 | `test_mscx_truncate` uses nested `<Tuplet>` (not MuseScore's flat shape) and has a tautological `assertGreaterEqual(changed, 0)`; no idempotence/unresolved/multi-voice/pickup/ties tests. | `tests/test_mscx_truncate.py:30-61` | Rewrite with flat fixtures; exact changed/notes; one-run fixpoint; unresolved test | in progress (batch1) |
 | C5 | P1 | Delivery tests are stateful/mocked, skip forced truncation, and have no success/stale-artifact/`--no-mscz` matrices. | `tests/test_delivery_scripts.py:13-14,98`; `scripts/convert.py:218-224` | Use tmp_path; assert artifacts from this run; test forced success/failure/skip | open |
 | C6 | P1 | `test_cli` asserts exit 0 where the real patch verifier should fail; it enshrines B2. | `tests/test_cli.py:109-149` | Integration test: clean verifier + failed patch verify => exit 1 | fixed (batch2) |
@@ -129,7 +129,7 @@ Scope: A1, A2, A3, A4, A5, A6, A9, B2, D8.
 tail, preserves positional rests, never edits inside flat tuplets, reports `UNRESOLVED` without
 partial mutation, uses staff ids, records real rounds/stability, and rejects `--truncate-overfull`
 without `--mscz-out`. The intermediate MusicXML is isolated. C4/D8 remain in progress. Verification:
-235 unittest / 319 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
+236 unittest / 320 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
 unchanged with no forced operations.
 
 ### Batch 2 — verifier and pass-sanity integrity
@@ -141,7 +141,7 @@ Scope: B1, B3–B7, C1–C4, C6, C9, A7, A8, A10.
 duration; MSCX length checks all overfull voices while allowing short secondary voices; explicit
 `<visible>1</visible>` is no longer treated as hidden; pass fixtures now assert an actual effect and
 the sanity framework compares state hashes and verifier details/multiplicity. All six MSCX
-verifiers now have direct tests. Verification: 235 unittest / 319 pytest.
+verifiers now have direct tests. Verification: 236 unittest / 320 pytest.
 
 - Strengthen `verify_patches` and add five drift tests.
 - Check every voice; fix hidden-rest semantics; add empty/implicit/multipart/grace cases.

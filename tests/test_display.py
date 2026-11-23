@@ -41,6 +41,35 @@ def build() -> MsxcDocument:
 
 
 class DisplayPassesTest(unittest.TestCase):
+    DISPLAY_MECHANICAL = {
+        "drop_text_voice_rests",
+        "unhide_real_rests",
+        "drop_padding_voices",
+        "canonical_voice_order",
+        "drop_secondary_voice_rests",
+        "normalize_range_spanners",
+        "hide_pickup_leading_rest",
+        "drop_first_time_signature",
+        "split_chord_fragments",
+        "restore_mscx_ties",
+        "dedupe_pedal_spanners",
+        "dedupe_text_objects",
+        "merge_text_voices",
+        "drop_empty_voices",
+        "upgrade_tempo_texts",
+        "upgrade_gradual_texts",
+        "apply_text_facts_style",
+        "apply_credits_display",
+    }
+
+    def test_display_mechanical_pass_inventory_is_explicit(self):
+        actual = {
+            one_pass.spec.name
+            for one_pass in DISPLAY_PASSES
+            if one_pass.spec.kind.value == "mechanical"
+        }
+        self.assertEqual(actual, self.DISPLAY_MECHANICAL)
+
     def test_padding_voice_is_dropped(self):
         doc = build()
         run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
