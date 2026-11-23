@@ -207,6 +207,8 @@ def _shorten(element, beats: Fraction) -> None:
     for tag in ("durationType", "dots"):
         for node in element.findall(tag):
             element.remove(node)
+    for node in element.findall("NoteDot"):
+        element.remove(node)
     text = Fraction(beats) / 4
     node = element.find("duration")
     if node is None:
@@ -267,6 +269,19 @@ def normalize_explicit_durations(doc: MsxcDocument) -> int:
                             stale = True
                     if stale:
                         changed += 1
+                dots = int(element.findtext("dots") or 0)
+                note_dots = element.findall("NoteDot")
+                if dots:
+                    for dot in note_dots:
+                        for visible in dot.findall("visible"):
+                            dot.remove(visible)
+                    if not note_dots:
+                        from xml.etree import ElementTree
+
+                        ElementTree.SubElement(element, "NoteDot")
+                else:
+                    for dot in note_dots:
+                        element.remove(dot)
         for voice in measure.findall("voice"):
             if voice.findall("Chord") or voice.findall("Rest"):
                 continue
@@ -278,6 +293,13 @@ def normalize_explicit_durations(doc: MsxcDocument) -> int:
             ElementTree.SubElement(rest, "durationType").text = "measure"
             ElementTree.SubElement(rest, "visible").text = "0"
             changed += 1
+    for element in doc.root.iter():
+        if element.tag not in ("Chord", "Rest"):
+            continue
+        if int(element.findtext("dots") or 0):
+            for dot in element.findall("NoteDot"):
+                for visible in dot.findall("visible"):
+                    dot.remove(visible)
     return changed
 
 
