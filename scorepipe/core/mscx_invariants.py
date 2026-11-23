@@ -33,7 +33,15 @@ def text_voice_rests(doc: MsxcDocument, ctx: Context) -> list[Violation]:
         for voice in doc.voices(measure):
             if voice.findall("Chord") or not has_text(voice):
                 continue
-            if voice.findall("Rest"):
+            rests = [
+                rest
+                for rest in voice.findall("Rest")
+                if not (
+                    rest.findtext("durationType") == "measure"
+                    and (rest.findtext("visible") or "").strip().lower() in ("0", "false")
+                )
+            ]
+            if rests:
                 out.append(Violation("text-voice-rest", index, "text voice carries a rest"))
     return out
 

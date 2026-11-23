@@ -19,6 +19,7 @@ from .core.mscx_invariants import MSCX_VERIFIERS
 from .core.pass_base import Context
 from .core.pipeline import PhaseReport, RunReport, TraceEntry, run_display
 from .passes import DISPLAY_PASSES, TRUNCATE_OVERFULL_MSCX
+from .passes.mscx_truncate import normalize_explicit_durations
 
 COMMON_PATHS = (
     r"S:\Program Files\MuseScore 4\bin\MuseScore4.exe",
@@ -101,6 +102,9 @@ def export_and_display(
                 unresolved = any(note.startswith("UNRESOLVED") for note in result.notes)
                 if unresolved or not result.changed:
                     break
+            normalized = normalize_explicit_durations(archive.document)
+            if normalized:
+                notes.append(f"normalized {normalized} explicit duration(s)")
             if total_changed or notes:
                 report.trace.append(
                     TraceEntry(

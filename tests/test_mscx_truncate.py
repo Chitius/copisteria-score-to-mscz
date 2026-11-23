@@ -42,6 +42,7 @@ class TruncateOverfullMscxTest(unittest.TestCase):
         chords = doc.root.findall(".//Chord")
         self.assertEqual(len(chords), 1)
         self.assertIsNotNone(chords[-1].find("duration"))
+        self.assertIsNone(chords[-1].find("durationType"))
         self.assertIn("[60]", " ".join(result.notes))
         self.assertIn("[explicit-duration]", " ".join(result.notes))
 
@@ -152,6 +153,19 @@ class TruncateOverfullMscxTest(unittest.TestCase):
         self.assertEqual(result.changed, 1)
         self.assertEqual(len(doc.root.findall(".//Staff")[0].findall(".//Chord")), 3)
         self.assertEqual(len(doc.root.findall(".//Staff")[1].findall(".//Chord")), 4)
+
+    def test_stale_overlong_measure_len_is_removed(self):
+        four = "<Chord><durationType>quarter</durationType><Note><pitch>60</pitch></Note></Chord>"
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score><Staff id='1'><Measure len='5/4'>"
+                "<TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>"
+                f"<voice>{four * 4}</voice></Measure></Staff></Score></museScore>"
+            )
+        )
+        result = TruncateOverfullMscx().run(doc, Context())
+        self.assertEqual(result.changed, 0)
+        self.assertIsNone(doc.root.find(".//Measure").get("len"))
 
 
 if __name__ == "__main__":

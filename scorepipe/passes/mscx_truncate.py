@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 from ..core.mscx import MsxcDocument
-from ..core.mscx_invariants import _beats, _tuplet_ratio
+from ..core.mscx_invariants import DURATIONS, _beats, _tuplet_ratio
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
 
 
@@ -57,6 +57,13 @@ class TruncateOverfullMscx:
                     pass
             meters[id(staff)] = meter
             target = _measure_target(measure, meter)
+            raw_len = measure.get("len")
+            if raw_len:
+                try:
+                    if Fraction(raw_len) * 4 > meter:
+                        del measure.attrib["len"]
+                except (ValueError, ZeroDivisionError):
+                    pass
             for voice in doc.voices(measure):
                 items = _items(voice, target)
                 total = sum(item.beats for item in items)
@@ -85,6 +92,9 @@ class TruncateOverfullMscx:
                         for (element, old, new) in _describe(actions, items)
                     )
                 )
+            for voice in measure.findall("voice"):
+                if not list(voice):
+                    measure.remove(voice)
         return PassResult(changed=changed, notes=notes)
 
 
@@ -188,7 +198,15 @@ def _describe_element(element) -> str:
 
 
 def _shorten(element, beats: Fraction) -> None:
-    """MuseScore accepts an optional whole-note fraction; keep the original durationType."""
+    """Use an explicit whole-note fraction and drop the now-stale note value.
+
+    MuseScore derives the note/rest head from ``<duration>`` after the original
+    ``durationType``/dots are removed; keeping them would print a half note that
+    only occupies one beat (A7).
+    """
+    for tag in ("durationType", "dots"):
+        for node in element.findall(tag):
+            element.remove(node)
     text = Fraction(beats) / 4
     node = element.find("duration")
     if node is None:
@@ -199,3 +217,77 @@ def _shorten(element, beats: Fraction) -> None:
 
 
 TRUNCATE_OVERFULL_MSCX = TruncateOverfullMscx()
+
+
+def normalize_explicit_durations(doc: MsxcDocument) -> int:
+    """Make explicit ``<duration>`` values consistent with MuseScore's note values.
+
+    Outside a tuplet the fraction is authoritative, so stale type/dots are removed.
+    Inside a tuplet the base note value is authoritative; the fraction is converted
+    back to a type so MuseScore does not count the tuplet twice.
+    """
+    changed = 0
+    for _staff, _index, measure in doc.iter_measures():
+        for voice in measure.findall("voice"):
+            tuplets: list[Fraction] = []
+            for element in list(voice):
+                if element.tag == "Tuplet":
+                    tuplets.append(_tuplet_ratio(element))
+                    continue
+                if element.tag == "endTuplet":
+                    if tuplets:
+                        tuplets.pop()
+                    continue
+                if element.tag not in ("Chord", "Rest") or element.find("duration") is None:
+                    continue
+                if tuplets:
+                    ratio = Fraction(1)
+                    for tuplet in tuplets:
+                        ratio *= tuplet
+                    actual = Fraction(element.findtext("duration") or "0") * 4
+                    value = _duration_value(actual / ratio)
+                    if value is None:
+                        continue
+                    name, dots = value
+                    for tag in ("durationType", "dots"):
+                        for node in element.findall(tag):
+                            element.remove(node)
+                    from xml.etree import ElementTree
+
+                    ElementTree.SubElement(element, "durationType").text = name
+                    if dots:
+                        ElementTree.SubElement(element, "dots").text = str(dots)
+                    element.remove(element.find("duration"))
+                    changed += 1
+                else:
+                    stale = False
+                    for tag in ("durationType", "dots"):
+                        for node in element.findall(tag):
+                            element.remove(node)
+                            stale = True
+                    if stale:
+                        changed += 1
+        for voice in measure.findall("voice"):
+            if voice.findall("Chord") or voice.findall("Rest"):
+                continue
+            if not any(child.tag in ("Expression", "StaffText", "SystemText", "Tempo") for child in voice):
+                continue
+            from xml.etree import ElementTree
+
+            rest = ElementTree.SubElement(voice, "Rest")
+            ElementTree.SubElement(rest, "durationType").text = "measure"
+            ElementTree.SubElement(rest, "visible").text = "0"
+            changed += 1
+    return changed
+
+
+def _duration_value(beats: Fraction) -> tuple[str, int] | None:
+    for name, base in DURATIONS.items():
+        dots = 0
+        value = base
+        while dots <= 2:
+            if value == beats:
+                return name, dots
+            dots += 1
+            value += base / (2**dots)
+    return None
