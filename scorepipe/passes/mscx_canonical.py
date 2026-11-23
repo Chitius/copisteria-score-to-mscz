@@ -23,9 +23,11 @@ _TUPLET_FOR_BEATS = {
 }
 
 
-def canonicalize(doc: MsxcDocument) -> int:
+def canonicalize(doc: MsxcDocument, only=None) -> int:
     changed = 0
-    for staff, _index, measure in doc.iter_measures():
+    for staff, index, measure in doc.iter_measures():
+        if only is not None and index not in only:
+            continue
         meter = Fraction(4)
         for time in measure.iter("TimeSig"):
             try:
@@ -79,7 +81,17 @@ def _clamp_location(voice, meter: Fraction) -> int:
 
 def _wrap_fractions(voice) -> int:
     changed = 0
+    tuplets: list[Fraction] = []
     for element in list(voice):
+        if element.tag == "Tuplet":
+            tuplets.append(_tuplet_ratio(element))
+            continue
+        if element.tag == "endTuplet":
+            if tuplets:
+                tuplets.pop()
+            continue
+        if tuplets:
+            continue
         if element.tag not in ("Chord", "Rest") or element.find("duration") is None:
             continue
         try:
