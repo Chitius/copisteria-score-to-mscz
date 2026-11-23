@@ -81,7 +81,7 @@ class TruncateOverfullMscx:
                     if new_beats is None:
                         voice.remove(element)
                     else:
-                        _shorten(element, new_beats)
+                        _shorten(element, new_beats, voice)
                 changed += 1
                 notes.append(
                     f"m{index} staff {staff_label}: {float(total):g}->{float(target):g}; "
@@ -197,13 +197,36 @@ def _describe_element(element) -> str:
     return (f" [{','.join(pitches)}]" if pitches else "") + suffix
 
 
-def _shorten(element, beats: Fraction) -> None:
-    """Use an explicit whole-note fraction and drop the now-stale note value.
+def _set_legal(element, name: str, dots: int) -> None:
+    for tag in ("durationType", "dots", "duration"):
+        for node in element.findall(tag):
+            element.remove(node)
+    for node in element.findall("NoteDot"):
+        element.remove(node)
+    from xml.etree import ElementTree
 
-    MuseScore derives the note/rest head from ``<duration>`` after the original
-    ``durationType``/dots are removed; keeping them would print a half note that
-    only occupies one beat (A7).
+    ElementTree.SubElement(element, "durationType").text = name
+    if dots:
+        ElementTree.SubElement(element, "dots").text = str(dots)
+
+
+def _shorten(element, beats: Fraction, voice) -> None:
+    """Write legal note values; split an exact multi-value chord/rest.
+
+    A single arbitrary fraction (A7) is not a legal MuseScore note value. If the
+    duration decomposes exactly into standard values, emit those values instead.
     """
+    parts = _decompose(beats)
+    if len(parts) > 1 and sum((part[2] for part in parts), Fraction(0)) == beats:
+        import copy
+
+        index = list(voice).index(element)
+        for offset, (name, dots, _) in enumerate(parts):
+            piece = element if offset == 0 else copy.deepcopy(element)
+            if offset:
+                voice.insert(index + offset, piece)
+            _set_legal(piece, name, dots)
+        return
     for tag in ("durationType", "dots"):
         for node in element.findall(tag):
             element.remove(node)
