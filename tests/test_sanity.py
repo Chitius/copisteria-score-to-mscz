@@ -168,6 +168,16 @@ class AddRestEachRunPass:
         return PassResult(changed=1)
 
 
+class SilentMutationPass(NoOpPass):
+    """Mutates the tree but reports changed=0; idempotence must still catch it."""
+
+    spec = PassSpec(name="silent_mutation", phase=Phase.STRUCTURAL, kind=Kind.MECHANICAL)
+
+    def run(self, doc: Document, ctx: Context) -> PassResult:
+        _append_chord_d(doc)
+        return PassResult(changed=0)
+
+
 # ---------------------------------------------------------------------------
 # snapshot / diff
 # ---------------------------------------------------------------------------
@@ -673,6 +683,27 @@ def test_run_contract_uses_three_fresh_documents():
         "doc_factory must return a distinct Document object on every call"
     )
     assert report.ok, "clean run with a three-call factory should be ok"
+
+
+def test_check_idempotent_detects_silent_state_mutation():
+    messages = check_idempotent(
+        SilentMutationPass(), document(measure(1, note("C", 16))), Context()
+    )
+    assert messages, "a pass that mutates while reporting changed=0 was called idempotent"
+    assert "silent_mutation" in messages[0]
+
+
+def test_check_no_new_verifier_violations_catches_a_second_identical_violation():
+    before = document(measure(1, note(rest=True, duration=16, hidden=True)))
+    after = document(
+        measure(
+            1,
+            note(rest=True, duration=16, hidden=True)
+            + note(rest=True, duration=16, hidden=True),
+        )
+    )
+    messages = check_no_new_verifier_violations(before, after, Context())
+    assert messages, "a second identical hidden-rest violation in the same measure was ignored"
 
 
 if __name__ == "__main__":

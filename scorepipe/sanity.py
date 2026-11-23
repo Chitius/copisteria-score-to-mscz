@@ -577,18 +577,20 @@ def check_no_new_verifier_violations(
     ctx: Context,
     verifiers: Sequence[Verifier] | None = None,
 ) -> list[str]:
-    """Fail on a ``(code, measure)`` verifier violation that is new after the pass."""
+    """Fail on a new or worsened verifier violation after the pass."""
     functions = tuple(VERIFIERS) if verifiers is None else tuple(verifiers)
-    before_keys = {
-        (violation.code, violation.measure)
+    before_counts = Counter(
+        (violation.code, violation.measure, violation.detail, getattr(verifier, "__name__", ""))
         for verifier in functions
         for violation in verifier(before_doc, ctx)
-    }
+    )
     messages: list[str] = []
     for verifier in functions:
         name = getattr(verifier, "__name__", type(verifier).__name__)
         for violation in verifier(after_doc, ctx):
-            if (violation.code, violation.measure) in before_keys:
+            key = (violation.code, violation.measure, violation.detail, name)
+            if before_counts[key] > 0:
+                before_counts[key] -= 1
                 continue
             messages.append(
                 f"{name}: new {violation.code} at {_where(violation.measure)}: "
@@ -649,14 +651,16 @@ def check_pitch_set_preserved(before: Snapshot | Document, after: Snapshot | Doc
 
 
 def check_idempotent(pass_obj, doc: Document, ctx: Context) -> list[str]:
-    """Run a pass twice on the same document; the second run must be a no-op."""
+    """Run a pass twice; the second run must change neither the counter nor the state hash."""
     name = _pass_name(pass_obj)
     first = pass_obj.run(doc, ctx)
+    after_first = doc.state_hash()
     second = pass_obj.run(doc, ctx)
-    if second.changed != 0:
+    after_second = doc.state_hash()
+    if second.changed != 0 or after_second != after_first:
         return [
-            f"pass {name} is not idempotent: second run changed {second.changed} "
-            f"(first run changed {first.changed})"
+            f"pass {name} is not idempotent: second run changed {second.changed}, "
+            f"state moved={after_second != after_first} (first run changed {first.changed})"
         ]
     return []
 

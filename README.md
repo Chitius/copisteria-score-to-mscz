@@ -158,7 +158,7 @@ Tests:
 
 ```text
 python -m unittest discover -s tests   # 231 tests
-python -m pytest tests -q              # 313 tests
+python -m pytest tests -q              # 315 tests
 ```
 
 Corpus (sounding-note match; rests excluded from the primary score):
