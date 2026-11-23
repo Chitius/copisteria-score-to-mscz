@@ -162,6 +162,9 @@ def validate(args: argparse.Namespace) -> int:
 
 
 def merge(args: argparse.Namespace) -> int:
+    if args.pages is None and not args.allow_missing_pages:
+        print("merge requires --pages N unless --allow-missing-pages is explicit")
+        return 1
     parts = []
     for path in args.parts:
         payload = normalize_agent_facts(load_agent_facts(path))

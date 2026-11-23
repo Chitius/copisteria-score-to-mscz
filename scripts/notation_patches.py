@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     accept.add_argument("--patches", required=True)
     accept.add_argument("--musicxml", required=True)
     accept.add_argument("--indices", nargs="+", type=int, required=True)
-    accept.add_argument("--reviewer", default="")
+    accept.add_argument("--reviewer", required=True)
     accept.add_argument("-o", "--output", required=True)
     args = parser.parse_args(argv)
 
@@ -54,14 +54,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"patch index out of range: {index}")
                 return 1
             patch = patches[index]
-            if patch.get("op") != "tuplet":
-                print(f"patches[{index}] is not a tuplet patch")
+            if patch.get("op") not in ("tuplet", "ottava"):
+                print(f"patches[{index}] is not a tuplet/ottava patch")
                 return 1
             patch["status"] = "accepted"
-            if args.reviewer:
-                patch["accepted_by"] = args.reviewer
+            patch["accepted_by"] = args.reviewer
         doc = Document.load(args.musicxml) if args.musicxml else None
-        problems = validate_patches(payload, doc)
+        problems = validate_patches(payload, doc, require_acceptance=True)
         if problems:
             for problem in problems:
                 print(problem)
@@ -79,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
 
     doc = Document.load(args.input)
     payload = load_patches(args.patches)
-    problems = validate_patches(payload, doc)
+    problems = validate_patches(payload, doc, require_acceptance=True)
     if problems:
         for problem in problems:
             print(problem)

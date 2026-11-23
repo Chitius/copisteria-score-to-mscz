@@ -94,7 +94,7 @@ is mandatory for agent facts (manual facts may omit it).
 
 ```bash
 python scripts/agent_facts.py validate --facts review/facts/agent-page1.json --pages 2 --measures 31
-python scripts/agent_facts.py merge --parts review/facts/agent-page*.json -o review/facts/facts.json
+python scripts/agent_facts.py merge --parts review/facts/agent-page*.json --pages 2 -o review/facts/facts.json
 ```
 
 Invalid evidence fails; it is not silently dropped. Duplicate claims are de-duplicated and the
@@ -117,7 +117,9 @@ python scripts/convert.py score.pdf --pages path/to/omr-pages \
 
 Pitch corrections are **never injected automatically**. A correction has `from`, `to`, page,
 bbox and evidence; it starts as `"status": "proposed"`. Review it with a human before applying
-anything.
+anything. There is no automatic correction applier: after a human accepts a correction, edit the
+note in MuseScore (or a dedicated edit workflow) and re-render; `--allow-corrections` only records
+an explicit override and never changes the pitch.
 
 ### 4. Page coverage
 

@@ -71,7 +71,9 @@ def load_patches(path: str | Path | None) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8-sig"))
 
 
-def validate_patches(payload: dict, doc: Document | None = None) -> list[str]:
+def validate_patches(
+    payload: dict, doc: Document | None = None, *, require_acceptance: bool = False
+) -> list[str]:
     problems: list[str] = []
     patches = payload.get("patches")
     if not isinstance(patches, list):
@@ -84,7 +86,7 @@ def validate_patches(payload: dict, doc: Document | None = None) -> list[str]:
             continue
         op = patch.get("op")
         if op == "ottava":
-            problems.extend(_validate_ottava(patch, doc, prefix))
+            problems.extend(_validate_ottava(patch, doc, prefix, require_acceptance))
             continue
         if op != "tuplet":
             problems.append(f"{prefix}: unsupported op {op!r}")
@@ -158,8 +160,14 @@ def apply_patches(doc: Document, payload: dict) -> int:
     return changed
 
 
-def _validate_ottava(patch: dict, doc: Document | None, prefix: str) -> list[str]:
+def _validate_ottava(
+    patch: dict, doc: Document | None, prefix: str, require_acceptance: bool = False
+) -> list[str]:
     problems: list[str] = []
+    if require_acceptance:
+        status = patch.get("status")
+        if status not in (None, "accepted"):
+            problems.append(f"{prefix}: ottava patch must be accepted before apply")
     measure_count = len(doc.measures()) if doc is not None else None
     if patch.get("mode") not in (None, "add", "replace", "remove"):
         problems.append(f"{prefix}: mode must be add/replace/remove")

@@ -17,17 +17,21 @@ Start with [`SKILL.md`](SKILL.md). The operational references are in
 # Environment probe: reports what is missing; never installs or downloads.
 python scripts/preflight.py --save env.local.json
 
-# End-to-end: PDF -> copisteria page output -> scorepipe -> mscz + review PDF.
+# End-to-end pipeline draft: PDF -> copisteria page output -> scorepipe -> mscz + review PDF.
 python scripts/convert.py "score.pdf" --env env.local.json --outdir "out/score" \
   --title "Title" --composer "Composer"
+
+# Final delivery: page review + facts/patches + mechanical/reviewed/forced trees.
+python scripts/review.py "score.pdf" --pages out/score/work/copisteria \
+  --facts-dir review/facts --outdir "review/score"
 
 # Pipeline only: use an existing page directory.
 python -m scorepipe.cli path/to/pages -o out/score.musicxml --mscz-out out/score.mscz \
   --report out/report.json
 ```
 
-If MuseScore is unavailable, use `--no-mscz`/`--no-pdf`; deliver MusicXML plus the report and say
-that display review was not produced.
+`scripts/convert.py` is a pipeline draft; its `delivery.json` has `reviewed: false`. Use
+`scripts/review.py` for the final delivery tree and acceptance checks.
 
 ## What the skill produces
 
@@ -113,7 +117,7 @@ text layer still needs the agent/vision facts path.
 ```bash
 python scripts/agent_facts.py prepare --pdf score.pdf --outdir review/facts
 python scripts/agent_facts.py validate --facts review/facts/agent-page1.json --pages 2
-python scripts/agent_facts.py merge --parts review/facts/agent-page*.json -o review/facts/facts.json
+python scripts/agent_facts.py merge --parts review/facts/agent-page*.json --pages 2 -o review/facts/facts.json
 python scripts/convert.py score.pdf --pages path/to/omr-pages \
   --facts review/facts/facts.json --outdir out/score
 ```
@@ -157,8 +161,8 @@ every operation in `truncation-report.json`. See [`references/review.md`](refere
 Tests:
 
 ```text
-python -m unittest discover -s tests   # 238 tests
-python -m pytest tests -q              # 322 tests
+python -m unittest discover -s tests   # 239 tests
+python -m pytest tests -q              # 323 tests
 ```
 
 Corpus (sounding-note match; rests excluded from the primary score):

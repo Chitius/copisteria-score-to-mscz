@@ -72,17 +72,17 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 
 | ID | Sev | Finding | Evidence | Fix / test | Status |
 |---|---|---|---|---|---|
-| D1 | P0 | proposed vs accepted contradiction: agent docs say write `status: proposed`; tuplet validation requires `accepted`; ottava ignores status entirely; SKILL 4c passes `patches.json`. | `SKILL.md:177-179`; `references/agent-review.md:25-27`; `scorepipe/notation_patches.py:161-191`; `scripts/notation_patches.py:57-59` | Define one state machine; require accepted+accepted_by for ottava and tuplet; update examples | open |
-| D2 | P0 | Corrections are a dead queue: no consumer, and `--allow-corrections` only suppresses the blocker; it never applies `to`. | `scorepipe/agent_facts.py:97-113,198-210`; `scripts/review.py:196-209` | Add accept-correction + constrained applier, or document manual-only and drop the claim | open |
+| D1 | P0 | proposed vs accepted contradiction: agent docs say write `status: proposed`; tuplet validation requires `accepted`; ottava ignores status entirely; SKILL 4c passes `patches.json`. | `SKILL.md:177-179`; `references/agent-review.md:25-27`; `scorepipe/notation_patches.py:161-191`; `scripts/notation_patches.py:57-59` | Define one state machine; require accepted+accepted_by for ottava and tuplet; update examples | fixed (batch3) |
+| D2 | P0 | Corrections are a dead queue: no consumer, and `--allow-corrections` only suppresses the blocker; it never applies `to`. | `scorepipe/agent_facts.py:97-113,198-210`; `scripts/review.py:196-209` | Add accept-correction + constrained applier, or document manual-only and drop the claim | fixed (batch3) |
 | D3 | P0 | Coverage gate turns off when `pdfinfo` is missing: page_count falls back to facts count. Two reviewed pages of a ten-page PDF can pass. | `scripts/review.py:172-174,200` | Fail closed or require `--page-count`; mark pdfinfo required for review | fixed (batch1) |
-| D4 | P0 | `merge` without `--pages` performs no coverage check, and every example omits it. | `scripts/agent_facts.py:181-206`; docs commands | Require `--pages` or explicit `--allow-missing-pages`; update examples | open |
-| D5 | P0 | Advertised quick path (`convert.py`) bypasses review: no facts/page coverage, no mechanical/forced trees, but `delivery.json.ready` can be true. | `SKILL.md:29-38`; `README.md:14-30`; `scripts/convert.py:205-224` | Make review mandatory or label output `reviewed:false`; align delivery checklist | open |
-| D6 | P1 | Failed mechanical baseline does not block `ready`. | `scripts/review.py:242-253,266` | Add blocker/`artifacts_missing` when mechanical fails | open |
+| D4 | P0 | `merge` without `--pages` performs no coverage check, and every example omits it. | `scripts/agent_facts.py:181-206`; docs commands | Require `--pages` or explicit `--allow-missing-pages`; update examples | fixed (batch3) |
+| D5 | P0 | Advertised quick path (`convert.py`) bypasses review: no facts/page coverage, no mechanical/forced trees, but `delivery.json.ready` can be true. | `SKILL.md:29-38`; `README.md:14-30`; `scripts/convert.py:205-224` | Make review mandatory or label output `reviewed:false`; align delivery checklist | fixed (batch3) |
+| D6 | P1 | Failed mechanical baseline does not block `ready`. | `scripts/review.py:242-253,266` | Add blocker/`artifacts_missing` when mechanical fails | fixed (batch3) |
 | D7 | P1 | `--no-mechanical` / `--no-forced-truncation` / `--no-pdf` can yield ready with required artifacts absent and no warning. | `scripts/review.py:157-162,340-402` | Record missing artifacts and set `interim:true`/`ready:false` unless explicitly allowed | open |
 | D8 | P1 | Forced-truncation warning is weak/backwards; CLI help does not say notes/rests may be deleted; review.md says the flag is for when the overfull copy is wanted. | `scorepipe/cli.py:48-52`; `references/review.md:84-86` | State deletion clearly; correct wording; print operations before writing | in progress (batch1) |
-| D9 | P1 | `accept` can record acceptance with an empty reviewer. | `scripts/notation_patches.py:45,60-62`; `references/agent-review.md:75` | Require non-empty `--reviewer`; record timestamp | open |
-| D10 | P1 | No canonical delivery tree; convert uses `out/score`, review uses `review/score`, delivery.md requires one root with both trees. No command produces it; review does not write `delivery.json`. | `SKILL.md:34`; `references/review.md:16-21`; `references/delivery.md:3-28`; `scripts/review.py` | Pick one root and one sequence; make review write `delivery.json` or document convert as draft | open |
-| D11 | P1 | Review/convert accept stale artifacts by existence; failed reruns can report old mscz/pdf. | `scripts/review.py:382-386`; `scripts/convert.py:218-224` | Clear/stamp outputs; include run id/time/hash; only report files created this run | open |
+| D9 | P1 | `accept` can record acceptance with an empty reviewer. | `scripts/notation_patches.py:45,60-62`; `references/agent-review.md:75` | Require non-empty `--reviewer`; record timestamp | fixed (batch3) |
+| D10 | P1 | No canonical delivery tree; convert uses `out/score`, review uses `review/score`, delivery.md requires one root with both trees. No command produces it; review does not write `delivery.json`. | `SKILL.md:34`; `references/review.md:16-21`; `references/delivery.md:3-28`; `scripts/review.py` | Pick one root and one sequence; make review write `delivery.json` or document convert as draft | fixed (batch3) |
+| D11 | P1 | Review/convert accept stale artifacts by existence; failed reruns can report old mscz/pdf. | `scripts/review.py:382-386`; `scripts/convert.py:218-224` | Clear/stamp outputs; include run id/time/hash; only report files created this run | fixed (batch3) |
 | D12 | P1 | Review cannot carry manual title/composer or compare to ground truth; MuseScore discovery differs from convert. | `scripts/review.py:171,288-303`; `scorepipe/cli.py:34,153-165` | Add `--title/--composer/--compare-golden`; reuse `_find_musescore` | open |
 | D13 | P1 | OMR wrapper does not enforce `pdfinfo pages == page count`; a dropped page silently shortens the score. | `references/omr.md:61-70`; `scripts/convert.py:142-147` | Compare page counts before merge; abort with both numbers | open |
 | D14 | P1 | Review does not clear old `source-*.png`; `_render_pages` counts stale pages and can fake coverage. | `scripts/review.py:73-87,178` | Remove old `source-*.png` before rendering; use page hashes | fixed (batch1) |
@@ -129,7 +129,7 @@ Scope: A1, A2, A3, A4, A5, A6, A9, B2, D8.
 tail, preserves positional rests, never edits inside flat tuplets, reports `UNRESOLVED` without
 partial mutation, uses staff ids, records real rounds/stability, and rejects `--truncate-overfull`
 without `--mscz-out`. The intermediate MusicXML is isolated. C4/D8 remain in progress. Verification:
-238 unittest / 322 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
+239 unittest / 323 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
 unchanged with no forced operations.
 
 ### Batch 2 — verifier and pass-sanity integrity
@@ -141,7 +141,7 @@ Scope: B1, B3–B7, C1–C4, C6, C9, A7, A8, A10.
 duration; MSCX length checks all overfull voices while allowing short secondary voices; explicit
 `<visible>1</visible>` is no longer treated as hidden; pass fixtures now assert an actual effect and
 the sanity framework compares state hashes and verifier details/multiplicity; display pass inventory
-is explicit; truncation has multi-voice/3-4 tests. Verification: 238 unittest / 322 pytest.
+is explicit; truncation has multi-voice/3-4 tests. Verification: 239 unittest / 323 pytest.
 
 - Strengthen `verify_patches` and add five drift tests.
 - Check every voice; fix hidden-rest semantics; add empty/implicit/multipart/grace cases.
@@ -151,6 +151,12 @@ is explicit; truncation has multi-voice/3-4 tests. Verification: 238 unittest / 
 ### Batch 3 — workflow, coverage and readiness
 
 Scope: D1–D7, D9–D15, E15, E16.
+
+**Progress 2026-11-23:** D1/D2/D4/D5/D6/D9/D10/D11 fixed; D7/D12/D13/D15/E15/E16 remain.
+The CLI/review now require an accepted patch (legacy patches without a status remain readable),
+`accept` handles ottava and requires `--reviewer`, `merge` requires `--pages` unless explicitly
+overridden, review writes `delivery.json` and blocks a failed mechanical baseline, and convert is
+labeled `reviewed:false`. Stale outputs are removed before reruns.
 
 - One proposed→accepted state machine; require `accepted_by`; make ottava and tuplet consistent.
 - Require `--pages` for merge unless explicitly overridden.

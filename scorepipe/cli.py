@@ -114,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     ottava_payload = None
     if args.patches:
         patches_payload = load_patches(args.patches)
-        problems = validate_patches(patches_payload, doc)
+        problems = validate_patches(patches_payload, doc, require_acceptance=True)
         if problems:
             for problem in problems:
                 print(f"patches: {problem}")

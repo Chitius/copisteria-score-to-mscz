@@ -148,6 +148,8 @@ def main(argv: list[str] | None = None) -> int:
 
     musicxml = outdir / "score.musicxml"
     report = outdir / "report.json"
+    for stale in (musicxml, report, outdir / "score.mscz", outdir / "score.pdf"):
+        stale.unlink(missing_ok=True)
     score_command = [
         pipeline_python,
         "-m",
@@ -204,6 +206,8 @@ def main(argv: list[str] | None = None) -> int:
 
     manifest = {
         "skill": "copisteria-to-mscz",
+        "reviewed": False,
+        "delivery": "pipeline draft; run scripts/review.py before delivery",
         "ready": pipeline_exit == 0 and (render_exit is None or render_exit == 0),
         "pipeline_exit": pipeline_exit,
         "render_exit": render_exit,

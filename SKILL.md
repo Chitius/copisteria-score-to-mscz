@@ -30,11 +30,13 @@ metadata:
 # 1. 每台机器做一次环境检查；只报告缺项，不安装。
 python scripts/preflight.py --save env.local.json
 
-# 2. OMR + 修复 + MuseScore + PDF 一次完成。
+# 2. OMR + 修复 + MuseScore + PDF 生成 pipeline draft（还不是最终交付）。
 python scripts/convert.py "score.pdf" --env env.local.json --outdir "out/score" \
   --title "标题" --composer "作曲"
 
-# 3. 检查 report 和渲染页，再交付。
+# 3. 逐页 review、facts/proposals、mechanical/reviewed/forced 三树；通过后才交付。
+python scripts/review.py "score.pdf" --pages out/score/work/copisteria \
+  --facts-dir review/facts --outdir "review/score"
 ```
 
 如果用户已有别的 OMR 前端，不用 `scripts/convert.py`，直接把逐页目录交给 pipeline：
@@ -109,7 +111,7 @@ python scripts/agent_facts.py prepare --pdf "score.pdf" --outdir review/facts
 
 # agent 逐页看图，写出带 page/evidence/bbox 的 JSON
 python scripts/agent_facts.py validate --facts review/facts/agent-page1.json --pages 2
-python scripts/agent_facts.py merge --parts review/facts/agent-page*.json -o review/facts/facts.json
+python scripts/agent_facts.py merge --parts review/facts/agent-page*.json --pages 2 -o review/facts/facts.json
 
 # 注入并重新渲染
 python scripts/convert.py "score.pdf" --pages path/to/omr-pages \
@@ -151,7 +153,7 @@ tuplet 只重定时已有的完整同声部音符段，必须提供独立的比�
 
 ```bash
 python scripts/review.py "score.pdf" --pages path/to/omr-pages \
-  --facts-dir review/facts --patches review/patches.json --outdir review/score
+  --facts-dir review/facts --patches review/patches.accepted.json --outdir review/score
 ```
 
 缺页、unresolved、proposed correction 或 patch 校验失败时，默认在 pipeline 前停止并写
@@ -177,6 +179,7 @@ Agent 是 producer，不是改谱者。完整协议见 `references/agent-review.
 5. 音高/节奏疑点放 `corrections`，8va/tuplet 放 `patches`，都保持 `status: proposed`；
 6. 不在 agent 阶段直接编辑 MusicXML/mscz/mscx，也不自行把 proposal 改成 `accepted`；
 7. 用 `validate`/`merge` 检查覆盖与证据，经人工/明确 reviewer 接受后才 apply 并重新渲染。
+   corrections 没有自动 applier：接受后必须在 MuseScore/专门编辑流程里改音高，再重渲染。
 
 ### 5. 交付
 

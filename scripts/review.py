@@ -216,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
     patch_problems = []
     if args.patches:
         patch_payload = load_patches(args.patches)
-        patch_problems = validate_patches(patch_payload, merged.document)
+        patch_problems = validate_patches(patch_payload, merged.document, require_acceptance=True)
         if patch_problems:
             blockers.extend(f"patch: {problem}" for problem in patch_problems)
 
@@ -240,6 +240,9 @@ def main(argv: list[str] | None = None) -> int:
             mechanical_command.extend(["--mscz-out", str(mech_mscz)])
             if musescore:
                 mechanical_command.extend(["--musescore", str(musescore)])
+        for stale in (mech_musicxml, mech_report, mech_mscz, mechanical_dir / "score.pdf"):
+            if stale:
+                stale.unlink(missing_ok=True)
         print("+ mechanical baseline (no agent facts or patches)")
         mech_exit = _run(mechanical_command, ROOT)
         mechanical = {
@@ -263,6 +266,9 @@ def main(argv: list[str] | None = None) -> int:
                     mechanical["rendered_pages"] = _render_pages(mech_pdf, mechanical_dir / "rendered")
                 except RuntimeError as exc:
                     mechanical["render_error"] = str(exc)
+
+    if mechanical is not None and not mechanical.get("ready"):
+        blockers.append("mechanical baseline did not complete cleanly")
 
     report = {
         "ready": not blockers,
@@ -289,6 +295,8 @@ def main(argv: list[str] | None = None) -> int:
 
     musicxml = outdir / "score.musicxml"
     report_json = outdir / "report.json"
+    for stale in (musicxml, report_json, outdir / "score.mscz", outdir / "score.pdf"):
+        stale.unlink(missing_ok=True)
     command = [
         python,
         "-m",
@@ -361,6 +369,8 @@ def main(argv: list[str] | None = None) -> int:
             forced_musicxml = forced_dir / "score.musicxml"
             forced_report = forced_dir / "report.json"
             forced_mscz = forced_dir / "score.mscz"
+            for stale in (forced_musicxml, forced_report, forced_mscz, forced_dir / "score.pdf"):
+                stale.unlink(missing_ok=True)
             forced_command = [
                 python,
                 "-m",
@@ -435,6 +445,19 @@ def main(argv: list[str] | None = None) -> int:
                 report["blockers"].append("forced-truncation copy is not clean/complete")
 
     _write(outdir / "review-report.json", report)
+    _write(
+        outdir / "delivery.json",
+        {
+            "reviewed": True,
+            "ready": report["ready"],
+            "pipeline_exit": report.get("pipeline_exit"),
+            "render_exit": report.get("render_exit"),
+            "artifacts": report.get("artifacts"),
+            "mechanical": mechanical,
+            "forced_truncation": forced,
+            "blockers": report.get("blockers") or [],
+        },
+    )
     print(f"review ready: {report['ready']}")
     print(f"report: {outdir / 'review-report.json'}")
     return pipeline_exit or code or (0 if report["ready"] else 2)

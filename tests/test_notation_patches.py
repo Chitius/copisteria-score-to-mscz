@@ -158,6 +158,11 @@ class NotationPatchesTest(unittest.TestCase):
         doc.root.find(".//note/duration").text = "20"
         self.assertTrue(any("tuplet" in problem for problem in verify_patches(doc, payload)))
 
+    def test_proposed_ottava_is_rejected_when_acceptance_is_required(self):
+        doc = Document.load(TINY)
+        payload = patch(status="proposed")
+        self.assertTrue(validate_patches(payload, doc, require_acceptance=True))
+
     def assert_tuplet_rejected(self, doc: Document, payload: dict):
         before = doc.state_hash()
         problems = validate_patches(payload, doc)
