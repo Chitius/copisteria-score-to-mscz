@@ -10,6 +10,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -37,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     apply = sub.add_parser("apply", help="apply a patch file to MusicXML")
     apply.add_argument("--input", required=True)
     apply.add_argument("--patches", required=True)
+    apply.add_argument("--dry-run", action="store_true", help="validate and report changes without writing")
     apply.add_argument("-o", "--output", required=True)
     accept = sub.add_parser("accept", help="promote proposed tuplet patches to accepted")
     accept.add_argument("--patches", required=True)
@@ -83,6 +85,11 @@ def main(argv: list[str] | None = None) -> int:
         for problem in problems:
             print(problem)
         return 1
+    if args.dry_run:
+        preview = Document(ElementTree.fromstring(ElementTree.tostring(doc.root)))
+        changed = apply_patches(preview, payload)
+        print(f"dry-run: {changed} patch change(s); {args.output} not written")
+        return 0
     changed = apply_patches(doc, payload)
     doc.save(args.output)
     print(f"wrote {args.output} ({changed} patch changes)")

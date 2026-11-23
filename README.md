@@ -33,6 +33,22 @@ python -m scorepipe.cli path/to/pages -o out/score/score.musicxml --mscz-out out
 `scripts/convert.py` is a pipeline draft; its `delivery.json` has `reviewed: false`. Use
 `scripts/review.py` for the final delivery tree and acceptance checks.
 
+### Operational flags
+
+| Script | Flag | Meaning |
+|---|---|---|
+| `review.py` | `--no-mechanical` | omit the no-agent baseline (blocked unless `--allow-incomplete-delivery`) |
+| `review.py` | `--no-forced-truncation` | omit the forced editable tree (same gate) |
+| `review.py` | `--allow-incomplete-delivery` | explicit interim override; still records `artifacts_missing` |
+| `review.py` | `--title` / `--composer` | inject manual credits before review |
+| `review.py` | `--compare-golden` | compare the reviewed MusicXML with a golden file |
+| `review.py` | `--allow-unresolved` / `--allow-corrections` | interim override; recorded as `overrides` |
+| `convert.py` | `--force` | replace existing draft artifacts |
+| `convert.py` | `--no-mscz` / `--no-pdf` | stop before/without render (draft only) |
+| `scorepipe.cli` | `--truncate-overfull` | explicit forced-repair pass; requires `--mscz-out` |
+| `notation_patches.py` | `apply --dry-run` | validate and report changes without writing |
+| `notation_patches.py` | `accept --reviewer NAME` | promote selected ottava/tuplet patches |
+
 ## What the skill produces
 
 | Artifact | Meaning |

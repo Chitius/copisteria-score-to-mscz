@@ -12,7 +12,7 @@ model weights, packages, or system tools. Ask the user before changing their env
 | OMR Python env | copisteria + music21 | `--omr-python` or `COPISTERIA_PYTHON` |
 | copisteria source | OMR engine | `--repo` or `COPISTERIA_REPO` |
 | MuseScore 4 | `.mscz`, PDF render | `MUSESCORE_EXE` or common paths |
-| poppler | PDF page count/raster | `pdfinfo`, `pdftoppm` |
+| poppler | PDF page count/raster; required by `scripts/review.py`, optional for a `--pages` pipeline-only run | `pdfinfo`, `pdftoppm` |
 
 Optional: `pdftotext` (PDF text layer), `xmllint` (schema debugging), a LaTeX/office renderer for
 delivery packets.
