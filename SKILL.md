@@ -158,6 +158,18 @@ python scripts/review.py "score.pdf" --pages path/to/omr-pages \
 `review-report.json`。`--allow-unresolved` / `--allow-corrections` 只用于临时试跑，报告仍会
 列出被覆盖的项。review 成功后检查 `rendered/` 和 `score.pdf`，再交付。
 
+### 4d. Agent 检查与提案契约
+
+Agent 是 producer，不是改谱者。完整协议见 `references/agent-review.md`，最低要求：
+
+1. 用 source PDF 的逐页 `page-*.png` 和 `score-map.json` 检查，不以修复后的 mscz 代替原页；
+2. 每一页都要产出 `agent-pageNN.json`，`producer.pages` 必须声明实际看过的页；
+3. credit/mark 必须带 `page`、`evidence`、`bbox`/`crop`；
+4. 看不清的内容放 `unresolved`，不要猜；
+5. 音高/节奏疑点放 `corrections`，8va/tuplet 放 `patches`，都保持 `status: proposed`；
+6. 不在 agent 阶段直接编辑 MusicXML/mscz/mscx，也不自行把 proposal 改成 `accepted`；
+7. 用 `validate`/`merge` 检查覆盖与证据，经人工/明确 reviewer 接受后才 apply 并重新渲染。
+
 ### 5. 交付
 
 按 `references/delivery.md` 执行。交付 MusicXML + `.mscz` + PDF + report，说明 verifier

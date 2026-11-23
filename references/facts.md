@@ -49,7 +49,8 @@ The JSON Schema is [`schemas/facts.schema.json`](../schemas/facts.schema.json).
 | agent/vision | rendered page + explicit transcript | available via `scripts/agent_facts.py` |
 
 The text layer is not automatically correct. Sincerely's PDF text layer produced spaced/garbled
-tokens; do not trust it without checking the rendered page.
+tokens; do not trust it without checking the rendered page. The agent hand-off rules (per-page
+coverage, proposal status, no direct score edits) are in [`agent-review.md`](agent-review.md).
 
 ## Agent visual facts
 

@@ -7,6 +7,7 @@
 | [`../references/environment.md`](../references/environment.md) | preflight and environment variables |
 | [`../references/omr.md`](../references/omr.md) | page contract and OMR integration |
 | [`../references/facts.md`](../references/facts.md) | facts schema and agent visual workflow |
+| [`../references/agent-review.md`](../references/agent-review.md) | agent review/proposal protocol |
 | [`../references/notation-patches.md`](../references/notation-patches.md) | constrained 8va prototype and range review |
 | [`../references/review.md`](../references/review.md) | page-wise review loop and blocking policy |
 | [`../references/troubleshooting.md`](../references/troubleshooting.md) | MuseScore import crashes and bisection |
