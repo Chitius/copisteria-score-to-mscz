@@ -121,6 +121,20 @@ class TruncateOverfullMscxTest(unittest.TestCase):
         self.assertEqual(result.changed, 1)
         self.assertEqual(len(doc.root.findall(".//Chord")), 3)
 
+    def test_removed_chord_reports_spanner_risk(self):
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score><Staff id='1'><Measure>"
+                "<TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>"
+                "<voice><Chord><durationType>whole</durationType><Note><pitch>60</pitch></Note></Chord>"
+                "<Chord><durationType>quarter</durationType><Tie><start/></Tie>"
+                "<Note><pitch>62</pitch></Note></Chord></voice>"
+                "</Measure></Staff></Score></museScore>"
+            )
+        )
+        result = TruncateOverfullMscx().run(doc, Context())
+        self.assertIn("spanner-risk:Tie", " ".join(result.notes))
+
 
 if __name__ == "__main__":
     unittest.main()
