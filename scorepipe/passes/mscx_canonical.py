@@ -1,26 +1,42 @@
-"""Turn the remaining raw mscx fractions into legal MuseScore values.
+"""Canonicalize mscx voices against MuseScore's 480-tick model.
 
-Forced truncation can leave OMR fractions such as 16/384 or 5/12 whole-note
-values.  MuseScore can display them but reports tick-level measure errors.  This
-module wraps the small fractions in the smallest tuplet that represents them and
-clamps cross-staff voice locations that start too late in the bar.
+The model in ``musescore_ticks`` mirrors ``Constants::DIVISION`` and
+``Fraction::ticks()``.  A forced voice is allowed to be short only when it is a
+secondary voice; here we fill such a voice with hidden rests, and clamp a
+cross-staff ``location`` that starts late enough to leave the bar.  The result
+is checked by exact tick totals, not beat totals.
 """
 
 from __future__ import annotations
 
-import copy
 from fractions import Fraction
 from xml.etree import ElementTree
 
 from ..core.mscx import MsxcDocument
-from ..core.mscx_invariants import _beats, _tuplet_ratio
+from ..core.musescore_ticks import (
+    TICKS_PER_WHOLE,
+    location_ticks,
+    measure_expected_ticks,
+    voice_ticks,
+)
 
-# beats -> (base durationType, normalNotes, actualNotes)
-_TUPLET_FOR_BEATS = {
-    Fraction(1, 12): ("32nd", 2, 3),
-    Fraction(1, 6): ("16th", 2, 3),
-    Fraction(1, 24): ("64th", 2, 3),
-}
+# name, dots, ticks
+_LEGAL_TICKS = (
+    ("whole", 0, 1920),
+    ("half", 1, 1440),
+    ("half", 0, 960),
+    ("quarter", 1, 720),
+    ("quarter", 0, 480),
+    ("eighth", 1, 360),
+    ("eighth", 0, 240),
+    ("16th", 1, 180),
+    ("16th", 0, 120),
+    ("32nd", 1, 90),
+    ("32nd", 0, 60),
+    ("64th", 1, 45),
+    ("64th", 0, 30),
+    ("128th", 0, 15),
+)
 
 
 def canonicalize(doc: MsxcDocument, only=None) -> int:
@@ -28,153 +44,52 @@ def canonicalize(doc: MsxcDocument, only=None) -> int:
     for staff, index, measure in doc.iter_measures():
         if only is not None and index not in only:
             continue
-        meter = Fraction(4)
-        for time in measure.iter("TimeSig"):
-            try:
-                meter = Fraction(time.findtext("sigN") or 4) * 4 / Fraction(
-                    time.findtext("sigD") or 4
-                )
-            except (ValueError, ZeroDivisionError):
-                pass
-        snapshot = copy.deepcopy(measure)
-        before = [_voice_end(voice, meter) for voice in measure.findall("voice")]
-        touched = 0
+        expected = measure_expected_ticks(measure)
         for voice in measure.findall("voice"):
-            touched += _clamp_location(voice, meter)
-            touched += _wrap_fractions(voice)
-        after = [_voice_end(voice, meter) for voice in measure.findall("voice")]
-        safe = True
-        for old, new in zip(before, after):
-            if old <= meter + Fraction(1, 1_000_000):
-                if abs(new - old) > Fraction(1, 1_000_000):
-                    safe = False
-            elif new > meter + Fraction(1, 1_000_000):
-                safe = False
-        if touched and not safe:
-            staff[index - 1] = snapshot
-            continue
-        changed += touched
+            if not voice.findall("Chord"):
+                continue
+            if any(rest.findtext("durationType") == "measure" or rest.find("padding") is not None
+                   for rest in voice.findall("Rest")):
+                continue
+            start = location_ticks(voice)
+            duration = voice_ticks(voice)
+            end = start + duration
+            if start <= 0:
+                continue
+            if end > expected:
+                if duration <= expected:
+                    _set_location(voice, expected - duration)
+                    changed += 1
+            elif end < expected:
+                changed += _fill(voice, expected - end)
+        for voice in measure.findall("voice"):
+            if location_ticks(voice) + voice_ticks(voice) > expected:
+                raise ValueError(f"canonicalization left m{index} voice beyond the bar")
     return changed
 
 
-def _voice_end(voice, meter: Fraction) -> Fraction:
-    location = voice.find("location/fractions")
-    start = Fraction(0)
-    if location is not None:
-        try:
-            start = Fraction(location.text or "0") * 4
-        except (ValueError, ZeroDivisionError):
-            pass
-    return start + _voice_beats(voice, meter)
-
-
-def _voice_beats(voice, meter: Fraction) -> Fraction:
-    total = Fraction(0)
-    tuplets: list[Fraction] = []
-    for child in voice:
-        if child.tag == "Tuplet":
-            tuplets.append(_tuplet_ratio(child))
-        elif child.tag == "endTuplet":
-            if tuplets:
-                tuplets.pop()
-        elif child.tag in ("Chord", "Rest"):
-            ratio = Fraction(1)
-            for tuplet in tuplets:
-                ratio *= tuplet
-            total += _beats(child, meter, ratio)
-    return total
-
-
-def _clamp_location(voice, meter: Fraction) -> int:
+def _set_location(voice, ticks: int) -> None:
     location = voice.find("location")
     if location is None:
-        return 0
+        location = ElementTree.SubElement(voice, "location")
     fractions = location.find("fractions")
     if fractions is None:
-        return 0
-    try:
-        start = Fraction(fractions.text or "0") * 4
-    except (ValueError, ZeroDivisionError):
-        return 0
-    duration = _voice_beats(voice, meter)
-    if start + duration <= meter:
-        return 0
-    new_start = max(Fraction(0), meter - duration)
-    value = new_start / 4
+        fractions = ElementTree.SubElement(location, "fractions")
+    value = Fraction(ticks, TICKS_PER_WHOLE)
     fractions.text = f"{value.numerator}/{value.denominator}"
-    return 1
 
 
-def _wrap_fractions(voice) -> int:
+def _fill(voice, ticks: int) -> int:
     changed = 0
-    tuplets: list[Fraction] = []
-    for element in list(voice):
-        if element.tag == "Tuplet":
-            tuplets.append(_tuplet_ratio(element))
-            continue
-        if element.tag == "endTuplet":
-            if tuplets:
-                tuplets.pop()
-            continue
-        if tuplets:
-            continue
-        if element.tag not in ("Chord", "Rest") or element.find("duration") is None:
-            continue
-        try:
-            beats = Fraction(element.findtext("duration") or "0") * 4
-        except (ValueError, ZeroDivisionError):
-            continue
-        if beats == Fraction(5, 3) and element.tag == "Rest":
-            changed += _split_rest(voice, element)
-            continue
-        mapping = _TUPLET_FOR_BEATS.get(beats)
-        if mapping is None:
-            continue
-        base, normal, actual = mapping
-        _wrap(voice, element, base, normal, actual)
-        changed += 1
+    remaining = ticks
+    for name, dots, value in _LEGAL_TICKS:
+        while remaining >= value:
+            rest = ElementTree.SubElement(voice, "Rest")
+            ElementTree.SubElement(rest, "padding").text = "1"
+            ElementTree.SubElement(rest, "durationType").text = name
+            if dots:
+                ElementTree.SubElement(rest, "dots").text = str(dots)
+            ElementTree.SubElement(rest, "visible").text = "0"
+            remaining -= value
+            changed += 1
     return changed
-
-
-def _wrap(voice, element, base: str, normal: int, actual: int) -> None:
-    index = list(voice).index(element)
-    tuplet = ElementTree.Element("Tuplet")
-    ElementTree.SubElement(tuplet, "normalNotes").text = str(normal)
-    ElementTree.SubElement(tuplet, "actualNotes").text = str(actual)
-    ElementTree.SubElement(tuplet, "baseNote").text = base
-    end = ElementTree.Element("endTuplet")
-    voice.remove(element)
-    _set_type(element, base)
-    voice.insert(index, tuplet)
-    voice.insert(index + 1, element)
-    voice.insert(index + 2, end)
-
-
-def _split_rest(voice, element) -> int:
-    """5/3 beats = dotted quarter (3/2) plus one 16th triplet (1/6)."""
-    index = list(voice).index(element)
-    first = copy.deepcopy(element)
-    _set_type(first, "quarter")
-    ElementTree.SubElement(first, "dots").text = "1"
-    voice.remove(element)
-    voice.insert(index, first)
-    rest = copy.deepcopy(element)
-    _set_type(rest, "16th")
-    tuplet = ElementTree.Element("Tuplet")
-    ElementTree.SubElement(tuplet, "normalNotes").text = "2"
-    ElementTree.SubElement(tuplet, "actualNotes").text = "3"
-    ElementTree.SubElement(tuplet, "baseNote").text = "16th"
-    end = ElementTree.Element("endTuplet")
-    voice.insert(index + 1, tuplet)
-    voice.insert(index + 2, rest)
-    voice.insert(index + 3, end)
-    return 1
-
-
-def _set_type(element, name: str) -> None:
-    for tag in ("duration", "durationType", "dots"):
-        for node in element.findall(tag):
-            element.remove(node)
-    for node in element.findall("NoteDot"):
-        element.remove(node)
-    ElementTree.SubElement(element, "durationType").text = name
