@@ -114,6 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-mscz", action="store_true", help="stop after MusicXML")
     parser.add_argument("--no-pdf", action="store_true", help="do not render a review PDF")
     parser.add_argument("--max-rounds", type=int, default=32)
+    parser.add_argument("--force", action="store_true", help="replace existing delivery artifacts")
     args = parser.parse_args(argv)
 
     config = _load_config(args.env)
@@ -173,6 +174,9 @@ def main(argv: list[str] | None = None) -> int:
 
     musicxml = outdir / "score.musicxml"
     report = outdir / "report.json"
+    existing = [path for path in (musicxml, report, outdir / "score.mscz", outdir / "score.pdf") if path.exists()]
+    if existing and not args.force:
+        parser.error("output already exists; pass --force to replace: " + ", ".join(str(path) for path in existing))
     for stale in (musicxml, report, outdir / "score.mscz", outdir / "score.pdf"):
         stale.unlink(missing_ok=True)
     score_command = [

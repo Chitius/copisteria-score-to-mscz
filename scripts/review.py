@@ -195,7 +195,10 @@ def main(argv: list[str] | None = None) -> int:
         for path, payload in zip(parts, normalized):
             problems.extend(f"{path.name}: {problem}" for problem in validate_agent_facts(payload, page_count=page_count))
         if problems:
-            _write(outdir / "review-report.json", {"ready": False, "errors": problems})
+            _write(
+                outdir / "review-report.json",
+                {"ready": False, "blockers": problems, "errors": problems},
+            )
             for problem in problems:
                 print(problem)
             return 1

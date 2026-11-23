@@ -101,13 +101,13 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 | E7 | P3 | Label-stripping docs say the printed label stays in `evidence`; code only strips it. | `README.md:122-123`; `references/facts.md:100-103`; `scorepipe/agent_facts.py:24-33` | Append original label or correct docs | fixed (batch4) |
 | E8 | P2 | Ottava docs claim start/end staff enforcement; schema has one staff field and implementation never compares. Docs also say page alone is enough. | `references/notation-patches.md:115-119`; `schemas/notation-patches.schema.json:37-40,60`; `notation_patches.py:161-191` | Require evidence+bbox/crop; remove/reword staff claim | fixed (batch4) |
 | E9 | P2 | Destructive `replace/remove` have no dry-run or itemized deleted spanners; script prints only a count. | `references/notation-patches.md:40-47`; `scripts/notation_patches.py:87-89` | Add `--dry-run` and itemized report; require reviewer/force | open |
-| E10 | P2 | Blocked review has two schemas/exit codes: validation errors use `errors`/1; normal blockers use `blockers`/2. | `scripts/review.py:188-191,265-286`; `references/review.md:25` | Unify schema; document 1 vs 2 | open |
+| E10 | P2 | Blocked review has two schemas/exit codes: validation errors use `errors`/1; normal blockers use `blockers`/2. | `scripts/review.py:188-191,265-286`; `references/review.md:25` | Unify schema; document 1 vs 2 | fixed (batch4) |
 | E11 | P2 | `--allow-unresolved`/`--allow-corrections` leave `ready:true` with no `interim`/`overrides` field. | `scripts/review.py:206-209,266` | Add `interim` and overrides; print INTERIM | fixed (batch4) |
 | E12 | P2 | `validate_facts` rejects metronome-only marks though schema/agent validation allow them. | `scorepipe/facts.py:34`; `schemas/facts.schema.json:38,51-56` | Include `metronome` | fixed (batch4) |
 | E13 | P3 | Lieder corpus README points at missing files/commands. | `tests/corpus/lieder/README.md:57-59` | Correct paths or remove | fixed (batch4) |
 | E14 | P3 | Undocumented flags: `--no-mechanical`, `--mechanical-dir`, `--forced-dir`, `--images`, `--dpi`, `--max-rounds`, `--truncate-overfull`. | scripts/review.py, agent_facts.py, convert.py, cli.py | Add a per-script flag table | open |
 | E15 | P1 | Facts are not bound to the PDF/score: one `agent-page-all.json` can claim all pages; no PDF hash recorded. | `scorepipe/agent_facts.py:174-212`; shipped Zenzenzense facts | Require per-page files/markers; record PDF SHA-256; reject mismatches | in progress (batch3) |
-| E16 | P1 | `convert.py` overwrites prior artifacts and arranger facts without warning; manifest omits facts.json. | `scripts/convert.py:149-150,171-186,218-225`; `SKILL.md:20` | Refuse without `--force`; separate arranger facts; include in manifest | open |
+| E16 | P1 | `convert.py` overwrites prior artifacts and arranger facts without warning; manifest omits facts.json. | `scripts/convert.py:149-150,171-186,218-225`; `SKILL.md:20` | Refuse without `--force`; separate arranger facts; include in manifest | fixed (batch4) |
 
 ## Batch plan
 
@@ -170,10 +170,11 @@ title/composer/compare-golden and the shared MuseScore resolver are wired into r
 
 Scope: C7, C8, C10, E1–E14.
 
-**Progress 2026-11-23:** E1, E2, E3, E5, E6, E7, E8, E11, E12, E13 fixed; C7/C8/C10,
-E4/E9/E10/E14 remain. Historical docs are marked, current paths and agent filenames are normalized,
-the corpus README points at real files, and the label-stripping code now preserves the printed
-wording in evidence.
+**Progress 2026-11-23:** E1, E2, E3, E5, E6, E7, E8, E10, E11, E12, E13, E16 fixed; C7/C8/C10,
+E4/E9/E14 remain. Historical docs are marked, current paths and agent filenames are normalized,
+the corpus README points at real files, the label-stripping code preserves the printed wording in
+evidence, blocked reports share the `blockers` schema, and convert refuses existing outputs unless
+`--force` is explicit.
 
 - Mark historical docs; regenerate pass/test counts.
 - Normalize score paths and artifact names.

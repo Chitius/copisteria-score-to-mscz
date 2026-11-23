@@ -171,14 +171,20 @@ def _describe(actions, items):
 
 
 def _describe_element(element) -> str:
+    risky = [
+        child.tag
+        for child in element.iter()
+        if child.tag in ("Tie", "Slur", "Spanner")
+    ]
+    suffix = f" [spanner-risk:{','.join(sorted(set(risky)))}]" if risky else ""
     if element.tag != "Chord":
-        return ""
+        return suffix
     pitches = []
     for note in element.findall("Note"):
         pitch = note.find("pitch")
         if pitch is not None:
             pitches.append(str(pitch.text or ""))
-    return f" [{','.join(pitches)}]" if pitches else ""
+    return (f" [{','.join(pitches)}]" if pitches else "") + suffix
 
 
 def _shorten(element, beats: Fraction) -> None:

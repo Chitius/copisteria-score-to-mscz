@@ -60,7 +60,7 @@ python scripts/agent_facts.py validate --facts review/facts/agent-page01.json --
 python scripts/agent_facts.py merge --parts review/facts/agent-page*.json --pages N \
   -o review/facts/facts.json
 python scripts/notation_patches.py accept --patches review/patches.json \
-  --musicxml out/score.musicxml --indices 0 --reviewer "name" \
+  --musicxml out/score/score.musicxml --indices 0 --reviewer "name" \
   -o review/patches.accepted.json
 ```
 

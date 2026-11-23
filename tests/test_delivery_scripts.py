@@ -39,7 +39,7 @@ class ConvertFailureTest(unittest.TestCase):
             patch.object(convert_script, "_find_musescore", return_value="musescore"),
         ):
             code = convert_script.main(
-                [str(source), "--pages", str(pages), "--outdir", str(outdir)]
+                [str(source), "--pages", str(pages), "--outdir", str(outdir), "--force"]
             )
 
         self.assertEqual(code, 1)
