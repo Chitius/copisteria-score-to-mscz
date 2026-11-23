@@ -72,6 +72,38 @@ class TruncateOverfullMscxTest(unittest.TestCase):
         self.assertEqual(len(doc.root.findall(".//Rest")), 1)
         self.assertTrue(any(note.startswith("UNRESOLVED") for note in result.notes))
 
+    def test_short_secondary_voice_is_untouched(self):
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score><Staff id='1'><Measure>"
+                "<TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>"
+                "<voice><Chord><durationType>whole</durationType><Note><pitch>60</pitch></Note></Chord>"
+                "<Chord><durationType>quarter</durationType><Note><pitch>62</pitch></Note></Chord></voice>"
+                "<voice><Chord><durationType>half</durationType><Note><pitch>64</pitch></Note></Chord></voice>"
+                "</Measure></Staff></Score></museScore>"
+            )
+        )
+        result = TruncateOverfullMscx().run(doc, Context())
+        self.assertEqual(result.changed, 1)
+        secondary = doc.root.findall(".//voice")[1].find("Chord")
+        self.assertIsNone(secondary.find("duration"))
+
+    def test_three_four_target_is_honoured(self):
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score><Staff id='1'><Measure>"
+                "<TimeSig><sigN>3</sigN><sigD>4</sigD></TimeSig>"
+                "<voice><Chord><durationType>quarter</durationType><Note><pitch>60</pitch></Note></Chord>"
+                "<Chord><durationType>quarter</durationType><Note><pitch>62</pitch></Note></Chord>"
+                "<Chord><durationType>quarter</durationType><Note><pitch>64</pitch></Note></Chord>"
+                "<Chord><durationType>quarter</durationType><Note><pitch>65</pitch></Note></Chord></voice>"
+                "</Measure></Staff></Score></museScore>"
+            )
+        )
+        result = TruncateOverfullMscx().run(doc, Context())
+        self.assertEqual(result.changed, 1)
+        self.assertEqual(len(doc.root.findall(".//Chord")), 3)
+
 
 if __name__ == "__main__":
     unittest.main()
