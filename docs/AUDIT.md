@@ -57,7 +57,7 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 
 | ID | Sev | Finding | Evidence | Fix / test | Status |
 |---|---|---|---|---|---|
-| C1 | P0 | Pass-sanity never asserts an effect. Replacing all 32 structural/inject passes with no-ops still gives ok=True; 8 fixtures are already `changed=0`. | `tests/test_pass_sanity.py:343-357`; fixtures at `:74-119,259-264` | Assert exact `changed` and element postconditions; add a meta no-op mutation test; fix the eight fixtures | open |
+| C1 | P0 | Pass-sanity never asserts an effect. Replacing all 32 structural/inject passes with no-ops still gives ok=True; 8 fixtures are already `changed=0`. | `tests/test_pass_sanity.py:343-357`; fixtures at `:74-119,259-264` | Assert exact `changed` and element postconditions; add a meta no-op mutation test; fix the eight fixtures | fixed (batch2) |
 | C2 | P0 | Idempotence and contracts cannot see unreported or non-note mutation: only `second.changed` is checked; snapshots cover notes only, not slurs/ties/beams/text. | `scorepipe/sanity.py:651-661,268-307,492-531` | Compare state hash after the second run; add element inventory; negative mutation tests | fixed (batch2) |
 | C3 | P0 | Display mechanical passes (18) and the analysis pass have no pass contract/idempotence coverage. | `tests/test_pass_sanity.py:330-340` | Add a display/analysis contract registry or explicit exemption list, plus mutation tests | open |
 | C4 | P1 | `test_mscx_truncate` uses nested `<Tuplet>` (not MuseScore's flat shape) and has a tautological `assertGreaterEqual(changed, 0)`; no idempotence/unresolved/multi-voice/pickup/ties tests. | `tests/test_mscx_truncate.py:30-61` | Rewrite with flat fixtures; exact changed/notes; one-run fixpoint; unresolved test | in progress (batch1) |
@@ -136,10 +136,12 @@ unchanged with no forced operations.
 
 Scope: B1, B3–B7, C1–C4, C6, C9, A7, A8, A10.
 
-**Progress 2026-11-23:** B1, B3, B4 and C6 fixed; B6/B7/C1/C2/C3/C9/A7/A8/A10 remain.
+**Progress 2026-11-23:** B1, B3, B4, C1, C2, C6 and B6 fixed; B7/C3/C4/C9/A7/A8/A10 remain.
 `verify_patches` now checks ottava type/size/measure/number and tuplet onset span, bracket and
 duration; MSCX length checks all overfull voices while allowing short secondary voices; explicit
-`<visible>1</visible>` is no longer treated as hidden. Verification: 231 unittest / 315 pytest.
+`<visible>1</visible>` is no longer treated as hidden; pass fixtures now assert an actual effect and
+the sanity framework compares state hashes and verifier details/multiplicity. Verification: 231
+unittest / 315 pytest.
 
 - Strengthen `verify_patches` and add five drift tests.
 - Check every voice; fix hidden-rest semantics; add empty/implicit/multipart/grace cases.

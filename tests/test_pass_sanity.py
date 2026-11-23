@@ -19,7 +19,20 @@ PART = """
 """
 
 
-def note(step="C", octave=4, duration=16, *, voice="1", staff=None, chord=False, tie=None, rest=False, extra=""):
+def note(
+    step="C",
+    octave=4,
+    duration=16,
+    *,
+    voice="1",
+    staff=None,
+    chord=False,
+    tie=None,
+    rest=False,
+    hidden=False,
+    note_type=None,
+    extra="",
+):
     chord_tag = "<chord/>" if chord else ""
     if rest:
         body = f"<rest/>{extra}"
@@ -27,9 +40,11 @@ def note(step="C", octave=4, duration=16, *, voice="1", staff=None, chord=False,
         body = f"<pitch><step>{step}</step><octave>{octave}</octave></pitch>{extra}"
     staff_tag = f"<staff>{staff}</staff>" if staff else ""
     tie_tag = f'<tie type="{tie}"/>' if tie else ""
+    hidden_attr = ' print-object="no"' if hidden else ""
+    type_tag = f"<type>{note_type}</type>" if note_type else ""
     return (
-        f"<note>{chord_tag}{body}<duration>{duration}</duration>{tie_tag}"
-        f"<voice>{voice}</voice>{staff_tag}</note>"
+        f"<note{hidden_attr}>{chord_tag}{body}<duration>{duration}</duration>{tie_tag}"
+        f"<voice>{voice}</voice>{type_tag}{staff_tag}</note>"
     )
 
 
@@ -72,7 +87,10 @@ def tie_slur_pair():
 
 
 def beam_run():
-    notes = "".join(note(step, duration=2) for step in ("C", "D", "E", "F", "G", "A", "B", "C"))
+    notes = "".join(
+        note(step, duration=2, note_type="eighth")
+        for step in ("C", "D", "E", "F", "G", "A", "B", "C")
+    )
     return build(measure(1, notes))
 
 
@@ -96,7 +114,11 @@ def redundant_time():
 
 def hidden_rest():
     return build(
-        measure(1, note("C", duration=8) + note(duration=8, rest=True, extra='<display-step>C</display-step>'))
+        measure(
+            1,
+            note("C", duration=8)
+            + note(duration=8, rest=True, hidden=True, extra="<display-step>C</display-step>"),
+        )
     )
 
 
@@ -109,13 +131,13 @@ def duplicate_notes():
 
 
 def trailing_duplicate():
-    return build(measure(1, note("C") + note("D", chord=True)) + measure(2, note("C")))
+    return build(measure(1, note("C", duration=16)) + measure(2, note("C", duration=8)))
 
 
 def overflow_duplicate():
     return build(
-        measure(1, note("C") + note("D", chord=True) + note("E", duration=8, voice="2"))
-        + measure(2, note("E", duration=8) + note("G", duration=8))
+        measure(1, note("C", duration=16) + note("E", duration=4))
+        + measure(2, note("E", duration=8))
     )
 
 
@@ -210,13 +232,31 @@ def page_context(name):
     return model.document, Context(pages=model)
 
 
+def _strip_notation(doc, *, directions: bool, tags: tuple[str, ...]) -> None:
+    for measure in doc.measures():
+        if directions:
+            for direction in list(measure.findall("direction")):
+                measure.remove(direction)
+        for note in measure.iter("note"):
+            for tie in list(note.findall("tie")):
+                note.remove(tie)
+            notations = note.find("notations")
+            if notations is None:
+                continue
+            for tag in tags:
+                for child in list(notations.findall(tag)):
+                    notations.remove(child)
+
+
 def pages_restore():
     doc, ctx = page_context("pages_restore")
+    _strip_notation(doc, directions=True, tags=("tied", "slur"))
     return ctx, doc
 
 
 def pages_notation():
     doc, ctx = page_context("pages_notation")
+    _strip_notation(doc, directions=True, tags=("arpeggiate", "articulations"))
     return ctx, doc
 
 
@@ -353,6 +393,7 @@ def test_pass_obeys_contract(name):
     contract = CONTRACTS[name]
     report = run_contract(MECHANICAL[name], factory, contract, ctx)
     assert report.idempotent, f"{name} is not idempotent"
+    assert report.changed > 0, f"{name} fixture is a no-op; it proves nothing"
     assert not report.contract_violations, f"{name} broke its contract: {report.contract_violations}"
     assert not report.checker_violations, f"{name} failed sanity checks: {report.checker_violations}"
 

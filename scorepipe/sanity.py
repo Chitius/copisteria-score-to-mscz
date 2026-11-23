@@ -720,9 +720,10 @@ def run_contract(
     checker_violations.extend(
         check_no_new_verifier_violations(before_doc, after_doc, context)
     )
-    checker_violations.extend(
-        check_pitch_set_preserved(before_snapshot, after_snapshot)
-    )
+    if not contract.allows_remove_notes and not contract.allows_add_or_remove_measures:
+        checker_violations.extend(
+            check_pitch_set_preserved(before_snapshot, after_snapshot)
+        )
 
     idempotence_doc = doc_factory()
     idempotence_violations = check_idempotent(pass_obj, idempotence_doc, context)
