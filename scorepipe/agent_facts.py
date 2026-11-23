@@ -38,7 +38,10 @@ def normalize_agent_facts(payload: dict) -> dict:
     normalized = copy.deepcopy(payload)
     for credit in normalized.get("credits") or []:
         if isinstance(credit, dict) and isinstance(credit.get("text"), str):
+            original = credit["text"]
             credit["text"] = normalize_credit_text(credit.get("type") or "", credit["text"])
+            if credit["text"] != original and credit.get("evidence"):
+                credit["evidence"] = f"{credit['evidence']} (printed: {original})"
     for item in normalized.get("unresolved") or []:
         if isinstance(item, dict) and not item.get("reason") and item.get("note"):
             item["reason"] = item["note"]

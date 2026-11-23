@@ -42,7 +42,7 @@ python scripts/review.py "score.pdf" --pages out/score/work/copisteria \
 如果用户已有别的 OMR 前端，不用 `scripts/convert.py`，直接把逐页目录交给 pipeline：
 
 ```bash
-python -m scorepipe.cli path/to/pages -o out/score.musicxml --mscz-out out/score.mscz \
+python -m scorepipe.cli path/to/pages -o out/score/score.musicxml --mscz-out out/score/score.mscz \
   --report out/report.json
 ```
 
@@ -110,7 +110,7 @@ Agent/视觉 facts 的流程：
 python scripts/agent_facts.py prepare --pdf "score.pdf" --outdir review/facts
 
 # agent 逐页看图，写出带 page/evidence/bbox 的 JSON
-python scripts/agent_facts.py validate --facts review/facts/agent-page1.json --pages 2
+python scripts/agent_facts.py validate --facts review/facts/agent-page01.json --pages 2
 python scripts/agent_facts.py merge --parts review/facts/agent-page*.json --pages 2 -o review/facts/facts.json
 
 # 注入并重新渲染
@@ -135,8 +135,8 @@ python scripts/convert.py "score.pdf" --pages path/to/omr-pages \
 facts 不适合承载 8va、pedal、hairpin 这类谱面对象。原型用“音符锚点 + 操作”而不是直接改 mscz：
 
 ```bash
-python scripts/notation_patches.py map --input out/score.musicxml -o review/score-map.json
-python -m scorepipe.cli pages/ -o out/score.musicxml --mscz-out out/score.mscz \
+python scripts/notation_patches.py map --input out/score/score.musicxml -o review/score-map.json
+python -m scorepipe.cli pages/ -o out/score/score.musicxml --mscz-out out/score/score.mscz \
   --patches review/patches.json
 ```
 

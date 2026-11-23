@@ -93,7 +93,7 @@ is mandatory for agent facts (manual facts may omit it).
 ### 2. Validate and merge
 
 ```bash
-python scripts/agent_facts.py validate --facts review/facts/agent-page1.json --pages 2 --measures 31
+python scripts/agent_facts.py validate --facts review/facts/agent-page01.json --pages 2 --measures 31
 python scripts/agent_facts.py merge --parts review/facts/agent-page*.json --pages 2 -o review/facts/facts.json
 ```
 

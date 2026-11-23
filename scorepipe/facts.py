@@ -31,7 +31,7 @@ def validate_facts(facts: dict) -> list[str]:
     for index, mark in enumerate(facts.get("marks") or []):
         if not isinstance(mark.get("measure"), int) or mark["measure"] < 1:
             problems.append(f"marks[{index}]: measure must be a positive integer")
-        if not any(mark.get(key) for key in ("text", "rehearsal", "tempo")):
+        if not any(mark.get(key) for key in ("text", "rehearsal", "tempo", "metronome")):
             problems.append(f"marks[{index}]: empty mark")
         if mark.get("placement") not in (None, "above", "below"):
             problems.append(f"marks[{index}]: placement must be above/below")

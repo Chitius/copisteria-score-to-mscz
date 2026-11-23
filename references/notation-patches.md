@@ -91,33 +91,33 @@ Re-run both MusicXML and MSCX verifiers and inspect the rendered bracket after e
 ```bash
 # 1. Export stable note anchors for the agent.
 python scripts/notation_patches.py map \
-  --input out/score.musicxml -o review/score-map.json
+  --input out/score/score.musicxml -o review/score-map.json
 
 # 2. Agent looks at page images + score-map and writes patches.json.
 
 # 3. Promote a reviewed tuplet proposal to accepted.
 python scripts/notation_patches.py accept \
-  --patches review/patches.json --musicxml out/score.musicxml \
+  --patches review/patches.json --musicxml out/score/score.musicxml \
   --indices 0 --reviewer "reviewer-name" -o review/patches.accepted.json
 
 # 4. Validate/apply. Either script:
 python scripts/notation_patches.py apply \
-  --input out/score.musicxml --patches review/patches.accepted.json \
-  -o out/score.patched.musicxml
+  --input out/score/score.musicxml --patches review/patches.accepted.json \
+  -o out/score/score.patched.musicxml
 
 # or the pipeline CLI (tuplet before structural, ottava after inject):
-python -m scorepipe.cli path/to/pages -o out/score.musicxml --mscz-out out/score.mscz \
+python -m scorepipe.cli path/to/pages -o out/score/score.musicxml --mscz-out out/score/score.mscz \
   --patches review/patches.accepted.json --report out/report.json
 ```
 
 ## 8va range safety
 
-The range is the risky part. The compiler enforces:
+The range is the risky part. The patch has one `staff` field; the compiler enforces:
 
-- start and end are in the same staff;
 - end is strictly after start;
 - measures exist;
-- the resulting octave-shift directions are present exactly once.
+- the octave-shift start/stop directions share the expected number and size;
+- evidence and a bbox/crop are present in the schema.
 
 The delivery loop must then:
 

@@ -118,7 +118,7 @@ text layer still needs the agent/vision facts path.
 
 ```bash
 python scripts/agent_facts.py prepare --pdf score.pdf --outdir review/facts
-python scripts/agent_facts.py validate --facts review/facts/agent-page1.json --pages 2
+python scripts/agent_facts.py validate --facts review/facts/agent-page01.json --pages 2
 python scripts/agent_facts.py merge --parts review/facts/agent-page*.json --pages 2 -o review/facts/facts.json
 python scripts/convert.py score.pdf --pages path/to/omr-pages \
   --facts review/facts/facts.json --outdir out/score

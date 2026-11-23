@@ -54,9 +54,9 @@ pipeline run dropped to 34.66% because `merge_staff_voices` rebuilt tuplet measu
 (duration 1680/10080) got the fallback type `quarter` and lost its `<time-modification>`, so MuseScore
 laid the measure out as 4.875 beats instead of 3. The merge now skips any staff with tuplets; P2
 settles at 51.44% (slightly above raw OMR) with 70 display measure-length warnings instead of 86.
-The raw piano is still poor; use `lindenbaum_omr_raw.mscz` for inspection.
+The raw piano is still poor; use `der_lindenbaum/der_lindenbaum.mxl` for inspection.
 
-The P1 pipeline (`scorepipe .../P1.musicxml`) is verifier-clean and keeps the same 98.94% sounding
+The P1 pipeline (`python -m scorepipe.cli .../der_lindenbaum/der_lindenbaum.mxl`) is verifier-clean and keeps the same 98.94% sounding
 match.  The P2 piano part also converges (2 rounds, clean verifier) and matches the ground truth at
 98.64% overall / 99.0% on sounding notes after the pipeline; `merge_staff_voices` protects a notated
 sustained note when merging would shorten it into another voice's run (m5 D4), and treats rest onsets
