@@ -177,6 +177,8 @@ def _describe_element(element) -> str:
         if child.tag in ("Tie", "Slur", "Spanner")
     ]
     suffix = f" [spanner-risk:{','.join(sorted(set(risky)))}]" if risky else ""
+    if element.find("duration") is not None and element.findtext("durationType") != "measure":
+        suffix += " [explicit-duration]"
     if element.tag != "Chord":
         return suffix
     pitches = []

@@ -39,7 +39,8 @@ class LiederCorpusTest(unittest.TestCase):
             self.assertEqual([part.get("id") for part in parts], ["P1", "P2"], name)
             self.assertEqual([len(part.findall("measure")) for part in parts], [measures, measures], name)
 
-    def test_every_score_matches_itself(self):
+    def test_comparator_is_consistent_on_identical_scores(self):
+        """Fixture-integrity check for the comparator, not a pipeline regression."""
         comparator = load_comparator()
         for name in CASES:
             ground_truth = CORPUS / name / "ground_truth.musicxml"
