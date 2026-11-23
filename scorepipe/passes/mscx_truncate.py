@@ -282,49 +282,6 @@ def normalize_explicit_durations(doc: MsxcDocument) -> int:
                 else:
                     for dot in note_dots:
                         element.remove(dot)
-        target = Fraction(4)
-        for time in measure.iter("TimeSig"):
-            try:
-                target = Fraction(time.findtext("sigN") or 4) * 4 / Fraction(
-                    time.findtext("sigD") or 4
-                )
-            except (ValueError, ZeroDivisionError):
-                pass
-        primary = next((v for v in measure.findall("voice") if v.findall("Chord")), None)
-        for voice in measure.findall("voice"):
-            if not voice.findall("Chord"):
-                continue
-            if voice is primary:
-                continue
-            total = Fraction(0)
-            tuplets: list[Fraction] = []
-            for child in voice:
-                if child.tag == "Tuplet":
-                    tuplets.append(_tuplet_ratio(child))
-                elif child.tag == "endTuplet":
-                    if tuplets:
-                        tuplets.pop()
-                elif child.tag in ("Chord", "Rest"):
-                    ratio = Fraction(1)
-                    for tuplet in tuplets:
-                        ratio *= tuplet
-                    total += _beats(child, target, ratio)
-            remaining = target - total
-            if remaining <= 0:
-                continue
-            from xml.etree import ElementTree
-
-            for name, dots, value in _decompose(remaining):
-                rest = ElementTree.SubElement(voice, "Rest")
-                ElementTree.SubElement(rest, "padding").text = "1"
-                ElementTree.SubElement(rest, "durationType").text = name
-                if dots:
-                    ElementTree.SubElement(rest, "dots").text = str(dots)
-                ElementTree.SubElement(rest, "visible").text = "0"
-                remaining -= value
-                changed += 1
-            if remaining > 0:
-                pass
         for voice in measure.findall("voice"):
             if voice.findall("Chord") or voice.findall("Rest"):
                 continue
