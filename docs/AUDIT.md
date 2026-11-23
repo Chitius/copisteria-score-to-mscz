@@ -51,7 +51,7 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 | B4 | P1 | `<Rest><visible>1</visible>` is reported as hidden because only presence is checked. | `mscx_invariants.py:12-23` | Treat `0/false` as hidden; table-test all six verifiers | fixed (batch2) |
 | B5 | P1 | MusicXML invariants miss empty measures, overfull `implicit` bars, broken second parts, and grace notes (no duration). | `scorepipe/core/invariants.py:93-116`; `scorepipe/core/document.py:53-54,64-103` | Add negative tests; reject multi-part or check every part; account for grace notes | open |
 | B6 | P1 | New-violation detection keys only `(code, measure)`, so a second identical violation or worse detail is invisible. | `scorepipe/sanity.py:574-597` | Key by `(code, measure, detail)` or Counter; add same-code/worse-detail tests | fixed (batch2) |
-| B7 | P1 | Five of six MSCX verifiers have no direct tests; only `measure_lengths` is covered. | `tests/test_mscx_invariants.py` | Positive/negative table tests for hidden rests, text-voice rests, padding voices, voice order, empty voices | open |
+| B7 | P1 | Five of six MSCX verifiers have no direct tests; only `measure_lengths` is covered. | `tests/test_mscx_invariants.py` | Positive/negative table tests for hidden rests, text-voice rests, padding voices, voice order, empty voices | fixed (batch2) |
 
 ## C. Tests and pass-sanity framework
 
@@ -129,7 +129,7 @@ Scope: A1, A2, A3, A4, A5, A6, A9, B2, D8.
 tail, preserves positional rests, never edits inside flat tuplets, reports `UNRESOLVED` without
 partial mutation, uses staff ids, records real rounds/stability, and rejects `--truncate-overfull`
 without `--mscz-out`. The intermediate MusicXML is isolated. C4/D8 remain in progress. Verification:
-231 unittest / 315 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
+235 unittest / 319 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
 unchanged with no forced operations.
 
 ### Batch 2 — verifier and pass-sanity integrity

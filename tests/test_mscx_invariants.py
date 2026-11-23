@@ -4,7 +4,14 @@ import unittest
 from xml.etree import ElementTree
 
 from scorepipe.core.mscx import MsxcDocument
-from scorepipe.core.mscx_invariants import hidden_non_measure_rests, measure_lengths
+from scorepipe.core.mscx_invariants import (
+    empty_voices,
+    hidden_non_measure_rests,
+    measure_lengths,
+    padding_voices,
+    text_voice_rests,
+    voice_order,
+)
 from scorepipe.core.pass_base import Context
 
 
@@ -26,6 +33,10 @@ def chord(kind: str = "quarter", duration: str | None = None) -> str:
         f"<Chord><durationType>{kind}</durationType>{explicit}"
         "<Note><pitch>60</pitch></Note></Chord>"
     )
+
+
+def rest(kind: str = "quarter") -> str:
+    return f"<Rest><durationType>{kind}</durationType></Rest>"
 
 
 class MscxMeasureLengthTest(unittest.TestCase):
@@ -136,6 +147,34 @@ class MscxMeasureLengthTest(unittest.TestCase):
             )
         )
         self.assertEqual(len(hidden_non_measure_rests(doc, Context())), 1)
+
+    def test_text_voice_rest_is_reported(self):
+        doc = _doc_with_voices("<voice><StaffText>text</StaffText><Rest><durationType>measure</durationType></Rest></voice>")
+        self.assertEqual(len(text_voice_rests(doc, Context())), 1)
+
+    def test_padding_voice_is_reported(self):
+        doc = _doc_with_voices(f"<voice>{chord('whole')}</voice><voice>{rest('whole')}</voice>")
+        self.assertEqual(len(padding_voices(doc, Context())), 1)
+
+    def test_voice_order_is_reported_when_a_thin_voice_precedes_a_dense_one(self):
+        doc = _doc_with_voices(
+            f"<voice>{chord('whole')}</voice><voice>{chord()}{chord()}{chord()}{chord()}</voice>"
+        )
+        self.assertEqual(len(voice_order(doc, Context())), 1)
+
+    def test_empty_voice_is_reported(self):
+        doc = _doc_with_voices("<voice><BarLine/></voice>")
+        self.assertEqual(len(empty_voices(doc, Context())), 1)
+
+
+def _doc_with_voices(voices: str) -> MsxcDocument:
+    return MsxcDocument(
+        ElementTree.fromstring(
+            "<museScore><Score><Staff id='1'><Measure>"
+            + voices
+            + "</Measure></Staff></Score></museScore>"
+        )
+    )
 
 
 if __name__ == "__main__":
