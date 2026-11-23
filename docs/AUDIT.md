@@ -60,8 +60,8 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 | C1 | P0 | Pass-sanity never asserts an effect. Replacing all 32 structural/inject passes with no-ops still gives ok=True; 8 fixtures are already `changed=0`. | `tests/test_pass_sanity.py:343-357`; fixtures at `:74-119,259-264` | Assert exact `changed` and element postconditions; add a meta no-op mutation test; fix the eight fixtures | fixed (batch2) |
 | C2 | P0 | Idempotence and contracts cannot see unreported or non-note mutation: only `second.changed` is checked; snapshots cover notes only, not slurs/ties/beams/text. | `scorepipe/sanity.py:651-661,268-307,492-531` | Compare state hash after the second run; add element inventory; negative mutation tests | fixed (batch2) |
 | C3 | P0 | Display mechanical passes (18) and the analysis pass have no pass contract/idempotence coverage. | `tests/test_pass_sanity.py:330-340` | Add a display/analysis contract registry or explicit exemption list, plus mutation tests | fixed (inventory+idempotence) |
-| C4 | P1 | `test_mscx_truncate` uses nested `<Tuplet>` (not MuseScore's flat shape) and has a tautological `assertGreaterEqual(changed, 0)`; no idempotence/unresolved/multi-voice/pickup/ties tests. | `tests/test_mscx_truncate.py:30-61` | Rewrite with flat fixtures; exact changed/notes; one-run fixpoint; unresolved test | in progress (batch1) |
-| C5 | P1 | Delivery tests are stateful/mocked, skip forced truncation, and have no success/stale-artifact/`--no-mscz` matrices. | `tests/test_delivery_scripts.py:13-14,98`; `scripts/convert.py:218-224` | Use tmp_path; assert artifacts from this run; test forced success/failure/skip | open |
+| C4 | P1 | `test_mscx_truncate` uses nested `<Tuplet>` (not MuseScore's flat shape) and has a tautological `assertGreaterEqual(changed, 0)`; no idempotence/unresolved/multi-voice/pickup/ties tests. | `tests/test_mscx_truncate.py:30-61` | Rewrite with flat fixtures; exact changed/notes; one-run fixpoint; unresolved test | fixed (batch2) |
+| C5 | P1 | Delivery tests are stateful/mocked, skip forced truncation, and have no success/stale-artifact/`--no-mscz` matrices. | `tests/test_delivery_scripts.py:13-14,98`; `scripts/convert.py:218-224` | Use tmp_path; assert artifacts from this run; test forced success/failure/skip | in progress (batch4) |
 | C6 | P1 | `test_cli` asserts exit 0 where the real patch verifier should fail; it enshrines B2. | `tests/test_cli.py:109-149` | Integration test: clean verifier + failed patch verify => exit 1 | fixed (batch2) |
 | C7 | P1 | Lieder corpus tests compare ground truth to itself; no pipeline run. | `tests/test_lieder_corpus.py:42-51` | Add one end-to-end threshold case or label as fixture-integrity only | fixed (batch4: fixture-integrity) |
 | C8 | P1 | Plain pytest fails on ACL-denied cache dirs; tests write into repo `.runs` and rely on CWD. | repo root `.pytest_cache`, `pytest-cache-files-*`; `test_delivery_scripts.py:13-14`; `from scripts import` | Add `conftest.py`/`testpaths`, tmp_path, sys.path fixture; clean cache dirs | fixed (batch4) |
@@ -79,7 +79,7 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 | D5 | P0 | Advertised quick path (`convert.py`) bypasses review: no facts/page coverage, no mechanical/forced trees, but `delivery.json.ready` can be true. | `SKILL.md:29-38`; `README.md:14-30`; `scripts/convert.py:205-224` | Make review mandatory or label output `reviewed:false`; align delivery checklist | fixed (batch3) |
 | D6 | P1 | Failed mechanical baseline does not block `ready`. | `scripts/review.py:242-253,266` | Add blocker/`artifacts_missing` when mechanical fails | fixed (batch3) |
 | D7 | P1 | `--no-mechanical` / `--no-forced-truncation` / `--no-pdf` can yield ready with required artifacts absent and no warning. | `scripts/review.py:157-162,340-402` | Record missing artifacts and set `interim:true`/`ready:false` unless explicitly allowed | fixed (batch3) |
-| D8 | P1 | Forced-truncation warning is weak/backwards; CLI help does not say notes/rests may be deleted; review.md says the flag is for when the overfull copy is wanted. | `scorepipe/cli.py:48-52`; `references/review.md:84-86` | State deletion clearly; correct wording; print operations before writing | in progress (batch1) |
+| D8 | P1 | Forced-truncation warning is weak/backwards; CLI help does not say notes/rests may be deleted; review.md says the flag is for when the overfull copy is wanted. | `scorepipe/cli.py:48-52`; `references/review.md:84-86` | State deletion clearly; correct wording; print operations before writing | fixed (batch1) |
 | D9 | P1 | `accept` can record acceptance with an empty reviewer. | `scripts/notation_patches.py:45,60-62`; `references/agent-review.md:75` | Require non-empty `--reviewer`; record timestamp | fixed (batch3) |
 | D10 | P1 | No canonical delivery tree; convert uses `out/score`, review uses `review/score`, delivery.md requires one root with both trees. No command produces it; review does not write `delivery.json`. | `SKILL.md:34`; `references/review.md:16-21`; `references/delivery.md:3-28`; `scripts/review.py` | Pick one root and one sequence; make review write `delivery.json` or document convert as draft | fixed (batch3) |
 | D11 | P1 | Review/convert accept stale artifacts by existence; failed reruns can report old mscz/pdf. | `scripts/review.py:382-386`; `scripts/convert.py:218-224` | Clear/stamp outputs; include run id/time/hash; only report files created this run | fixed (batch3) |
@@ -129,7 +129,7 @@ Scope: A1, A2, A3, A4, A5, A6, A9, B2, D8.
 tail, preserves positional rests, never edits inside flat tuplets, reports `UNRESOLVED` without
 partial mutation, uses staff ids, records real rounds/stability, and rejects `--truncate-overfull`
 without `--mscz-out`. The intermediate MusicXML is isolated. C4/D8 remain in progress. Verification:
-246 unittest / 330 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
+248 unittest / 332 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
 unchanged with no forced operations.
 
 ### Batch 2 — verifier and pass-sanity integrity
@@ -143,7 +143,7 @@ duration; MSCX length checks all overfull voices while allowing short secondary 
 the sanity framework compares state hashes and verifier details/multiplicity; display pass inventory
 and idempotence are tested; truncation tests cover multi-voice, 3/4, `Measure@len`, tuplets,
 unresolved and spanner risk; explicit-duration and spanner-risk operations are surfaced as separate
-fields. Verification: 246 unittest / 330 pytest.
+fields. Verification: 248 unittest / 332 pytest.
 
 - Strengthen `verify_patches` and add five drift tests.
 - Check every voice; fix hidden-rest semantics; add empty/implicit/multipart/grace cases.

@@ -48,7 +48,61 @@ class ConvertFailureTest(unittest.TestCase):
         self.assertFalse(manifest["ready"])
         self.assertEqual(manifest["pipeline_exit"], 1)
         self.assertEqual(manifest["render_exit"], 0)
+
+    def test_success_reports_this_run_artifacts(self):
+        work = WORK / "convert_success"
+        pages = work / "pages"
+        pages.mkdir(parents=True, exist_ok=True)
+        source = work / "source.pdf"
+        source.write_bytes(b"draft")
+        outdir = work / "out"
+
+        def fake_run(command, cwd, tolerate=False):
+            if "scorepipe.cli" in command:
+                Path(command[command.index("-o") + 1]).write_text("musicxml", encoding="utf-8")
+                Path(command[command.index("--report") + 1]).write_text("{}", encoding="utf-8")
+                Path(command[command.index("--mscz-out") + 1]).write_bytes(b"mscz")
+                return 0, ""
+            Path(command[command.index("-o") + 1]).write_bytes(b"pdf")
+            return 0, ""
+
+        with (
+            patch.object(convert_script, "_run", side_effect=fake_run),
+            patch.object(convert_script, "_find_musescore", return_value="musescore"),
+        ):
+            code = convert_script.main(
+                [str(source), "--pages", str(pages), "--outdir", str(outdir), "--force"]
+            )
+
+        self.assertEqual(code, 0)
+        manifest = json.loads((outdir / "delivery.json").read_text(encoding="utf-8"))
+        self.assertTrue(manifest["ready"])
+        self.assertIsNotNone(manifest["artifacts"]["mscz"])
         self.assertIsNotNone(manifest["artifacts"]["pdf"])
+
+    def test_failed_rerun_does_not_report_stale_artifacts(self):
+        work = WORK / "convert_stale"
+        pages = work / "pages"
+        pages.mkdir(parents=True, exist_ok=True)
+        source = work / "source.pdf"
+        source.write_bytes(b"draft")
+        outdir = work / "out"
+        outdir.mkdir(parents=True, exist_ok=True)
+        (outdir / "score.mscz").write_bytes(b"old")
+        (outdir / "score.pdf").write_bytes(b"old")
+
+        with (
+            patch.object(convert_script, "_run", return_value=(1, "failed")),
+            patch.object(convert_script, "_find_musescore", return_value="musescore"),
+        ):
+            code = convert_script.main(
+                [str(source), "--pages", str(pages), "--outdir", str(outdir), "--force"]
+            )
+
+        self.assertEqual(code, 1)
+        manifest = json.loads((outdir / "delivery.json").read_text(encoding="utf-8"))
+        self.assertIsNone(manifest["artifacts"]["mscz"])
+        self.assertIsNone(manifest["artifacts"]["pdf"])
 
 
 class ReviewFailureTest(unittest.TestCase):
