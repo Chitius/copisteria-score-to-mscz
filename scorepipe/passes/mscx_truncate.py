@@ -58,13 +58,14 @@ class TruncateOverfullMscx:
             staff_number += 1
             staff_label = staff.get("id") or str(staff_number)
             meter = signatures.get(index, meter)
+            target = _measure_target(measure, meter)
             for voice in doc.voices(measure):
-                items = _items(voice, meter)
+                items = _items(voice, target)
                 total = sum(item.beats for item in items)
-                excess = total - meter
+                excess = total - target
                 if excess <= 0:
                     continue
-                actions, remaining = _plan_tail(items, excess, meter)
+                actions, remaining = _plan_tail(items, excess, target)
                 if remaining > 0:
                     notes.append(
                         f"UNRESOLVED m{index} staff {staff_label}: {float(total):g} beats, "
@@ -78,7 +79,7 @@ class TruncateOverfullMscx:
                         _shorten(element, new_beats)
                 changed += 1
                 notes.append(
-                    f"m{index} staff {staff_label}: {float(total):g}->{float(meter):g}; "
+                    f"m{index} staff {staff_label}: {float(total):g}->{float(target):g}; "
                     + "; ".join(
                         f"{'remove' if new is None else 'shorten'} {float(old):g}"
                         + (f"->{float(new):g}" if new is not None else "")
@@ -87,6 +88,18 @@ class TruncateOverfullMscx:
                     )
                 )
         return PassResult(changed=changed, notes=notes)
+
+
+def _measure_target(measure, meter: Fraction) -> Fraction:
+    """MuseScore records irregular/pickup bar length as a fraction of a whole note."""
+    raw = measure.get("len")
+    if not raw:
+        return meter
+    try:
+        target = Fraction(raw) * 4
+        return target if target <= meter else meter
+    except (ValueError, ZeroDivisionError):
+        return meter
 
 
 def _items(voice, meter: Fraction) -> list[_Item]:

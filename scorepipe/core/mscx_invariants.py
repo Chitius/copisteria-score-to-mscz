@@ -143,6 +143,7 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     for staff in doc.root.iter("Staff"):
         for index, measure in enumerate(staff.findall("Measure"), start=1):
             meter = signatures.get(index, meter)
+            target = _measure_target(measure, meter)
             primary = _primary_voice(measure)
             primary_voice = primary[0] if primary else None
             for voice in measure.findall("voice"):
@@ -158,22 +159,33 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
                         ratio = Fraction(1)
                         for tuplet in tuplets:
                             ratio *= tuplet
-                        total += _beats(child, meter, ratio)
+                        total += _beats(child, target, ratio)
                 if total <= 0:
                     continue
                 # The primary voice must fill the bar. Secondary voices may intentionally stop
                 # early, but they must never be overfull: that is what the editable repair edits.
-                if abs(total - meter) <= Fraction(1, 1_000_000):
+                if abs(total - target) <= Fraction(1, 1_000_000):
                     continue
-                if voice is primary_voice or total > meter:
+                if voice is primary_voice or total > target:
                     out.append(
                         Violation(
                             "mscx-measure-length",
                             index,
-                            f"voice {float(total):g} beats, metre {float(meter):g}",
+                            f"voice {float(total):g} beats, metre {float(target):g}",
                         )
                     )
     return out
+
+
+def _measure_target(measure, meter: Fraction) -> Fraction:
+    raw = measure.get("len")
+    if not raw:
+        return meter
+    try:
+        target = Fraction(raw) * 4
+        return target if target <= meter else meter
+    except (ValueError, ZeroDivisionError):
+        return meter
 
 
 def _primary_voice(measure):

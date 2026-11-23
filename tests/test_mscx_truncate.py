@@ -105,6 +105,22 @@ class TruncateOverfullMscxTest(unittest.TestCase):
         self.assertEqual(result.changed, 1)
         self.assertEqual(len(doc.root.findall(".//Chord")), 3)
 
+    def test_measure_len_overrides_time_signature(self):
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score><Staff id='1'><Measure len='3/4'>"
+                "<TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>"
+                "<voice><Chord><durationType>quarter</durationType><Note><pitch>60</pitch></Note></Chord>"
+                "<Chord><durationType>quarter</durationType><Note><pitch>62</pitch></Note></Chord>"
+                "<Chord><durationType>quarter</durationType><Note><pitch>64</pitch></Note></Chord>"
+                "<Chord><durationType>quarter</durationType><Note><pitch>65</pitch></Note></Chord></voice>"
+                "</Measure></Staff></Score></museScore>"
+            )
+        )
+        result = TruncateOverfullMscx().run(doc, Context())
+        self.assertEqual(result.changed, 1)
+        self.assertEqual(len(doc.root.findall(".//Chord")), 3)
+
 
 if __name__ == "__main__":
     unittest.main()
