@@ -17,6 +17,7 @@
 | [`../scripts/notation_patches.py`](../scripts/notation_patches.py) | map anchors and apply constrained patches |
 | [`../schemas/notation-patches.schema.json`](../schemas/notation-patches.schema.json) | ottava/tuplet patch JSON schema |
 | [`DESIGN.md`](DESIGN.md) | compiler-style pipeline architecture |
-| [`SANITY.md`](SANITY.md) | pass contracts and adversarial fixtures |
+| [`SANITY.md`](SANITY.md) | historical pass contracts and adversarial fixtures |
+| [`AUDIT.md`](AUDIT.md) | 2026-11-23 self-audit register and batch plan |
 | [`ACCEPTANCE.md`](ACCEPTANCE.md) | historical acceptance evidence |
 | [`archive/`](archive/) | completed migration/change plans (do not treat as current roadmap) |
