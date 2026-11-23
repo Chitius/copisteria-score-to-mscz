@@ -377,4 +377,66 @@ DISPLAY_PASSES = [
     DropFirstTimeSignature(),
 ]
 
+def compact_secondary_padding(doc) -> int:
+    """Replace trailing hidden padding rests with one exact <location> offset.
+
+    The existing DropSecondaryVoiceRests pass turns rests *before a later chord*
+    into location gaps, but deletes trailing rests.  This function handles the
+    generated trailing padding instead: it removes the padding and shifts the
+    whole secondary voice so its tick end remains exactly at the bar line.
+    """
+    from ..core.musescore_ticks import (
+        TICKS_PER_WHOLE,
+        location_ticks,
+        measure_expected_ticks,
+        voice_ticks,
+    )
+
+    changed = 0
+    meters = {}
+    for staff, index, measure in doc.iter_measures():
+        meter = meters.get(id(staff), Fraction(1))
+        for time in measure.iter("TimeSig"):
+            try:
+                meter = Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4))
+            except (ValueError, ZeroDivisionError):
+                pass
+        meters[id(staff)] = meter
+        expected = measure_expected_ticks(measure, round(meter * TICKS_PER_WHOLE))
+        voices = measure.findall("voice")
+        primary = next((voice for voice in voices if voice.findall("Chord")), None)
+        for voice in voices:
+            if voice is primary:
+                continue
+            pads = [rest for rest in voice.findall("Rest") if rest.find("padding") is not None]
+            if not pads:
+                continue
+            snapshot = ElementTree.fromstring(ElementTree.tostring(voice))
+            for pad in pads:
+                voice.remove(pad)
+            notes = voice_ticks(voice)
+            if notes > expected:
+                _restore_voice(voice, snapshot)
+                continue
+            for location in list(voice.findall("location")):
+                voice.remove(location)
+            start = expected - notes
+            if start:
+                value = Fraction(start, TICKS_PER_WHOLE)
+                location = ElementTree.Element("location")
+                ElementTree.SubElement(location, "fractions").text = (
+                    f"{value.numerator}/{value.denominator}"
+                )
+                voice.insert(0, location)
+            if location_ticks(voice) + voice_ticks(voice) != expected:
+                _restore_voice(voice, snapshot)
+                continue
+            changed += len(pads)
+    return changed
+
+
+def _restore_voice(voice, snapshot) -> None:
+    voice.clear()
+    for child in snapshot:
+        voice.append(child)
 

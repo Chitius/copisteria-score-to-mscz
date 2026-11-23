@@ -19,6 +19,7 @@ from .core.mscx_invariants import MSCX_VERIFIERS
 from .core.pass_base import Context
 from .core.pipeline import PhaseReport, RunReport, TraceEntry, run_display
 from .passes import DISPLAY_PASSES, TRUNCATE_OVERFULL_MSCX
+from .passes.mscx_display import compact_secondary_padding
 from .passes.mscx_truncate import normalize_explicit_durations
 
 COMMON_PATHS = (
@@ -109,6 +110,9 @@ def export_and_display(
             )
             if normalized:
                 notes.append(f"normalized {normalized} explicit duration(s)")
+            compacted = compact_secondary_padding(archive.document)
+            if compacted:
+                notes.append(f"converted {compacted} secondary padding rest(s) to location offsets")
             if total_changed or notes:
                 report.trace.append(
                     TraceEntry(
