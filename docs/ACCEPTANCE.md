@@ -1,3 +1,5 @@
+> **Historical snapshot.** Current audit/status is in [AUDIT.md](AUDIT.md); this file records the original audit at its stated date and may contain stale counts.
+
 # Acceptance evidence
 
 Date: 2026-11-20. Commands run from the project root with the system Python.

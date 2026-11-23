@@ -1,3 +1,5 @@
+> **Historical snapshot.** Current audit/status is in [AUDIT.md](AUDIT.md); this file records the original audit at its stated date and may contain stale counts.
+
 # SANITY — per-pass contracts and sanity-check design
 
 Audit of `scorepipe/passes/*.py` at commit state of 2026-11-20. Read-only audit: no code or test was

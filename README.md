@@ -26,7 +26,7 @@ python scripts/review.py "score.pdf" --pages out/score/work/copisteria \
   --facts-dir review/facts --outdir "review/score"
 
 # Pipeline only: use an existing page directory.
-python -m scorepipe.cli path/to/pages -o out/score.musicxml --mscz-out out/score.mscz \
+python -m scorepipe.cli path/to/pages -o out/score/score.musicxml --mscz-out out/score/score.mscz \
   --report out/report.json
 ```
 
@@ -41,7 +41,9 @@ python -m scorepipe.cli path/to/pages -o out/score.musicxml --mscz-out out/score
 | `score.mscz` | MuseScore container after the display fixpoint |
 | `score.pdf` | rendered review copy |
 | `report.json` | phase rounds, pass trace, analysis, verifier violations |
-| `delivery.json` | commands, paths and artifact manifest from `scripts/convert.py` |
+| `delivery.json` | final review manifest (convert writes `reviewed:false` draft) |
+| `mechanical/` | no-agent-facts/no-patches comparison tree |
+| `forced-truncation/` | editable overfull-voice repair; `semantic_authority:false` |
 | `work/copisteria/` | per-page OMR MusicXML, reading JSON and HTML |
 
 Keep the page directory. It is the audit trail for page-level ties/slurs and for OMR defects.
@@ -128,13 +130,13 @@ original wording in evidence. See [`references/facts.md`](references/facts.md).
 
 ### Constrained notation patches
 
-Long-tail symbols are not forced into facts. The prototype supports `ottava` (`8va`/`8vb`) as a
-musical-anchor patch; the compiler writes MusicXML `<octave-shift>` and MuseScore builds the
-spanner:
+Long-tail symbols are not forced into facts. The prototype supports `ottava` (`8va`/`8vb`) and
+constrained `tuplet` patches as musical-anchor operations; the compiler writes MusicXML
+`<octave-shift>` / tuplet notation and MuseScore builds the spanner/bracket:
 
 ```bash
-python scripts/notation_patches.py map --input out/score.musicxml -o review/score-map.json
-python -m scorepipe.cli pages/ -o out/score.musicxml --mscz-out out/score.mscz \
+python scripts/notation_patches.py map --input out/score/score.musicxml -o review/score-map.json
+python -m scorepipe.cli pages/ -o out/score/score.musicxml --mscz-out out/score/score.mscz \
   --patches review/patches.json
 ```
 
@@ -187,8 +189,8 @@ Recent Sincerely-specific fixes:
 - Agent/vision fact extraction has page preparation, coverage checking, evidence validation, merge,
   and a separate corrections review; real delivery still needs per-page review and resolving
   `unresolved`/`corrections`.
-- The notation-patch compiler currently supports `ottava` only; pedal/hairpin/dynamic operations are
-  future work.
+- The notation-patch compiler currently supports `ottava` and constrained `tuplet`; pedal/hairpin/
+  dynamic operations are future work.
 - Same-value beam runs are still rebuilt as one group; a full compound-metre `BeamGrouper` is
   future work.
 - Voice merge skips tuplet measures rather than preserving nested ratios.

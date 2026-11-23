@@ -9,7 +9,7 @@ model weights, packages, or system tools. Ask the user before changing their env
 |---|---|---|
 | Python 3.10+ | runs `scorepipe` | `python --version` |
 | `scorepipe` checkout | pipeline | `python -c "import scorepipe"` |
-| OMR Python env | copisteria + music21 | `--python` or `COPISTERIA_PYTHON` |
+| OMR Python env | copisteria + music21 | `--omr-python` or `COPISTERIA_PYTHON` |
 | copisteria source | OMR engine | `--repo` or `COPISTERIA_REPO` |
 | MuseScore 4 | `.mscz`, PDF render | `MUSESCORE_EXE` or common paths |
 | poppler | PDF page count/raster | `pdfinfo`, `pdftoppm` |
