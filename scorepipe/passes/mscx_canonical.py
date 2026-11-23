@@ -36,10 +36,36 @@ def canonicalize(doc: MsxcDocument, only=None) -> int:
                 )
             except (ValueError, ZeroDivisionError):
                 pass
+        snapshot = copy.deepcopy(measure)
+        before = [_voice_end(voice, meter) for voice in measure.findall("voice")]
+        touched = 0
         for voice in measure.findall("voice"):
-            changed += _clamp_location(voice, meter)
-            changed += _wrap_fractions(voice)
+            touched += _clamp_location(voice, meter)
+            touched += _wrap_fractions(voice)
+        after = [_voice_end(voice, meter) for voice in measure.findall("voice")]
+        safe = True
+        for old, new in zip(before, after):
+            if old <= meter + Fraction(1, 1_000_000):
+                if abs(new - old) > Fraction(1, 1_000_000):
+                    safe = False
+            elif new > meter + Fraction(1, 1_000_000):
+                safe = False
+        if touched and not safe:
+            staff[index - 1] = snapshot
+            continue
+        changed += touched
     return changed
+
+
+def _voice_end(voice, meter: Fraction) -> Fraction:
+    location = voice.find("location/fractions")
+    start = Fraction(0)
+    if location is not None:
+        try:
+            start = Fraction(location.text or "0") * 4
+        except (ValueError, ZeroDivisionError):
+            pass
+    return start + _voice_beats(voice, meter)
 
 
 def _voice_beats(voice, meter: Fraction) -> Fraction:
