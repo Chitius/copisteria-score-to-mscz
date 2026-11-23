@@ -92,6 +92,38 @@ def _write(path: Path, payload) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _timing(report_path: Path) -> dict:
+    """Extract measure-length findings from a scorepipe report."""
+    if not report_path.is_file():
+        return {"count": 0, "violations": []}
+    data = json.loads(report_path.read_text(encoding="utf-8"))
+    violations = [
+        {"measure": violation.get("measure"), "detail": violation.get("detail")}
+        for violation in data.get("verifier") or []
+        if violation.get("code") in ("measure-length", "mscx-measure-length")
+    ]
+    return {"count": len(violations), "violations": violations}
+
+
+def _timing_report(baseline: dict | None, reviewed: dict | None) -> dict:
+    before = baseline or {"count": 0, "violations": []}
+    after = reviewed or {"count": 0, "violations": []}
+    before_set = {(item["measure"], item["detail"]) for item in before["violations"]}
+    after_set = {(item["measure"], item["detail"]) for item in after["violations"]}
+    return {
+        "baseline": before,
+        "reviewed": after,
+        "introduced": [
+            {"measure": measure, "detail": detail}
+            for measure, detail in sorted(after_set - before_set, key=lambda item: (item[0], item[1]))
+        ],
+        "resolved": [
+            {"measure": measure, "detail": detail}
+            for measure, detail in sorted(before_set - after_set, key=lambda item: (item[0], item[1]))
+        ],
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the page-wise delivery review loop")
     parser.add_argument("pdf")
@@ -192,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
             "musicxml": str(mech_musicxml),
             "report": str(mech_report),
             "pipeline_exit": mech_exit,
+            "timing": _timing(mech_report),
             "mscz": str(mech_mscz) if mech_mscz and mech_mscz.is_file() else None,
             "pdf": None,
             "render_exit": None,
@@ -223,6 +256,9 @@ def main(argv: list[str] | None = None) -> int:
         "artifacts": {"score_map": str(outdir / "score-map.json"), "facts": str(facts_path), "pages": str(outdir / "pages")},
     }
     if blockers:
+        timing = _timing_report((mechanical or {}).get("timing"), None)
+        report["timing"] = timing
+        _write(outdir / "timing-report.json", timing)
         _write(outdir / "review-report.json", report)
         for blocker in blockers:
             print(f"blocked: {blocker}")
@@ -255,6 +291,9 @@ def main(argv: list[str] | None = None) -> int:
     report["artifacts"].update({"musicxml": str(musicxml), "report": str(report_json)})
     if mscz:
         report["artifacts"]["mscz"] = str(mscz)
+    timing = _timing_report((mechanical or {}).get("timing"), _timing(report_json))
+    report["timing"] = timing
+    _write(outdir / "timing-report.json", timing)
     if code != 0:
         report["ready"] = False
         report["blockers"].append(f"pipeline exited {code}")

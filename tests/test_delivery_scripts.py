@@ -109,5 +109,42 @@ class ReviewFailureTest(unittest.TestCase):
         self.assertIn("pdf", report["artifacts"])
 
 
+class TimingReportTest(unittest.TestCase):
+    def test_timing_delta_lists_introduced_and_resolved(self):
+        work = WORK / "timing"
+        work.mkdir(parents=True, exist_ok=True)
+        baseline = work / "baseline.json"
+        reviewed = work / "reviewed.json"
+        baseline.write_text(
+            json.dumps(
+                {
+                    "verifier": [
+                        {"code": "mscx-measure-length", "measure": 16, "detail": "voice 4.5"},
+                        {"code": "mscx-measure-length", "measure": 84, "detail": "voice 4.5"},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        reviewed.write_text(
+            json.dumps(
+                {
+                    "verifier": [
+                        {"code": "mscx-measure-length", "measure": 84, "detail": "voice 4.5"},
+                        {"code": "mscx-measure-length", "measure": 122, "detail": "voice 4.2"},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        baseline_timing = review_script._timing(baseline)
+        reviewed_timing = review_script._timing(reviewed)
+        delta = review_script._timing_report(baseline_timing, reviewed_timing)
+        self.assertEqual(baseline_timing["count"], 2)
+        self.assertEqual(reviewed_timing["count"], 2)
+        self.assertEqual([item["measure"] for item in delta["introduced"]], [122])
+        self.assertEqual([item["measure"] for item in delta["resolved"]], [16])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -147,16 +147,16 @@ python scripts/review.py score.pdf --pages path/to/omr-pages \
 The review stops before the pipeline when pages are missing, unresolved claims or proposed
 corrections remain. `--allow-unresolved` / `--allow-corrections` are explicit interim overrides;
 the report still lists what was overridden. A no-facts/no-patches baseline is written to
-`mechanical/`; the root `score.*` files are the reviewed version. Keep both. See
-[`references/review.md`](references/review.md).
+`mechanical/`; the root `score.*` files are the reviewed version. Keep both. `timing-report.json`
+compares measure-length findings between the two. See [`references/review.md`](references/review.md).
 
 ## Current status (2026-11-21)
 
 Tests:
 
 ```text
-python -m unittest discover -s tests   # 219 tests
-python -m pytest tests -q              # 301 tests
+python -m unittest discover -s tests   # 220 tests
+python -m pytest tests -q              # 302 tests
 ```
 
 Corpus (sounding-note match; rests excluded from the primary score):

@@ -51,6 +51,7 @@ review/score/
   facts.json
   facts-corrections.json
   review-report.json
+  timing-report.json
   pages/source-*.png
   score.musicxml
   score.mscz
@@ -67,9 +68,10 @@ review/score/
 `mechanical/` is the pipeline output without agent facts or patches. It is the comparison/baseline
 artifact, not an alternative final delivery. `review-report.json` records page coverage, missing
 pages, unresolved claims, corrections, patch count, the mechanical baseline exits and artifact
-paths. If the reviewed pipeline fails after producing an MSCZ, review still renders and rasterises
-that draft when possible, then writes the report with `ready: false`; the failed run remains
-non-deliverable.
+paths. `timing-report.json` compares `measure-length` / `mscx-measure-length` findings between the
+mechanical baseline and the reviewed output, with `introduced` and `resolved` lists. If the reviewed
+pipeline fails after producing an MSCZ, review still renders and rasterises that draft when possible,
+then writes the report with `ready: false`; the failed run remains non-deliverable.
 
 ## Required human checks
 

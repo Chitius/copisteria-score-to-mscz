@@ -8,6 +8,8 @@ out/score/
   score.mscz              MuseScore review copy
   score.pdf               rendered check
   report.json             phases + trace + verifier
+  review-report.json      page coverage + blockers + artifact paths
+  timing-report.json      baseline vs reviewed measure-length findings
   work/copisteria/        page OMR output, reading JSON, HTML
   mechanical/             pipeline output without agent facts/patches
     score.musicxml
