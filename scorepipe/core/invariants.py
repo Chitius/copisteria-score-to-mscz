@@ -98,13 +98,18 @@ def measure_lengths(doc: Document, ctx: Context) -> list[Violation]:
         if declared is not None:
             meter = declared
         bar = meter[0] * 4.0 / meter[1]
-        if measure.get("implicit") == "yes":
-            continue  # anacrusis: short by design
+        implicit = measure.get("implicit") == "yes"
         ends: dict[tuple[str, str], float] = {}
         for event in doc.events(measure):
             key = (event.staff, event.voice)
             ends[key] = max(ends.get(key, 0.0), event.end)
+        if not ends:
+            out.append(Violation("measure-length", number, "empty measure"))
+            continue
         for (staff, voice), end in ends.items():
+            # An anacrusis is allowed to be short, but never overfull.
+            if implicit and end <= bar + 1e-6:
+                continue
             if abs(end - bar) > 1e-6:
                 out.append(
                     Violation(
