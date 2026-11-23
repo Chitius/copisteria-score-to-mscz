@@ -158,6 +158,9 @@ python scripts/review.py "score.pdf" --pages path/to/omr-pages \
 `review-report.json`。`--allow-unresolved` / `--allow-corrections` 只用于临时试跑，报告仍会
 列出被覆盖的项。review 成功后检查 `rendered/` 和 `score.pdf`，再交付。
 
+`review.py` 默认同时生成 `mechanical/`：不包含 agent facts/patches 的机械基线；根目录的
+`score.*` 是经过 review 的版本。交付时必须两套都保留，不能用 reviewed 覆盖 mechanical。
+
 ### 4d. Agent 检查与提案契约
 
 Agent 是 producer，不是改谱者。完整协议见 `references/agent-review.md`，最低要求：

@@ -22,13 +22,16 @@ python scripts/review.py score.pdf \
 
 ## Blocking policy
 
-The loop writes `review-report.json` and exits 2 without running the pipeline when:
+The loop writes `review-report.json` and exits 2 without running the **reviewed** pipeline when:
 
 - a page has no `producer.pages` coverage;
 - there are `unresolved` claims;
 - there are proposed `corrections`;
 - the source page count and rendered image count differ;
 - a notation patch fails validation.
+
+A mechanical baseline (no agent facts, no patches) is still produced first when it is enabled, so
+the delivery keeps a clean comparison even when the reviewed version is blocked.
 
 Explicit overrides for an interim review:
 
@@ -53,12 +56,20 @@ review/score/
   score.mscz
   score.pdf
   rendered/source-*.png
+  mechanical/
+    score.musicxml
+    score.mscz
+    score.pdf
+    report.json
+    rendered/source-*.png
 ```
 
-`review-report.json` records page coverage, missing pages, unresolved claims, corrections, patch
-count, pipeline/render exit codes and artifact paths. If the pipeline fails after producing an MSCZ,
-review still renders and rasterises that draft when possible, then writes the report with
-`ready: false`; the failed run remains non-deliverable.
+`mechanical/` is the pipeline output without agent facts or patches. It is the comparison/baseline
+artifact, not an alternative final delivery. `review-report.json` records page coverage, missing
+pages, unresolved claims, corrections, patch count, the mechanical baseline exits and artifact
+paths. If the reviewed pipeline fails after producing an MSCZ, review still renders and rasterises
+that draft when possible, then writes the report with `ready: false`; the failed run remains
+non-deliverable.
 
 ## Required human checks
 

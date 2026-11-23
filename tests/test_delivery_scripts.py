@@ -94,6 +94,7 @@ class ReviewFailureTest(unittest.TestCase):
                     str(outdir),
                     "--musescore",
                     "musescore",
+                    "--no-mechanical",
                 ]
             )
 

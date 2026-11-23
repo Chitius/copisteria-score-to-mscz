@@ -9,7 +9,15 @@ out/score/
   score.pdf               rendered check
   report.json             phases + trace + verifier
   work/copisteria/        page OMR output, reading JSON, HTML
+  mechanical/             pipeline output without agent facts/patches
+    score.musicxml
+    score.mscz
+    score.pdf
+    report.json
 ```
+
+The reviewed artifacts are the root files; `mechanical/` is the no-agent-proposal baseline kept for
+comparison and audit. Do not deliver only one of the two trees.
 
 If MuseScore is unavailable, deliver MusicXML + report and state that the `.mscz`/PDF were not
 produced. Do not fabricate a render.
@@ -20,6 +28,8 @@ Before saying "done":
 
 - [ ] every phase reports `stable=true`;
 - [ ] `report.json` has no verifier violations;
+- [ ] both `mechanical/` and the reviewed tree exist, and the mechanical tree contains no agent
+      facts/patches;
 - [ ] the first measure / pickup and the final bar have been inspected;
 - [ ] at least one dense page and one page seam have been inspected;
 - [ ] the output has been compared with a ground truth when one exists;

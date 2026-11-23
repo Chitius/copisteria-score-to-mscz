@@ -146,7 +146,9 @@ python scripts/review.py score.pdf --pages path/to/omr-pages \
 
 The review stops before the pipeline when pages are missing, unresolved claims or proposed
 corrections remain. `--allow-unresolved` / `--allow-corrections` are explicit interim overrides;
-the report still lists what was overridden. See [`references/review.md`](references/review.md).
+the report still lists what was overridden. A no-facts/no-patches baseline is written to
+`mechanical/`; the root `score.*` files are the reviewed version. Keep both. See
+[`references/review.md`](references/review.md).
 
 ## Current status (2026-11-21)
 

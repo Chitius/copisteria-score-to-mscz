@@ -105,6 +105,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--allow-corrections", action="store_true")
     parser.add_argument("--no-mscz", action="store_true")
     parser.add_argument("--no-pdf", action="store_true")
+    parser.add_argument("--no-mechanical", action="store_true", help="skip the no-agent-proposal baseline")
+    parser.add_argument("--mechanical-dir", help="baseline directory (default: <outdir>/mechanical)")
     args = parser.parse_args(argv)
 
     pdf = Path(args.pdf).resolve()
@@ -163,6 +165,49 @@ def main(argv: list[str] | None = None) -> int:
         if patch_problems:
             blockers.extend(f"patch: {problem}" for problem in patch_problems)
 
+    mechanical = None
+    if not args.no_mechanical:
+        mechanical_dir = Path(args.mechanical_dir).resolve() if args.mechanical_dir else outdir / "mechanical"
+        mech_musicxml = mechanical_dir / "score.musicxml"
+        mech_report = mechanical_dir / "report.json"
+        mech_mscz = None if args.no_mscz else mechanical_dir / "score.mscz"
+        mechanical_command = [
+            python,
+            "-m",
+            "scorepipe.cli",
+            str(page_dir),
+            "-o",
+            str(mech_musicxml),
+            "--report",
+            str(mech_report),
+        ]
+        if mech_mscz:
+            mechanical_command.extend(["--mscz-out", str(mech_mscz)])
+            if musescore:
+                mechanical_command.extend(["--musescore", str(musescore)])
+        print("+ mechanical baseline (no agent facts or patches)")
+        mech_exit = _run(mechanical_command, ROOT)
+        mechanical = {
+            "dir": str(mechanical_dir),
+            "musicxml": str(mech_musicxml),
+            "report": str(mech_report),
+            "pipeline_exit": mech_exit,
+            "mscz": str(mech_mscz) if mech_mscz and mech_mscz.is_file() else None,
+            "pdf": None,
+            "render_exit": None,
+            "ready": mech_exit == 0,
+        }
+        if mech_mscz and mech_mscz.is_file() and not args.no_pdf and musescore:
+            mech_pdf = mechanical_dir / "score.pdf"
+            render_exit = _run([musescore, "-f", "-o", str(mech_pdf), str(mech_mscz)], ROOT)
+            mechanical["pdf"] = str(mech_pdf) if mech_pdf.is_file() else None
+            mechanical["render_exit"] = render_exit
+            if render_exit == 0 and mech_pdf.is_file():
+                try:
+                    mechanical["rendered_pages"] = _render_pages(mech_pdf, mechanical_dir / "rendered")
+                except RuntimeError as exc:
+                    mechanical["render_error"] = str(exc)
+
     report = {
         "ready": not blockers,
         "page_count": page_count,
@@ -173,6 +218,7 @@ def main(argv: list[str] | None = None) -> int:
         "unresolved": unresolved,
         "corrections": corrections,
         "patch_count": len((patch_payload or {}).get("patches") or []),
+        "mechanical": mechanical,
         "blockers": blockers,
         "artifacts": {"score_map": str(outdir / "score-map.json"), "facts": str(facts_path), "pages": str(outdir / "pages")},
     }
