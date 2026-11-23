@@ -42,6 +42,7 @@ class TruncateOverfullMscxTest(unittest.TestCase):
         chords = doc.root.findall(".//Chord")
         self.assertEqual(len(chords), 1)
         self.assertIsNotNone(chords[-1].find("duration"))
+        self.assertIn("[60]", " ".join(result.notes))
 
     def test_shortens_last_chord_when_there_is_no_trailing_rest(self):
         doc = score(chord("half") + chord("whole"))
