@@ -65,7 +65,7 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 | C6 | P1 | `test_cli` asserts exit 0 where the real patch verifier should fail; it enshrines B2. | `tests/test_cli.py:109-149` | Integration test: clean verifier + failed patch verify => exit 1 | fixed (batch2) |
 | C7 | P1 | Lieder corpus tests compare ground truth to itself; no pipeline run. | `tests/test_lieder_corpus.py:42-51` | Add one end-to-end threshold case or label as fixture-integrity only | open |
 | C8 | P1 | Plain pytest fails on ACL-denied cache dirs; tests write into repo `.runs` and rely on CWD. | repo root `.pytest_cache`, `pytest-cache-files-*`; `test_delivery_scripts.py:13-14`; `from scripts import` | Add `conftest.py`/`testpaths`, tmp_path, sys.path fixture; clean cache dirs | in progress (batch4) |
-| C9 | P1 | No XSD validation and no MuseScore import/render round-trip in tests. | `tests/`; `tests/test_mscz_export.py` is skipped without MuseScore | Add an opt-in MuseScore integration test and XSD validation for a fixture | open |
+| C9 | P1 | No XSD validation and no MuseScore import/render round-trip in tests. | `tests/`; `tests/test_mscz_export.py` is skipped without MuseScore | Add an opt-in MuseScore integration test and XSD validation for a fixture | in progress (batch4) |
 | C10 | P2 | `run_pipeline` `repairable` outer-round path is dead; analysis `mutated` and non-convergence are untested. | `scorepipe/core/pipeline.py:84-98,137-153`; `scorepipe/cli.py:129` | Enable/test a repairable pass; assert stable=False on cap; test analysis mutation | open |
 
 ## D. Workflow, acceptance and readiness
@@ -129,7 +129,7 @@ Scope: A1, A2, A3, A4, A5, A6, A9, B2, D8.
 tail, preserves positional rests, never edits inside flat tuplets, reports `UNRESOLVED` without
 partial mutation, uses staff ids, records real rounds/stability, and rejects `--truncate-overfull`
 without `--mscz-out`. The intermediate MusicXML is isolated. C4/D8 remain in progress. Verification:
-240 unittest / 324 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
+241 unittest / 325 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
 unchanged with no forced operations.
 
 ### Batch 2 — verifier and pass-sanity integrity
@@ -141,7 +141,7 @@ Scope: B1, B3–B7, C1–C4, C6, C9, A7, A8, A10.
 duration; MSCX length checks all overfull voices while allowing short secondary voices; explicit
 `<visible>1</visible>` is no longer treated as hidden; pass fixtures now assert an actual effect and
 the sanity framework compares state hashes and verifier details/multiplicity; display pass inventory
-is explicit; truncation has multi-voice/3-4 tests. Verification: 240 unittest / 324 pytest.
+is explicit; truncation has multi-voice/3-4 tests. Verification: 241 unittest / 325 pytest.
 
 - Strengthen `verify_patches` and add five drift tests.
 - Check every voice; fix hidden-rest semantics; add empty/implicit/multipart/grace cases.

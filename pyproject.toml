@@ -13,4 +13,4 @@ include = ["scorepipe*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-cache_dir = "tests/.runs/.pytest_cache"
+addopts = "-p no:cacheprovider"
