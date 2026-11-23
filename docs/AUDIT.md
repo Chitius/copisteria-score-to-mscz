@@ -136,12 +136,12 @@ unchanged with no forced operations.
 
 Scope: B1, B3–B7, C1–C4, C6, C9, A7, A8, A10.
 
-**Progress 2026-11-23:** B1, B3, B4, C1, C2, C6 and B6 fixed; B7/C3/C4/C9/A7/A8/A10 remain.
+**Progress 2026-11-23:** B1, B3–B7, C1, C2 and C6 fixed; C3/C4/C9/A7/A8/A10 remain.
 `verify_patches` now checks ottava type/size/measure/number and tuplet onset span, bracket and
 duration; MSCX length checks all overfull voices while allowing short secondary voices; explicit
 `<visible>1</visible>` is no longer treated as hidden; pass fixtures now assert an actual effect and
-the sanity framework compares state hashes and verifier details/multiplicity. Verification: 231
-unittest / 315 pytest.
+the sanity framework compares state hashes and verifier details/multiplicity. All six MSCX
+verifiers now have direct tests. Verification: 235 unittest / 319 pytest.
 
 - Strengthen `verify_patches` and add five drift tests.
 - Check every voice; fix hidden-rest semantics; add empty/implicit/multipart/grace cases.
