@@ -56,7 +56,9 @@ review/score/
 ```
 
 `review-report.json` records page coverage, missing pages, unresolved claims, corrections, patch
-count, pipeline/render exit codes and artifact paths.
+count, pipeline/render exit codes and artifact paths. If the pipeline fails after producing an MSCZ,
+review still renders and rasterises that draft when possible, then writes the report with
+`ready: false`; the failed run remains non-deliverable.
 
 ## Required human checks
 

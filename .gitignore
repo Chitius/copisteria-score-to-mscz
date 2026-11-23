@@ -6,3 +6,4 @@ tests/.runs/
 .pytest_cache/
 pytest-cache-files-*/
 env.local.json
+out/

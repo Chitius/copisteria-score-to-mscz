@@ -138,10 +138,14 @@ python -m scorepipe.cli pages/ -o out/score.musicxml --mscz-out out/score.mscz \
   --patches review/patches.json
 ```
 
-当前只支持 `ottava`（8va/8vb），编译成 MusicXML `<octave-shift>`，由 MuseScore 生成 spanner。
-起止点必须落在真实 staff/measure/beat 上，end 必须晚于 start；像素 bbox 只作为证据，不决定范围。
+支持 `ottava`（8va/8vb）和受证据约束的 `tuplet`。ottava 编译成 MusicXML `<octave-shift>`；
+起止点必须落在真实 staff/measure/beat 上，end 必须晚于 start。像素 bbox 只作为证据，不决定范围。
 渲染后必须检查 8va 的实际覆盖范围；范围不确定就保持 unresolved，不要自动扩展。
-详见 `references/notation-patches.md`。
+
+tuplet 只重定时已有的完整同声部音符段，必须提供独立的比例、`note_count`、`span_beats`、
+源谱证据和 `status: accepted`。缺音、rest、跨声部、backup、嵌套或锚点不符时拒绝；禁止按小节
+长度反推比例。它在 structural fixpoint 前应用，并必须重新渲染核查。详见
+`references/notation-patches.md`。
 
 ### 4c. 交付 review 闭环
 
@@ -173,12 +177,12 @@ scorepipe/               Python pipeline（子模块，含 agent_facts/notation_
 tests/                   回归测试和 Lieder corpus
 docs/                    架构、验收证据、归档计划
 references/              skill 操作参考
-SANITY.md                pass 契约审计
+docs/SANITY.md            pass 契约审计
 ```
 
 ## 当前状态（2026-11）
 
-- `unittest`：194 个测试；`pytest`：276 个测试。
+- `unittest`：219 个测试；`pytest`：301 个测试。
 - Gute Nacht：sounding notes 98.94% / 99.0%（vocal/piano），verifier clean。
 - `aus_meinen_traenen`：91.38% / 90.10%；`die_wetterfahne`：98.97% / 97.75%。
 - `der_lindenbaum` P2 仍是 OMR 质量异常项（约 51%）。

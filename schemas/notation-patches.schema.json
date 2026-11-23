@@ -8,22 +8,10 @@
     "patches": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": ["op", "subtype", "staff", "start", "end", "page"],
-        "properties": {
-          "op": {"const": "ottava"},
-          "mode": {"enum": ["add", "replace", "remove"]},
-          "subtype": {"enum": ["8va", "8vb"]},
-          "staff": {"type": "integer", "minimum": 1},
-          "start": {"$ref": "#/$defs/anchor"},
-          "end": {"$ref": "#/$defs/anchor"},
-          "page": {"type": "integer", "minimum": 1},
-          "bbox": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
-          "bbox_space": {"enum": ["pdf-points", "image-px"]},
-          "crop": {"type": "string"},
-          "evidence": {"type": "string", "minLength": 1},
-          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
-        }
+        "oneOf": [
+          {"$ref": "#/$defs/ottava-patch"},
+          {"$ref": "#/$defs/tuplet-patch"}
+        ]
       }
     }
   },
@@ -35,6 +23,71 @@
         "measure": {"type": "integer", "minimum": 1},
         "beat": {"type": "number", "minimum": 0}
       }
+    },
+    "note-anchor": {
+      "allOf": [
+        {"$ref": "#/$defs/anchor"},
+        {
+          "type": "object",
+          "required": ["pitch"],
+          "properties": {"pitch": {"type": "string", "minLength": 2}}
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["page", "evidence"],
+      "anyOf": [{"required": ["bbox"]}, {"required": ["crop"]}],
+      "properties": {
+        "page": {"type": "integer", "minimum": 1},
+        "bbox": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+        "bbox_space": {"enum": ["pdf-points", "image-px"]},
+        "crop": {"type": "string"},
+        "evidence": {"type": "string", "minLength": 1},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "ottava-patch": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["op", "subtype", "staff", "start", "end"],
+          "properties": {
+            "op": {"const": "ottava"},
+            "mode": {"enum": ["add", "replace", "remove"]},
+            "subtype": {"enum": ["8va", "8vb"]},
+            "staff": {"type": "integer", "minimum": 1},
+            "start": {"$ref": "#/$defs/anchor"},
+            "end": {"$ref": "#/$defs/anchor"}
+          }
+        }
+      ]
+    },
+    "tuplet-patch": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": [
+            "op", "measure", "staff", "voice", "start", "end",
+            "actual_notes", "normal_notes", "note_count", "span_beats", "status"
+          ],
+          "properties": {
+            "op": {"const": "tuplet"},
+            "measure": {"type": "integer", "minimum": 1},
+            "staff": {"type": "integer", "minimum": 1},
+            "voice": {"type": "string", "minLength": 1},
+            "start": {"$ref": "#/$defs/note-anchor"},
+            "end": {"$ref": "#/$defs/note-anchor"},
+            "actual_notes": {"type": "integer", "minimum": 1},
+            "normal_notes": {"type": "integer", "minimum": 1},
+            "note_count": {"type": "integer", "minimum": 1},
+            "span_beats": {"type": "number", "exclusiveMinimum": 0},
+            "status": {"const": "accepted"}
+          }
+        }
+      ]
     }
   }
 }

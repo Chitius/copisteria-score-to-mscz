@@ -14,8 +14,8 @@
 | [`../scripts/agent_facts.py`](../scripts/agent_facts.py) | prepare/validate/merge agent visual facts |
 | [`../scripts/review.py`](../scripts/review.py) | page-wise review → pipeline → render report |
 | [`../scripts/notation_patches.py`](../scripts/notation_patches.py) | map anchors and apply constrained patches |
-| [`../schemas/notation-patches.schema.json`](../schemas/notation-patches.schema.json) | ottava patch JSON schema |
+| [`../schemas/notation-patches.schema.json`](../schemas/notation-patches.schema.json) | ottava/tuplet patch JSON schema |
 | [`DESIGN.md`](DESIGN.md) | compiler-style pipeline architecture |
-| [`../SANITY.md`](../SANITY.md) | pass contracts and adversarial fixtures |
+| [`SANITY.md`](SANITY.md) | pass contracts and adversarial fixtures |
 | [`ACCEPTANCE.md`](ACCEPTANCE.md) | historical acceptance evidence |
 | [`archive/`](archive/) | completed migration/change plans (do not treat as current roadmap) |

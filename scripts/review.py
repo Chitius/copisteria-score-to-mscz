@@ -204,6 +204,7 @@ def main(argv: list[str] | None = None) -> int:
         if musescore:
             command.extend(["--musescore", str(musescore)])
     code = _run(command, ROOT)
+    pipeline_exit = code
     report["pipeline_exit"] = code
     report["artifacts"].update({"musicxml": str(musicxml), "report": str(report_json)})
     if mscz:
@@ -211,10 +212,8 @@ def main(argv: list[str] | None = None) -> int:
     if code != 0:
         report["ready"] = False
         report["blockers"].append(f"pipeline exited {code}")
-        _write(outdir / "review-report.json", report)
-        return code
 
-    if mscz and not args.no_pdf and musescore:
+    if mscz and mscz.is_file() and not args.no_pdf and musescore:
         pdf_out = outdir / "score.pdf"
         code = _run([musescore, "-f", "-o", str(pdf_out), str(mscz)], ROOT)
         report["render_exit"] = code
@@ -234,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
     _write(outdir / "review-report.json", report)
     print(f"review ready: {report['ready']}")
     print(f"report: {outdir / 'review-report.json'}")
-    return 0 if report["ready"] else 2
+    return pipeline_exit or code or (0 if report["ready"] else 2)
 
 
 if __name__ == "__main__":

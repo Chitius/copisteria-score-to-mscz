@@ -1,19 +1,37 @@
 """Constrained notation patches: agent proposes symbols, the compiler writes MusicXML.
 
-The first operation is ``ottava`` (8va/8vb).  It is emitted as standard MusicXML
-``<octave-shift>`` directions at explicit anchors, so MuseScore builds the Ottava spanner and the
-agent never has to serialize mscx ids or location fractions.
+``ottava`` (8va/8vb) is emitted as standard MusicXML ``<octave-shift>`` directions. ``tuplet``
+rewrites an explicitly evidenced, continuous note segment with one duration ratio and bracket.
+The agent never has to serialize mscx ids or location fractions.
 """
 
 from __future__ import annotations
 
 import json
+import math
+from fractions import Fraction
 from pathlib import Path
 from xml.etree import ElementTree
 
 from .core.document import Document
 
 OTTAAVA_SUBTYPES = {"8va": "up", "8vb": "down"}
+NOTE_TYPE_BEATS = {
+    "maxima": Fraction(32),
+    "long": Fraction(16),
+    "breve": Fraction(8),
+    "whole": Fraction(4),
+    "half": Fraction(2),
+    "quarter": Fraction(1),
+    "eighth": Fraction(1, 2),
+    "16th": Fraction(1, 4),
+    "32nd": Fraction(1, 8),
+    "64th": Fraction(1, 16),
+    "128th": Fraction(1, 32),
+    "256th": Fraction(1, 64),
+    "512th": Fraction(1, 128),
+    "1024th": Fraction(1, 256),
+}
 
 
 def score_map(doc: Document) -> dict:
@@ -24,16 +42,23 @@ def score_map(doc: Document) -> dict:
         for event in doc.events(measure):
             if event.rest:
                 continue
-            pitch = event.element.findtext("pitch/step")
-            octave = event.element.findtext("pitch/octave")
-            if not pitch or not octave:
+            note = event.element
+            pitch = _pitch_name(note)
+            if pitch is None:
                 continue
+            modification = note.find("time-modification")
             staves.setdefault(event.staff, []).append(
                 {
                     "voice": event.voice,
                     "onset": round(event.onset, 4),
                     "duration": round(event.duration, 4),
-                    "pitch": f"{pitch}{octave}",
+                    "pitch": pitch,
+                    "alter": _alter(note),
+                    "chord": event.chord,
+                    "type": note.findtext("type"),
+                    "dots": len(note.findall("dot")),
+                    "actual": _integer_text(modification, "actual-notes"),
+                    "normal": _integer_text(modification, "normal-notes"),
                 }
             )
         measures.append({"number": number, "staves": staves})
@@ -51,52 +76,53 @@ def validate_patches(payload: dict, doc: Document | None = None) -> list[str]:
     patches = payload.get("patches")
     if not isinstance(patches, list):
         return ["patches must be an array"]
-    measure_count = len(doc.measures()) if doc is not None else None
+    tuplet_plans: list[tuple[int, dict]] = []
     for index, patch in enumerate(patches):
         prefix = f"patches[{index}]"
         if not isinstance(patch, dict):
             problems.append(f"{prefix}: must be an object")
             continue
-        if patch.get("op") != "ottava":
-            problems.append(f"{prefix}: unsupported op {patch.get('op')!r}")
+        op = patch.get("op")
+        if op == "ottava":
+            problems.extend(_validate_ottava(patch, doc, prefix))
             continue
-        if patch.get("mode") not in (None, "add", "replace", "remove"):
-            problems.append(f"{prefix}: mode must be add/replace/remove")
-        if patch.get("subtype") not in OTTAAVA_SUBTYPES:
-            problems.append(f"{prefix}: subtype must be 8va or 8vb")
-        if not isinstance(patch.get("staff"), int) or patch["staff"] < 1:
-            problems.append(f"{prefix}: staff must be a positive integer")
-        start = patch.get("start") or {}
-        end = patch.get("end") or {}
-        for label, anchor in (("start", start), ("end", end)):
-            if not isinstance(anchor, dict):
-                problems.append(f"{prefix}: {label} must be an object")
-                continue
-            if not isinstance(anchor.get("measure"), int) or anchor["measure"] < 1:
-                problems.append(f"{prefix}: {label}.measure must be positive")
-            if measure_count is not None and anchor.get("measure", 0) > measure_count:
-                problems.append(f"{prefix}: {label}.measure exceeds {measure_count}")
-            if not isinstance(anchor.get("beat"), (int, float)) or anchor["beat"] < 0:
-                problems.append(f"{prefix}: {label}.beat must be non-negative")
-        if (
-            isinstance(start.get("measure"), int)
-            and isinstance(end.get("measure"), int)
-            and (end["measure"], float(end.get("beat") or 0))
-            <= (start["measure"], float(start.get("beat") or 0))
-        ):
-            problems.append(f"{prefix}: end must be after start")
-        if not (patch.get("page") or patch.get("bbox") or patch.get("crop")):
-            problems.append(f"{prefix}: page/bbox evidence is required")
+        if op != "tuplet":
+            problems.append(f"{prefix}: unsupported op {op!r}")
+            continue
+        plan, patch_problems = _validate_tuplet(patch, doc, prefix)
+        problems.extend(patch_problems)
+        if plan is None:
+            continue
+        for other_index, other in tuplet_plans:
+            if plan["measure"] is other["measure"] and not (
+                plan["end_index"] < other["start_index"]
+                or plan["start_index"] > other["end_index"]
+            ):
+                problems.append(f"{prefix}: overlaps patches[{other_index}]")
+                break
+        else:
+            tuplet_plans.append((index, plan))
     return problems
 
 
 def apply_patches(doc: Document, payload: dict) -> int:
-    """Apply validated ottava patches; returns the number of directions written."""
+    """Apply validated patches; return directions written plus tuplet spans rewritten."""
     divisions = doc.divisions()
     measures = doc.measures()
     next_number = _next_octave_number(doc)
+    patches = payload.get("patches") or []
+    # Select every range before deleting forwards or changing durations shifts later onsets.
+    tuplet_plans = {
+        index: _select_tuplet(patch, doc, f"patches[{index}]")[0]
+        for index, patch in enumerate(patches)
+        if patch.get("op") == "tuplet"
+    }
     changed = 0
-    for patch in payload.get("patches") or []:
+    for index, patch in enumerate(patches):
+        if patch.get("op") == "tuplet":
+            _apply_tuplet(tuplet_plans[index])
+            changed += 1
+            continue
         start = patch["start"]
         end = patch["end"]
         subtype = patch["subtype"]
@@ -132,6 +158,321 @@ def apply_patches(doc: Document, payload: dict) -> int:
     return changed
 
 
+def _validate_ottava(patch: dict, doc: Document | None, prefix: str) -> list[str]:
+    problems: list[str] = []
+    measure_count = len(doc.measures()) if doc is not None else None
+    if patch.get("mode") not in (None, "add", "replace", "remove"):
+        problems.append(f"{prefix}: mode must be add/replace/remove")
+    if patch.get("subtype") not in OTTAAVA_SUBTYPES:
+        problems.append(f"{prefix}: subtype must be 8va or 8vb")
+    if not isinstance(patch.get("staff"), int) or patch["staff"] < 1:
+        problems.append(f"{prefix}: staff must be a positive integer")
+    start = patch.get("start") or {}
+    end = patch.get("end") or {}
+    for label, anchor in (("start", start), ("end", end)):
+        if not isinstance(anchor, dict):
+            problems.append(f"{prefix}: {label} must be an object")
+            continue
+        if not isinstance(anchor.get("measure"), int) or anchor["measure"] < 1:
+            problems.append(f"{prefix}: {label}.measure must be positive")
+        if measure_count is not None and anchor.get("measure", 0) > measure_count:
+            problems.append(f"{prefix}: {label}.measure exceeds {measure_count}")
+        if not isinstance(anchor.get("beat"), (int, float)) or anchor["beat"] < 0:
+            problems.append(f"{prefix}: {label}.beat must be non-negative")
+    if (
+        isinstance(start.get("measure"), int)
+        and isinstance(end.get("measure"), int)
+        and (end["measure"], float(end.get("beat") or 0))
+        <= (start["measure"], float(start.get("beat") or 0))
+    ):
+        problems.append(f"{prefix}: end must be after start")
+    if not (patch.get("page") or patch.get("bbox") or patch.get("crop")):
+        problems.append(f"{prefix}: page/bbox evidence is required")
+    return problems
+
+
+def _validate_tuplet(
+    patch: dict, doc: Document | None, prefix: str
+) -> tuple[dict | None, list[str]]:
+    problems: list[str] = []
+    for field in ("measure", "staff", "actual_notes", "normal_notes", "note_count"):
+        if not _positive_integer(patch.get(field)):
+            problems.append(f"{prefix}: {field} must be a positive integer")
+    if not isinstance(patch.get("voice"), str) or not patch["voice"]:
+        problems.append(f"{prefix}: voice must be a non-empty string")
+    span = patch.get("span_beats")
+    if (
+        isinstance(span, bool)
+        or not isinstance(span, (int, float))
+        or not math.isfinite(span)
+        or span <= 0
+    ):
+        problems.append(f"{prefix}: span_beats must be a positive number")
+    if patch.get("status") != "accepted":
+        problems.append(f"{prefix}: status must be accepted")
+    start = patch.get("start") or {}
+    end = patch.get("end") or {}
+    for label, anchor in (("start", start), ("end", end)):
+        if not isinstance(anchor, dict):
+            problems.append(f"{prefix}: {label} must be an object")
+            continue
+        if not _positive_integer(anchor.get("measure")):
+            problems.append(f"{prefix}: {label}.measure must be a positive integer")
+        beat = anchor.get("beat")
+        if (
+            isinstance(beat, bool)
+            or not isinstance(beat, (int, float))
+            or not math.isfinite(beat)
+            or beat < 0
+        ):
+            problems.append(f"{prefix}: {label}.beat must be non-negative")
+        if not isinstance(anchor.get("pitch"), str) or not anchor["pitch"]:
+            problems.append(f"{prefix}: {label}.pitch is required")
+    if isinstance(start, dict) and isinstance(end, dict):
+        for label, anchor in (("start", start), ("end", end)):
+            if anchor.get("measure") != patch.get("measure"):
+                problems.append(f"{prefix}: {label}.measure must match measure")
+        if (
+            isinstance(start.get("beat"), (int, float))
+            and isinstance(end.get("beat"), (int, float))
+            and end["beat"] <= start["beat"]
+        ):
+            problems.append(f"{prefix}: end onset must be after start onset")
+    if not _positive_integer(patch.get("page")):
+        problems.append(f"{prefix}: page must be a positive integer")
+    if not (patch.get("bbox") or patch.get("crop")):
+        problems.append(f"{prefix}: bbox or crop evidence is required")
+    if not isinstance(patch.get("evidence"), str) or not patch["evidence"]:
+        problems.append(f"{prefix}: evidence is required")
+    if doc is None:
+        problems.append(f"{prefix}: tuplet validation requires a document")
+        return None, problems
+    if _positive_integer(patch.get("measure")) and patch["measure"] > len(doc.measures()):
+        problems.append(f"{prefix}: measure exceeds {len(doc.measures())}")
+    if problems:
+        return None, problems
+    return _select_tuplet(patch, doc, prefix)
+
+
+def _select_tuplet(patch: dict, doc: Document, prefix: str) -> tuple[dict | None, list[str]]:
+    """Resolve a complete segment and check its new durations without changing the tree."""
+    problems: list[str] = []
+    measure = doc.measures()[patch["measure"] - 1]
+    staff = str(patch["staff"])
+    voice = patch["voice"]
+    events = doc.events(measure)
+    voice_events = [event for event in events if event.staff == staff and event.voice == voice]
+    groups: list[list] = []
+    for event in voice_events:
+        if event.chord and groups and abs(groups[-1][0].onset - event.onset) < 1e-6:
+            groups[-1].append(event)
+        else:
+            groups.append([event])
+
+    anchored = []
+    for label in ("start", "end"):
+        anchor = patch[label]
+        matches = [
+            event
+            for event in voice_events
+            if abs(event.onset - anchor["beat"]) < 1e-6 and _pitch_name(event.element) == anchor["pitch"]
+        ]
+        if len(matches) != 1:
+            problems.append(f"{prefix}: {label} anchor must match exactly one pitched note")
+            anchored.append(None)
+        else:
+            anchored.append(matches[0])
+    if any(event is None for event in anchored):
+        return None, problems
+
+    group_indices = []
+    for event in anchored:
+        group_indices.append(next(index for index, group in enumerate(groups) if event in group))
+    start_group, end_group = group_indices
+    if end_group <= start_group:
+        problems.append(f"{prefix}: end onset must be after start onset")
+        return None, problems
+    selected_groups = groups[start_group : end_group + 1]
+    for previous, current in zip(selected_groups, selected_groups[1:]):
+        if current[0].onset <= previous[0].onset:
+            problems.append(f"{prefix}: onsets must be strictly increasing")
+            break
+    if len(selected_groups) != patch["note_count"]:
+        problems.append(f"{prefix}: note_count does not match the number of onsets")
+
+    children = list(measure)
+    start_index = children.index(selected_groups[0][0].element)
+    end_index = children.index(selected_groups[-1][-1].element)
+    segment = children[start_index : end_index + 1]
+    if any(child.tag == "backup" for child in segment):
+        problems.append(f"{prefix}: backup inside a tuplet segment is not supported")
+    selected_notes = [child for child in segment if child.tag == "note"]
+    for note in selected_notes:
+        if (note.findtext("staff") or "1") != staff or (note.findtext("voice") or "1") != voice:
+            problems.append(f"{prefix}: another staff/voice intersects the segment")
+        elif note.find("rest") is not None or _pitch_name(note) is None:
+            problems.append(f"{prefix}: segment must contain only pitched notes")
+        if note.find("duration") is None:
+            problems.append(f"{prefix}: every note must have a duration")
+        if note.find("type") is None:
+            problems.append(f"{prefix}: every note must have a type")
+
+    _check_existing_tuplets(voice_events, selected_groups, prefix, problems)
+    divisions = Fraction(str(doc.divisions()))
+    actual = patch["actual_notes"]
+    normal = patch["normal_notes"]
+    durations = []
+    total = Fraction(0)
+    for group in selected_groups:
+        group_durations = []
+        for event in group:
+            note = event.element
+            note_type = note.findtext("type")
+            if note_type not in NOTE_TYPE_BEATS:
+                if note_type is not None:
+                    problems.append(f"{prefix}: unsupported note type {note_type!r}")
+                continue
+            nominal = NOTE_TYPE_BEATS[note_type] * (2 - Fraction(1, 2 ** len(note.findall("dot"))))
+            duration = divisions * nominal * normal / actual
+            group_durations.append(duration)
+            if duration.denominator != 1:
+                problems.append(f"{prefix}: new duration is not an integer tick")
+        if not group_durations:
+            durations.append(0)
+            continue
+        if any(duration != group_durations[0] for duration in group_durations[1:]):
+            problems.append(f"{prefix}: chord members must have the same nominal duration")
+        durations.append(int(group_durations[0]))
+        total += group_durations[0] / divisions
+    if total != Fraction(str(patch["span_beats"])):
+        problems.append(f"{prefix}: recomputed duration does not equal span_beats")
+    plan = {
+        "measure": measure,
+        "groups": [[event.element for event in group] for group in selected_groups],
+        "forwards": [child for child in segment if child.tag == "forward"],
+        "durations": durations,
+        "actual": actual,
+        "normal": normal,
+        "start_index": start_index,
+        "end_index": end_index,
+    }
+    return plan, problems
+
+
+def _check_existing_tuplets(voice_events, selected_groups, prefix: str, problems: list[str]) -> None:
+    start_onset = selected_groups[0][0].onset
+    end_onset = selected_groups[-1][0].onset
+    starts: list[float] = []
+    pairs: list[tuple[float | None, float | None]] = []
+    nested = False
+    for event in voice_events:
+        for tuplet in event.element.findall("notations/tuplet"):
+            if tuplet.get("type") == "start":
+                if starts:
+                    nested = True
+                starts.append(event.onset)
+            elif tuplet.get("type") == "stop":
+                pairs.append((starts.pop() if starts else None, event.onset))
+    if nested:
+        problems.append(f"{prefix}: existing tuplet crosses or is nested in the segment")
+    pairs.extend((start, None) for start in starts)
+    for old_start, old_stop in pairs:
+        overlaps = (old_start is None or old_start <= end_onset + 1e-6) and (
+            old_stop is None or old_stop >= start_onset - 1e-6
+        )
+        contained = (
+            old_start is not None
+            and old_stop is not None
+            and old_start >= start_onset - 1e-6
+            and old_stop <= end_onset + 1e-6
+        )
+        if overlaps and not contained:
+            problems.append(f"{prefix}: existing tuplet crosses or is nested in the segment")
+
+
+def _apply_tuplet(plan: dict) -> None:
+    measure = plan["measure"]
+    for forward in plan["forwards"]:
+        measure.remove(forward)
+    for group in plan["groups"]:
+        for note in group:
+            notations = note.find("notations")
+            if notations is not None:
+                for tuplet in list(notations.findall("tuplet")):
+                    notations.remove(tuplet)
+    for group, duration in zip(plan["groups"], plan["durations"]):
+        for note in group:
+            note.find("duration").text = str(duration)
+            _set_time_modification(note, plan["actual"], plan["normal"])
+    _append_tuplet(plan["groups"][0][0], "start")
+    _append_tuplet(plan["groups"][-1][0], "stop")
+
+
+def _set_time_modification(note, actual: int, normal: int) -> None:
+    for existing in list(note.findall("time-modification")):
+        note.remove(existing)
+    modification = ElementTree.Element("time-modification")
+    ElementTree.SubElement(modification, "actual-notes").text = str(actual)
+    ElementTree.SubElement(modification, "normal-notes").text = str(normal)
+    children = list(note)
+    index = 0
+    for candidate, child in enumerate(children):
+        if child.tag in ("type", "dot", "accidental"):
+            index = candidate + 1
+    note.insert(index, modification)
+
+
+def _append_tuplet(note, kind: str) -> None:
+    notations = note.find("notations")
+    if notations is None:
+        notations = ElementTree.Element("notations")
+        children = list(note)
+        index = next(
+            (candidate for candidate, child in enumerate(children) if child.tag in ("lyric", "play", "listen")),
+            len(children),
+        )
+        note.insert(index, notations)
+    ElementTree.SubElement(notations, "tuplet", {"type": kind})
+
+
+def _positive_integer(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _alter(note) -> int | float:
+    text = note.findtext("pitch/alter")
+    try:
+        value = float(text or 0)
+    except ValueError:
+        return 0
+    return int(value) if value.is_integer() else value
+
+
+def _pitch_name(note) -> str | None:
+    step = note.findtext("pitch/step")
+    octave = note.findtext("pitch/octave")
+    if not step or not octave:
+        return None
+    alter = _alter(note)
+    if isinstance(alter, int) and alter > 0:
+        accidental = "#" * alter
+    elif isinstance(alter, int) and alter < 0:
+        accidental = "b" * -alter
+    else:
+        accidental = ""
+    return f"{step}{accidental}{octave}"
+
+
+def _integer_text(element, path: str) -> int | None:
+    if element is None:
+        return None
+    text = element.findtext(path)
+    try:
+        return int(text) if text is not None else None
+    except ValueError:
+        return None
+
+
 def remove_octave_shifts(doc: Document, staff: str) -> int:
     """Remove all octave-shift directions on one staff; returns directions removed."""
     removed = 0
@@ -164,6 +505,67 @@ def list_octave_shifts(doc: Document) -> list[dict]:
                 }
             )
     return result
+
+
+def verify_patches(doc: Document, payload: dict) -> list[str]:
+    """Check that applied patches still have their target notes/shifts after the pipeline."""
+    problems: list[str] = []
+    for index, patch in enumerate(payload.get("patches") or []):
+        prefix = f"patches[{index}]"
+        op = patch.get("op")
+        if op == "ottava":
+            if patch.get("mode") == "remove":
+                continue
+            shifts = list_octave_shifts(doc)
+            staff = str(patch.get("staff"))
+            starts = [
+                shift
+                for shift in shifts
+                if shift["staff"] == staff and shift["type"] in ("up", "down")
+            ]
+            stops = [
+                shift for shift in shifts if shift["staff"] == staff and shift["type"] == "stop"
+            ]
+            if not starts or not stops:
+                problems.append(f"{prefix}: ottava start/stop missing after pipeline")
+            continue
+        if op != "tuplet":
+            problems.append(f"{prefix}: unsupported op {op!r}")
+            continue
+        measure_index = patch.get("measure")
+        if not isinstance(measure_index, int) or not 1 <= measure_index <= len(doc.measures()):
+            problems.append(f"{prefix}: measure missing after pipeline")
+            continue
+        measure = doc.measures()[measure_index - 1]
+        events = [
+            event
+            for event in doc.events(measure)
+            if event.staff == str(patch.get("staff")) and event.voice == patch.get("voice")
+        ]
+        for label in ("start", "end"):
+            anchor = patch.get(label) or {}
+            found = [
+                event
+                for event in events
+                if _pitch_name(event.element) == anchor.get("pitch")
+            ]
+            if not found:
+                problems.append(f"{prefix}: {label} anchor note missing after pipeline")
+        actual = patch.get("actual_notes")
+        normal = patch.get("normal_notes")
+        modified = [
+            event
+            for event in events
+            if (mod := event.element.find("time-modification")) is not None
+            and mod.findtext("actual-notes") == str(actual)
+            and mod.findtext("normal-notes") == str(normal)
+        ]
+        if len(modified) < int(patch.get("note_count") or 0):
+            problems.append(
+                f"{prefix}: tuplet notes lost after pipeline "
+                f"({len(modified)}/{patch.get('note_count')} remain)"
+            )
+    return problems
 
 
 def _insert_octave(measure, beat: float, staff: str, kind: str, direction: str, number: str, divisions: float) -> None:

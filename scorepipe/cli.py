@@ -17,7 +17,7 @@ from .core.registry import validate_all
 from .facts import validate_facts
 from .loader import load_pages, merge_pages
 from .mscz_export import export_and_display
-from .notation_patches import apply_patches, load_patches, validate_patches
+from .notation_patches import apply_patches, load_patches, validate_patches, verify_patches
 from .omr import run_omr
 from .passes import DISPLAY_PASSES, INJECT_PASSES, STRUCTURAL_PASSES
 from .producers import resolve as resolve_producer
@@ -103,7 +103,8 @@ def main(argv: list[str] | None = None) -> int:
         pages = merged
     else:
         doc = Document.load(path)
-    patches_payload = None
+    tuplets_payload = None
+    ottava_payload = None
     if args.patches:
         patches_payload = load_patches(args.patches)
         problems = validate_patches(patches_payload, doc)
@@ -111,6 +112,15 @@ def main(argv: list[str] | None = None) -> int:
             for problem in problems:
                 print(f"patches: {problem}")
             return 1
+        tuplets_payload = {
+            "patches": [patch for patch in patches_payload.get("patches") or [] if patch.get("op") == "tuplet"]
+        }
+        ottava_payload = {
+            "patches": [patch for patch in patches_payload.get("patches") or [] if patch.get("op") == "ottava"]
+        }
+    if tuplets_payload and tuplets_payload["patches"]:
+        changed = apply_patches(doc, tuplets_payload)
+        print(f"patches: {changed} tuplet change(s)")
     ctx = Context(facts=facts, pages=pages)
     report = run_pipeline(
         doc,
@@ -121,10 +131,17 @@ def main(argv: list[str] | None = None) -> int:
         max_rounds=args.max_rounds,
     )
     _print_report(report, args.trace)
-    _write_report(report, args.report)
-    if patches_payload is not None:
-        changed = apply_patches(doc, patches_payload)
+    if not args.mscz_out or args.check:
+        _write_report(report, args.report)
+    if ottava_payload and ottava_payload["patches"]:
+        changed = apply_patches(doc, ottava_payload)
         print(f"patches: {changed} octave direction(s)")
+    if args.patches:
+        patch_problems = verify_patches(doc, patches_payload)
+        for problem in patch_problems:
+            print(f"patches: {problem}")
+        if patch_problems:
+            status = 1
     if args.output and not args.check:
         doc.save(args.output)
     if args.compare_golden:
@@ -147,6 +164,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"mscz: {args.mscz_out}")
         _print_report(display_report, args.trace)
+        report = RunReport(
+            phases=report.phases + display_report.phases,
+            trace=report.trace + display_report.trace,
+            verifier=report.verifier + display_report.verifier,
+            analysis=report.analysis + display_report.analysis,
+        )
+        _write_report(report, args.report)
         if display_report.verifier:
             status = 1
     return status

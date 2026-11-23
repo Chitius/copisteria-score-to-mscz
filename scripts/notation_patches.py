@@ -38,7 +38,37 @@ def main(argv: list[str] | None = None) -> int:
     apply.add_argument("--input", required=True)
     apply.add_argument("--patches", required=True)
     apply.add_argument("-o", "--output", required=True)
+    accept = sub.add_parser("accept", help="promote proposed tuplet patches to accepted")
+    accept.add_argument("--patches", required=True)
+    accept.add_argument("--musicxml", required=True)
+    accept.add_argument("--indices", nargs="+", type=int, required=True)
+    accept.add_argument("--reviewer", default="")
+    accept.add_argument("-o", "--output", required=True)
     args = parser.parse_args(argv)
+
+    if args.command == "accept":
+        payload = load_patches(args.patches)
+        patches = payload.get("patches") or []
+        for index in args.indices:
+            if not 0 <= index < len(patches):
+                print(f"patch index out of range: {index}")
+                return 1
+            patch = patches[index]
+            if patch.get("op") != "tuplet":
+                print(f"patches[{index}] is not a tuplet patch")
+                return 1
+            patch["status"] = "accepted"
+            if args.reviewer:
+                patch["accepted_by"] = args.reviewer
+        doc = Document.load(args.musicxml) if args.musicxml else None
+        problems = validate_patches(payload, doc)
+        if problems:
+            for problem in problems:
+                print(problem)
+            return 1
+        Path(args.output).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"wrote {args.output}")
+        return 0
 
     if args.command == "map":
         doc = Document.load(args.input)
@@ -56,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     changed = apply_patches(doc, payload)
     doc.save(args.output)
-    print(f"wrote {args.output} ({changed} octave directions)")
+    print(f"wrote {args.output} ({changed} patch changes)")
     return 0
 
 

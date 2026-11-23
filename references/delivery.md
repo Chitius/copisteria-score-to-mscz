@@ -33,6 +33,11 @@ Before saying "done":
  "trace":[...]}
 ```
 
+When `--mscz-out` is requested, `report.json` combines structural, inject and display phases, traces,
+analysis and verifier violations. A failed run may still leave draft MSCZ/PDF artifacts for review;
+`delivery.json` records `ready`, `pipeline_exit` and `render_exit`. Draft artifacts do not make a failed
+run deliverable.
+
 - `stable=false`: a pass did not reach a fixed point. Do not deliver until understood.
 - `verifier` non-empty: structural or display problem. Treat as a blocker unless the user accepts
   the specific defect.

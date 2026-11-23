@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 from .invariants import Violation
 from .mscx import MsxcDocument, has_text, note_count
 from .pass_base import Context
@@ -79,54 +81,86 @@ def empty_voices(doc: MsxcDocument, ctx: Context) -> list[Violation]:
 
 
 DURATIONS = {
-    "breve": 8.0,
-    "whole": 4.0,
-    "half": 2.0,
-    "quarter": 1.0,
-    "eighth": 0.5,
-    "16th": 0.25,
-    "32nd": 0.125,
-    "64th": 0.0625,
+    "breve": Fraction(8),
+    "whole": Fraction(4),
+    "half": Fraction(2),
+    "quarter": Fraction(1),
+    "eighth": Fraction(1, 2),
+    "16th": Fraction(1, 4),
+    "32nd": Fraction(1, 8),
+    "64th": Fraction(1, 16),
+    "128th": Fraction(1, 32),
+    "256th": Fraction(1, 64),
 }
 
 
-def _beats(element, meter: float = 4.0) -> float:
+def _beats(element, meter: Fraction = Fraction(4), tuplet: Fraction = Fraction(1)) -> Fraction:
     name = element.findtext("durationType") or "quarter"
     if name == "measure":
         return meter
-    base = DURATIONS.get(name, 1.0)
+    explicit = element.findtext("duration")
+    if explicit:
+        try:
+            # MuseScore's optional duration is an actual fraction of a whole note.
+            return Fraction(explicit) * 4
+        except (ValueError, ZeroDivisionError):
+            pass
+    base = DURATIONS.get(name, Fraction(1))
     dots = int(element.findtext("dots") or 0)
-    return base * sum(0.5**index for index in range(dots + 1))
+    multiplier = sum((Fraction(1, 2) ** index for index in range(dots + 1)), Fraction(0))
+    return base * multiplier * tuplet
+
+
+def _tuplet_ratio(tuplet) -> Fraction:
+    try:
+        normal = Fraction(tuplet.findtext("normalNotes") or "")
+        actual = Fraction(tuplet.findtext("actualNotes") or "")
+        if normal <= 0 or actual <= 0:
+            return Fraction(1)
+        return normal / actual
+    except (ValueError, ZeroDivisionError):
+        return Fraction(1)
 
 
 def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     """What MuseScore flags as an incomplete measure: a voice whose ticks miss the time signature."""
-    signatures: dict[int, float] = {}
+    signatures: dict[int, Fraction] = {}
     for staff in doc.root.iter("Staff"):
         for index, measure in enumerate(staff.findall("Measure"), start=1):
             for time in measure.iter("TimeSig"):
                 try:
-                    signatures[index] = float(time.findtext("sigN") or 4) * 4.0 / float(
+                    signatures[index] = Fraction(time.findtext("sigN") or 4) * 4 / Fraction(
                         time.findtext("sigD") or 4
                     )
-                except ValueError:
+                except (ValueError, ZeroDivisionError):
                     pass
     out: list[Violation] = []
-    meter = 4.0
+    meter = Fraction(4)
     for staff in doc.root.iter("Staff"):
         for index, measure in enumerate(staff.findall("Measure"), start=1):
             meter = signatures.get(index, meter)
             for voice in _primary_voice(measure):
-                total = 0.0
+                total = Fraction(0)
+                tuplets: list[Fraction] = []
                 for child in voice:
-                    if child.tag in ("Chord", "Rest"):
-                        total += _beats(child, meter)
+                    if child.tag == "Tuplet":
+                        tuplets.append(_tuplet_ratio(child))
+                    elif child.tag == "endTuplet":
+                        if tuplets:
+                            tuplets.pop()
+                    elif child.tag in ("Chord", "Rest"):
+                        ratio = Fraction(1)
+                        for tuplet in tuplets:
+                            ratio *= tuplet
+                        total += _beats(child, meter, ratio)
                 if total <= 0:
                     continue
-                if abs(total - meter) > 1e-6:
+                if abs(total - meter) > Fraction(1, 1_000_000):
                     out.append(
                         Violation(
-                            "mscx-measure-length", index, f"voice {total:g} beats, metre {meter:g}"
+                            "mscx-measure-length",
+                            index,
+                            f"voice {float(total):g} beats, metre {float(meter):g}",
                         )
                     )
     return out

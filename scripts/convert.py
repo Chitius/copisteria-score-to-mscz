@@ -190,15 +190,23 @@ def main(argv: list[str] | None = None) -> int:
         score_command.extend(["--mscz-out", str(mscz)])
         if musescore:
             score_command.extend(["--musescore", str(musescore)])
-    _run(score_command, cwd=Path(__file__).resolve().parents[1])
+    pipeline_exit, _ = _run(score_command, cwd=Path(__file__).resolve().parents[1], tolerate=True)
 
     pdf_out = None
-    if mscz is not None and not args.no_pdf and musescore:
+    render_exit = None
+    if mscz is not None and mscz.is_file() and not args.no_pdf and musescore:
         pdf_out = outdir / "score.pdf"
-        _run([musescore, "-f", "-o", str(pdf_out), str(mscz)], cwd=Path(__file__).resolve().parents[1])
+        render_exit, _ = _run(
+            [musescore, "-f", "-o", str(pdf_out), str(mscz)],
+            cwd=Path(__file__).resolve().parents[1],
+            tolerate=True,
+        )
 
     manifest = {
         "skill": "copisteria-to-mscz",
+        "ready": pipeline_exit == 0 and (render_exit is None or render_exit == 0),
+        "pipeline_exit": pipeline_exit,
+        "render_exit": render_exit,
         "started": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(started)),
         "pdf": str(pdf),
         "outdir": str(outdir),
@@ -224,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"pdf:      {pdf_out}")
     print(f"report:   {report}")
     print(f"manifest: {outdir / 'delivery.json'}")
-    return 0
+    return pipeline_exit or render_exit or 0
 
 
 if __name__ == "__main__":

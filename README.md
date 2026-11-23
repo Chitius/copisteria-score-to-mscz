@@ -76,7 +76,7 @@ per-page MusicXML
 The pipeline is a compiler-style fixed point: each mechanical pass declares what it owns and a
 monotone measure; the runner repeats until a full round changes nothing; read-only verifiers run
 afterwards. See [`docs/DESIGN.md`](docs/DESIGN.md) for the architecture and
-[`SANITY.md`](SANITY.md) for the pass-contract audit.
+[`docs/SANITY.md`](docs/SANITY.md) for the pass-contract audit.
 
 Useful commands:
 
@@ -153,8 +153,8 @@ the report still lists what was overridden. See [`references/review.md`](referen
 Tests:
 
 ```text
-python -m unittest discover -s tests   # 194 tests
-python -m pytest tests -q              # 276 tests
+python -m unittest discover -s tests   # 219 tests
+python -m pytest tests -q              # 301 tests
 ```
 
 Corpus (sounding-note match; rests excluded from the primary score):
@@ -208,7 +208,7 @@ references/              setup, OMR, facts, delivery references
 docs/                    architecture, acceptance evidence, archived plans
 docs/archive/            completed migration/change plans (provenance)
 tests/                   regression suite and Lieder corpus
-SANITY.md                pass-contract audit
+docs/SANITY.md            pass-contract audit
 ```
 
 ## Development

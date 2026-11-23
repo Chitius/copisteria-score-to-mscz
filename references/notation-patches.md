@@ -46,6 +46,46 @@ and `end` must be after `start`. `page` and `bbox`/`crop` are required evidence 
 For a wrong OMR 8va on the bass staff, use `remove` on staff 2 and `add` on staff 1. Do not let a
 single patch silently move a spanner between staves.
 
+## Tuplet rhythm corrections
+
+`tuplet` retimes an existing, complete run of pitched notes in one measure/staff/voice. It is for OMR
+runs whose notes exist but whose ratios or internal forward gaps are wrong. It never creates pitches,
+turns rests into notes, merges voices, crosses a barline, or nests tuplets.
+
+```json
+{
+  "op": "tuplet",
+  "measure": 122,
+  "staff": 1,
+  "voice": "1",
+  "start": {"measure": 122, "beat": 1, "pitch": "C#5"},
+  "end": {"measure": 122, "beat": 1.8333333333333333, "pitch": "F#6"},
+  "actual_notes": 5,
+  "normal_notes": 4,
+  "note_count": 5,
+  "span_beats": 1,
+  "status": "accepted",
+  "page": 6,
+  "bbox": [340, 675, 405, 725],
+  "bbox_space": "image-px",
+  "evidence": "one printed 5 bracket covers these five notes",
+  "confidence": 0.98
+}
+```
+
+`actual_notes/normal_notes` define only the ratio. `note_count` independently counts base-note onsets;
+a chord counts once. `span_beats` is the source-backed sounding extent in quarter beats. These values
+must agree with the note types and dots, but the compiler must never infer a ratio from a bad bar length.
+`end` is the last included note's onset, not the exclusive end of the bracket.
+
+The patch must be explicitly `accepted` after reviewing the source evidence. Proposed or incomplete
+patches are rejected. The compiler removes forward gaps inside the evidenced contiguous run, but rejects
+rests, backup, other voices, missing/extra anchors, nested or boundary-crossing old tuplets, overlapping
+patches, non-integer ticks and any mismatch with `note_count` or `span_beats`.
+
+Tuplet patches apply before the structural fixpoint; ottava patches retain their post-pipeline timing.
+Re-run both MusicXML and MSCX verifiers and inspect the rendered bracket after every application.
+
 ## Workflow
 
 ```bash
@@ -55,13 +95,19 @@ python scripts/notation_patches.py map \
 
 # 2. Agent looks at page images + score-map and writes patches.json.
 
-# 3. Validate/apply. Either script:
-python scripts/notation_patches.py apply \
-  --input out/score.musicxml --patches review/patches.json -o out/score.patched.musicxml
+# 3. Promote a reviewed tuplet proposal to accepted.
+python scripts/notation_patches.py accept \
+  --patches review/patches.json --musicxml out/score.musicxml \
+  --indices 0 --reviewer "reviewer-name" -o review/patches.accepted.json
 
-# or the pipeline CLI (applies before the structural fixpoint):
+# 4. Validate/apply. Either script:
+python scripts/notation_patches.py apply \
+  --input out/score.musicxml --patches review/patches.accepted.json \
+  -o out/score.patched.musicxml
+
+# or the pipeline CLI (tuplet before structural, ottava after inject):
 python -m scorepipe.cli path/to/pages -o out/score.musicxml --mscz-out out/score.mscz \
-  --patches review/patches.json --report out/report.json
+  --patches review/patches.accepted.json --report out/report.json
 ```
 
 ## 8va range safety
@@ -84,5 +130,5 @@ Pixel coordinates are evidence only; the applied range comes from musical anchor
 
 ## Scope
 
-This is a prototype with `ottava` only. The same operation shape can later cover pedals, hairpins,
-slurs, dynamics and tuplets, but each operation needs its own compiler and render regression.
+The supported operations are `ottava` and the constrained same-voice `tuplet` correction above. Other
+symbols and cross-voice/missing-note rhythm repair still need their own compilers and render regressions.
