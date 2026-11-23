@@ -41,10 +41,19 @@ _LEGAL_TICKS = (
 
 def canonicalize(doc: MsxcDocument, only=None) -> int:
     changed = 0
+    meters = {}
     for staff, index, measure in doc.iter_measures():
         if only is not None and index not in only:
             continue
-        expected = measure_expected_ticks(measure)
+        meter = Fraction(TICKS_PER_WHOLE, TICKS_PER_WHOLE)
+        meter = meters.get(id(staff), Fraction(1))
+        for time in measure.iter("TimeSig"):
+            try:
+                meter = Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4))
+            except (ValueError, ZeroDivisionError):
+                pass
+        meters[id(staff)] = meter
+        expected = measure_expected_ticks(measure, Fraction(round(meter * TICKS_PER_WHOLE), 1))
         for voice in measure.findall("voice"):
             if not voice.findall("Chord"):
                 continue
@@ -58,7 +67,7 @@ def canonicalize(doc: MsxcDocument, only=None) -> int:
                 if start > 0 and duration <= expected:
                     _set_location(voice, expected - duration)
                     changed += 1
-            elif end < expected:
+            elif 0 < expected - end <= 15 or start > 0:
                 changed += _fill(voice, expected - end)
     return changed
 
@@ -76,7 +85,7 @@ def _set_location(voice, ticks: int) -> None:
 
 def _fill(voice, ticks: int) -> int:
     changed = 0
-    remaining = ticks
+    remaining = int(ticks)
     for name, dots, value in _LEGAL_TICKS:
         while remaining >= value:
             rest = ElementTree.SubElement(voice, "Rest")

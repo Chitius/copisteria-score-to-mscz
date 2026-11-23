@@ -141,8 +141,16 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     from .musescore_ticks import location_ticks, measure_expected_ticks, voice_ticks
 
     out: list[Violation] = []
-    for _staff, index, measure in doc.iter_measures():
-        expected = measure_expected_ticks(measure)
+    meters = {}
+    for staff, index, measure in doc.iter_measures():
+        meter = meters.get(id(staff), Fraction(1))
+        for time in measure.iter("TimeSig"):
+            try:
+                meter = Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4))
+            except (ValueError, ZeroDivisionError):
+                pass
+        meters[id(staff)] = meter
+        expected = measure_expected_ticks(measure, Fraction(round(meter * 1920), 1))
         primary = _primary_voice(measure)
         primary_voice = primary[0] if primary else None
         for voice in measure.findall("voice"):

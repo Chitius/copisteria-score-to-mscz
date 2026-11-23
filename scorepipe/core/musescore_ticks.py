@@ -88,7 +88,7 @@ def location_ticks(voice: ElementTree.Element) -> int:
     return fraction_ticks(Fraction(fraction)) if fraction else 0
 
 
-def measure_expected_ticks(measure: ElementTree.Element) -> int:
+def measure_expected_ticks(measure: ElementTree.Element, inherited=None) -> int:
     length = measure.get("len")
     if length:
         return fraction_ticks(Fraction(length))
@@ -97,11 +97,13 @@ def measure_expected_ticks(measure: ElementTree.Element) -> int:
         beats = int(signature.findtext("sigN") or 4)
         unit = int(signature.findtext("sigD") or 4)
         return fraction_ticks(Fraction(beats, unit))
+    if inherited is not None:
+        return inherited
     return TICKS_PER_WHOLE
 
 
-def measure_report(measure: ElementTree.Element) -> list[dict]:
-    expected = measure_expected_ticks(measure)
+def measure_report(measure: ElementTree.Element, inherited=None) -> list[dict]:
+    expected = measure_expected_ticks(measure, inherited)
     rows = []
     for voice in measure.findall("voice"):
         actual = location_ticks(voice) + voice_ticks(voice)
