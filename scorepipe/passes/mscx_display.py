@@ -405,6 +405,14 @@ def compact_secondary_padding(doc) -> int:
         expected = measure_expected_ticks(measure, round(meter * TICKS_PER_WHOLE))
         voices = measure.findall("voice")
         primary = next((voice for voice in voices if voice.findall("Chord")), None)
+        if primary is not None:
+            for rest in primary.findall("Rest"):
+                if rest.find("padding") is None:
+                    continue
+                visible = rest.find("visible")
+                if visible is not None and (visible.text or "").strip().lower() in ("0", "false"):
+                    rest.remove(visible)
+                    changed += 1
         for voice in voices:
             if voice is primary:
                 continue
