@@ -70,6 +70,18 @@ class DisplayPassesTest(unittest.TestCase):
         }
         self.assertEqual(actual, self.DISPLAY_MECHANICAL)
 
+    def test_each_display_mechanical_pass_is_idempotent(self):
+        for one_pass in DISPLAY_PASSES:
+            if one_pass.spec.kind.value != "mechanical":
+                continue
+            with self.subTest(pass_name=one_pass.spec.name):
+                doc = build()
+                one_pass.run(doc, Context())
+                after_first = doc.state_hash()
+                result = one_pass.run(doc, Context())
+                self.assertEqual(result.changed, 0)
+                self.assertEqual(doc.state_hash(), after_first)
+
     def test_padding_voice_is_dropped(self):
         doc = build()
         run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)

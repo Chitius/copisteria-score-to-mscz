@@ -129,19 +129,20 @@ Scope: A1, A2, A3, A4, A5, A6, A9, B2, D8.
 tail, preserves positional rests, never edits inside flat tuplets, reports `UNRESOLVED` without
 partial mutation, uses staff ids, records real rounds/stability, and rejects `--truncate-overfull`
 without `--mscz-out`. The intermediate MusicXML is isolated. C4/D8 remain in progress. Verification:
-241 unittest / 325 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
+242 unittest / 326 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
 unchanged with no forced operations.
 
 ### Batch 2 — verifier and pass-sanity integrity
 
 Scope: B1, B3–B7, C1–C4, C6, C9, A7, A8, A10.
 
-**Progress 2026-11-23:** B1, B3–B7, C1, C2, C6 fixed; C3/C4 in progress; C9/A7/A8/A10 remain.
+**Progress 2026-11-23:** B1, B3–B7, C1, C2, C6 fixed; C3/C4/C9/A10 in progress; A7/A8 remain.
 `verify_patches` now checks ottava type/size/measure/number and tuplet onset span, bracket and
 duration; MSCX length checks all overfull voices while allowing short secondary voices; explicit
 `<visible>1</visible>` is no longer treated as hidden; pass fixtures now assert an actual effect and
 the sanity framework compares state hashes and verifier details/multiplicity; display pass inventory
-is explicit; truncation has multi-voice/3-4 tests. Verification: 241 unittest / 325 pytest.
+and idempotence are tested; truncation has multi-voice/3-4/len tests. Verification: 242 unittest /
+326 pytest.
 
 - Strengthen `verify_patches` and add five drift tests.
 - Check every voice; fix hidden-rest semantics; add empty/implicit/multipart/grace cases.
