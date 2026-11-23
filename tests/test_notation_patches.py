@@ -141,6 +141,23 @@ class NotationPatchesTest(unittest.TestCase):
                 note.remove(modification)
         self.assertTrue(verify_patches(doc, payload))
 
+    def test_verify_rejects_ottava_size_drift(self):
+        doc = Document.load(TINY)
+        payload = patch()
+        apply_patches(doc, payload)
+        first = next(doc.root.iter("octave-shift"))
+        first.set("size", "15")
+        self.assertTrue(any("ottava" in problem for problem in verify_patches(doc, payload)))
+
+    def test_verify_rejects_tuplet_duration_drift(self):
+        doc = make_doc(
+            "".join(note_xml(pitch, duration=16) for pitch in ("C4", "D4", "E4", "F4", "G4"))
+        )
+        payload = tuplet_patch(end={"measure": 1, "beat": 3.2, "pitch": "G4"}, span_beats=4)
+        apply_patches(doc, payload)
+        doc.root.find(".//note/duration").text = "20"
+        self.assertTrue(any("tuplet" in problem for problem in verify_patches(doc, payload)))
+
     def assert_tuplet_rejected(self, doc: Document, payload: dict):
         before = doc.state_hash()
         problems = validate_patches(payload, doc)

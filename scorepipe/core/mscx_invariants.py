@@ -18,8 +18,12 @@ def hidden_non_measure_rests(doc: MsxcDocument, ctx: Context) -> list[Violation]
                     continue
                 if rest.find("pickupPadding") is not None:
                     continue
-                if rest.find("visible") is not None:
-                    out.append(Violation("hidden-rest", index, rest.findtext("durationType") or ""))
+                visible = rest.find("visible")
+                if visible is None:
+                    continue
+                if (visible.text or "").strip().lower() not in ("0", "false"):
+                    continue
+                out.append(Violation("hidden-rest", index, rest.findtext("durationType") or ""))
     return out
 
 
@@ -139,7 +143,9 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     for staff in doc.root.iter("Staff"):
         for index, measure in enumerate(staff.findall("Measure"), start=1):
             meter = signatures.get(index, meter)
-            for voice in _primary_voice(measure):
+            primary = _primary_voice(measure)
+            primary_voice = primary[0] if primary else None
+            for voice in measure.findall("voice"):
                 total = Fraction(0)
                 tuplets: list[Fraction] = []
                 for child in voice:
@@ -155,7 +161,11 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
                         total += _beats(child, meter, ratio)
                 if total <= 0:
                     continue
-                if abs(total - meter) > Fraction(1, 1_000_000):
+                # The primary voice must fill the bar. Secondary voices may intentionally stop
+                # early, but they must never be overfull: that is what the editable repair edits.
+                if abs(total - meter) <= Fraction(1, 1_000_000):
+                    continue
+                if voice is primary_voice or total > meter:
                     out.append(
                         Violation(
                             "mscx-measure-length",

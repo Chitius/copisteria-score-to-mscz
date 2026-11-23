@@ -45,10 +45,10 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 
 | ID | Sev | Finding | Evidence | Fix / test | Status |
 |---|---|---|---|---|---|
-| B1 | P0 | `verify_patches` accepts drift: ottava only checks any start/stop; tuplet only checks anchor pitch and global modified count. Size 8→15, end moved, duration changed, bracket removed, or one note lost + one cloned all still return clean. | `scorepipe/notation_patches.py:510-568`; tests only delete time-modification at `tests/test_notation_patches.py:131-142` | Verify number/size/type/order/span, per-note onsets/durations, brackets; add five negative tests | open |
+| B1 | P0 | `verify_patches` accepts drift: ottava only checks any start/stop; tuplet only checks anchor pitch and global modified count. Size 8→15, end moved, duration changed, bracket removed, or one note lost + one cloned all still return clean. | `scorepipe/notation_patches.py:510-568`; tests only delete time-modification at `tests/test_notation_patches.py:131-142` | Verify number/size/type/order/span, per-note onsets/durations, brackets; add five negative tests | fixed (batch2) |
 | B2 | P0 | Patch-verification failure is erased from CLI exit status: `status=1` at the patch check is overwritten by the verifier assignment. | `scorepipe/cli.py:145-166`; `tests/test_cli.py:109-149` | Keep `patch_failed` separate, include it in report, OR into exit; add integration test | fixed (batch1) |
-| B3 | P1 | MSCX `measure_lengths` checks only the first chord voice; an overfull secondary voice returns clean. Truncation edits every voice. | `mscx_invariants.py:156-157,169-175`; `mscx_truncate.py:41-87` | Check all voices; add overfull-secondary test | open |
-| B4 | P1 | `<Rest><visible>1</visible>` is reported as hidden because only presence is checked. | `mscx_invariants.py:12-23` | Treat `0/false` as hidden; table-test all six verifiers | open |
+| B3 | P1 | MSCX `measure_lengths` checks only the first chord voice; an overfull secondary voice returns clean. Truncation edits every voice. | `mscx_invariants.py:156-157,169-175`; `mscx_truncate.py:41-87` | Check all voices; add overfull-secondary test | fixed (batch2) |
+| B4 | P1 | `<Rest><visible>1</visible>` is reported as hidden because only presence is checked. | `mscx_invariants.py:12-23` | Treat `0/false` as hidden; table-test all six verifiers | fixed (batch2) |
 | B5 | P1 | MusicXML invariants miss empty measures, overfull `implicit` bars, broken second parts, and grace notes (no duration). | `scorepipe/core/invariants.py:93-116`; `scorepipe/core/document.py:53-54,64-103` | Add negative tests; reject multi-part or check every part; account for grace notes | open |
 | B6 | P1 | New-violation detection keys only `(code, measure)`, so a second identical violation or worse detail is invisible. | `scorepipe/sanity.py:574-597` | Key by `(code, measure, detail)` or Counter; add same-code/worse-detail tests | open |
 | B7 | P1 | Five of six MSCX verifiers have no direct tests; only `measure_lengths` is covered. | `tests/test_mscx_invariants.py` | Positive/negative table tests for hidden rests, text-voice rests, padding voices, voice order, empty voices | open |
@@ -62,7 +62,7 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 | C3 | P0 | Display mechanical passes (18) and the analysis pass have no pass contract/idempotence coverage. | `tests/test_pass_sanity.py:330-340` | Add a display/analysis contract registry or explicit exemption list, plus mutation tests | open |
 | C4 | P1 | `test_mscx_truncate` uses nested `<Tuplet>` (not MuseScore's flat shape) and has a tautological `assertGreaterEqual(changed, 0)`; no idempotence/unresolved/multi-voice/pickup/ties tests. | `tests/test_mscx_truncate.py:30-61` | Rewrite with flat fixtures; exact changed/notes; one-run fixpoint; unresolved test | in progress (batch1) |
 | C5 | P1 | Delivery tests are stateful/mocked, skip forced truncation, and have no success/stale-artifact/`--no-mscz` matrices. | `tests/test_delivery_scripts.py:13-14,98`; `scripts/convert.py:218-224` | Use tmp_path; assert artifacts from this run; test forced success/failure/skip | open |
-| C6 | P1 | `test_cli` asserts exit 0 where the real patch verifier should fail; it enshrines B2. | `tests/test_cli.py:109-149` | Integration test: clean verifier + failed patch verify => exit 1 | open |
+| C6 | P1 | `test_cli` asserts exit 0 where the real patch verifier should fail; it enshrines B2. | `tests/test_cli.py:109-149` | Integration test: clean verifier + failed patch verify => exit 1 | fixed (batch2) |
 | C7 | P1 | Lieder corpus tests compare ground truth to itself; no pipeline run. | `tests/test_lieder_corpus.py:42-51` | Add one end-to-end threshold case or label as fixture-integrity only | open |
 | C8 | P1 | Plain pytest fails on ACL-denied cache dirs; tests write into repo `.runs` and rely on CWD. | repo root `.pytest_cache`, `pytest-cache-files-*`; `test_delivery_scripts.py:13-14`; `from scripts import` | Add `conftest.py`/`testpaths`, tmp_path, sys.path fixture; clean cache dirs | open |
 | C9 | P1 | No XSD validation and no MuseScore import/render round-trip in tests. | `tests/`; `tests/test_mscz_export.py` is skipped without MuseScore | Add an opt-in MuseScore integration test and XSD validation for a fixture | open |
@@ -129,12 +129,17 @@ Scope: A1, A2, A3, A4, A5, A6, A9, B2, D8.
 tail, preserves positional rests, never edits inside flat tuplets, reports `UNRESOLVED` without
 partial mutation, uses staff ids, records real rounds/stability, and rejects `--truncate-overfull`
 without `--mscz-out`. The intermediate MusicXML is isolated. C4/D8 remain in progress. Verification:
-226 unittest / 308 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
+231 unittest / 313 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
 unchanged with no forced operations.
 
 ### Batch 2 — verifier and pass-sanity integrity
 
 Scope: B1, B3–B7, C1–C4, C6, C9, A7, A8, A10.
+
+**Progress 2026-11-23:** B1, B3, B4 and C6 fixed; B6/B7/C1/C2/C3/C9/A7/A8/A10 remain.
+`verify_patches` now checks ottava type/size/measure/number and tuplet onset span, bracket and
+duration; MSCX length checks all overfull voices while allowing short secondary voices; explicit
+`<visible>1</visible>` is no longer treated as hidden. Verification: 231 unittest / 313 pytest.
 
 - Strengthen `verify_patches` and add five drift tests.
 - Check every voice; fix hidden-rest semantics; add empty/implicit/multipart/grace cases.

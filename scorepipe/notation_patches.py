@@ -518,16 +518,31 @@ def verify_patches(doc: Document, payload: dict) -> list[str]:
                 continue
             shifts = list_octave_shifts(doc)
             staff = str(patch.get("staff"))
+            expected_type = OTTAAVA_SUBTYPES.get(patch.get("subtype"))
+            start_measure = (patch.get("start") or {}).get("measure")
+            end_measure = (patch.get("end") or {}).get("measure")
             starts = [
                 shift
                 for shift in shifts
-                if shift["staff"] == staff and shift["type"] in ("up", "down")
+                if shift["staff"] == staff
+                and shift["type"] == expected_type
+                and shift["size"] == "8"
+                and shift["measure"] == start_measure
             ]
-            stops = [
-                shift for shift in shifts if shift["staff"] == staff and shift["type"] == "stop"
-            ]
-            if not starts or not stops:
-                problems.append(f"{prefix}: ottava start/stop missing after pipeline")
+            if not starts:
+                problems.append(f"{prefix}: ottava start missing or has the wrong type/size/measure")
+                continue
+            if not any(
+                any(
+                    stop["staff"] == staff
+                    and stop["type"] == "stop"
+                    and stop["number"] == start["number"]
+                    and stop["measure"] == end_measure
+                    for stop in shifts
+                )
+                for start in starts
+            ):
+                problems.append(f"{prefix}: ottava stop missing or does not match its start")
             continue
         if op != "tuplet":
             problems.append(f"{prefix}: unsupported op {op!r}")
@@ -551,19 +566,58 @@ def verify_patches(doc: Document, payload: dict) -> list[str]:
             ]
             if not found:
                 problems.append(f"{prefix}: {label} anchor note missing after pipeline")
+        start_events = [
+            event
+            for event in events
+            if _pitch_name(event.element) == (patch.get("start") or {}).get("pitch")
+        ]
+        end_events = [
+            event
+            for event in events
+            if _pitch_name(event.element) == (patch.get("end") or {}).get("pitch")
+        ]
+        if not start_events or not end_events:
+            continue
+        start = min(start_events, key=lambda event: event.onset)
+        end = max(end_events, key=lambda event: event.onset)
+        if end.onset <= start.onset - 1e-6:
+            problems.append(f"{prefix}: end anchor is not after start after pipeline")
+            continue
+        selected = [
+            event
+            for event in events
+            if start.onset - 1e-6 <= event.onset <= end.onset + 1e-6
+        ]
         actual = patch.get("actual_notes")
         normal = patch.get("normal_notes")
         modified = [
             event
-            for event in events
+            for event in selected
             if (mod := event.element.find("time-modification")) is not None
             and mod.findtext("actual-notes") == str(actual)
             and mod.findtext("normal-notes") == str(normal)
         ]
-        if len(modified) < int(patch.get("note_count") or 0):
+        expected_count = int(patch.get("note_count") or 0)
+        if len(modified) < expected_count:
             problems.append(
                 f"{prefix}: tuplet notes lost after pipeline "
-                f"({len(modified)}/{patch.get('note_count')} remain)"
+                f"({len(modified)}/{expected_count} remain)"
+            )
+        notations = [
+            tuplet.get("type")
+            for event in selected
+            if (tuplet := event.element.find("notations/tuplet")) is not None
+        ]
+        if "start" not in notations or "stop" not in notations:
+            problems.append(f"{prefix}: tuplet start/stop bracket missing after pipeline")
+        span = float(patch.get("span_beats") or 0)
+        selected_duration = sum(
+            event.duration for event in selected if not event.chord and not event.rest
+        )
+        if span and abs(selected_duration - span) > 0.05:
+            problems.append(
+                f"{prefix}: tuplet span changed after pipeline "
+                f"({selected_duration:g} vs {span:g} beats)"
             )
     return problems
 

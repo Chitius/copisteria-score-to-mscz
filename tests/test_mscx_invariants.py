@@ -4,7 +4,7 @@ import unittest
 from xml.etree import ElementTree
 
 from scorepipe.core.mscx import MsxcDocument
-from scorepipe.core.mscx_invariants import measure_lengths
+from scorepipe.core.mscx_invariants import hidden_non_measure_rests, measure_lengths
 from scorepipe.core.pass_base import Context
 
 
@@ -75,12 +75,25 @@ class MscxMeasureLengthTest(unittest.TestCase):
         dotted_quarter = "<Chord><dots>1</dots><durationType>quarter</durationType></Chord>"
         self.assertEqual(violations(dotted_quarter * 2, signature), [])
 
-    def test_secondary_voice_does_not_define_measure_length(self):
+    def test_secondary_voice_may_be_short_but_not_overfull(self):
         doc = MsxcDocument(
             ElementTree.fromstring(
                 "<museScore><Score><Staff id='1'><Measure>"
                 f"<voice>{chord('whole')}</voice>"
                 f"<voice>{chord() * 5}</voice>"
+                "</Measure></Staff></Score></museScore>"
+            )
+        )
+        result = measure_lengths(doc, Context())
+        self.assertEqual(len(result), 1)
+        self.assertIn("5", result[0].detail)
+
+    def test_short_secondary_voice_is_not_reported_as_measure_error(self):
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score><Staff id='1'><Measure>"
+                f"<voice>{chord('whole')}</voice>"
+                f"<voice>{chord('half')}</voice>"
                 "</Measure></Staff></Score></museScore>"
             )
         )
@@ -95,6 +108,34 @@ class MscxMeasureLengthTest(unittest.TestCase):
     def test_incomplete_tuplet_ratio_falls_back_to_nominal_duration(self):
         body = "<Tuplet/><endTuplet/>" + chord() * 4
         self.assertEqual(violations(body), [])
+
+    def test_explicitly_visible_rest_is_not_hidden(self):
+        body = (
+            '<Rest><durationType>quarter</durationType><visible>1</visible></Rest>'
+            + chord("half")
+        )
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score><Staff id='1'><Measure><voice>"
+                + body
+                + "</voice></Measure></Staff></Score></museScore>"
+            )
+        )
+        self.assertEqual(hidden_non_measure_rests(doc, Context()), [])
+
+    def test_hidden_rest_is_reported(self):
+        body = (
+            '<Rest><durationType>quarter</durationType><visible>0</visible></Rest>'
+            + chord("half")
+        )
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score><Staff id='1'><Measure><voice>"
+                + body
+                + "</voice></Measure></Staff></Score></museScore>"
+            )
+        )
+        self.assertEqual(len(hidden_non_measure_rests(doc, Context())), 1)
 
 
 if __name__ == "__main__":
