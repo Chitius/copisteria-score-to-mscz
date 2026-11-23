@@ -165,6 +165,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-forced-truncation", action="store_true", help="skip the forced editable copy")
     parser.add_argument("--forced-dir", help="forced editable directory (default: <outdir>/forced-truncation)")
     parser.add_argument(
+        "--allow-combined-pages",
+        action="store_true",
+        help="allow one facts file to claim multiple pages instead of one file per page",
+    )
+    parser.add_argument(
         "--allow-incomplete-delivery",
         action="store_true",
         help="explicitly allow skipped mechanical/forced artifacts (still recorded as interim)",
@@ -227,6 +232,11 @@ def main(argv: list[str] | None = None) -> int:
     artifacts_missing = []
     if (facts.get("producer") or {}).get("pdf_sha256_mismatch"):
         blockers.append("facts were produced for a different source PDF (sha256 mismatch)")
+    if page_count and len(parts) < page_count and not args.allow_combined_pages:
+        blockers.append(
+            f"facts coverage uses {len(parts)} file(s) for {page_count} pages; "
+            "use one agent-page file per page or pass --allow-combined-pages"
+        )
     if missing_pages:
         blockers.append(f"missing pages: {missing_pages}")
     if unresolved:

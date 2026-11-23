@@ -55,6 +55,17 @@ class ChordSemanticsTest(unittest.TestCase):
         )
         self.assertTrue(measure_lengths(Document(root), Context()))
 
+    def test_multi_part_musicxml_is_rejected_instead_of_silently_ignored(self):
+        root = ElementTree.fromstring(
+            '<score-partwise version="4.0"><part-list>'
+            '<score-part id="P1"><part-name>a</part-name></score-part>'
+            '<score-part id="P2"><part-name>b</part-name></score-part></part-list>'
+            '<part id="P1"><measure number="1"/></part><part id="P2"><measure number="1"/></part>'
+            "</score-partwise>"
+        )
+        with self.assertRaises(ValueError):
+            Document(root)
+
 
 if __name__ == "__main__":
     unittest.main()

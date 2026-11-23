@@ -28,6 +28,11 @@ class Document:
     """A parsed score. The root element is the single source of truth."""
 
     def __init__(self, root: ElementTree.Element):
+        parts = root.findall("part")
+        if len(parts) > 1:
+            raise ValueError(
+                "multi-part MusicXML is not supported; split it into one part before merging"
+            )
         self.root = root
 
     # -- loading / saving -------------------------------------------------
