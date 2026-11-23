@@ -8,11 +8,13 @@ incomplete or when unresolved/corrections need a human decision; `--allow-unreso
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +31,7 @@ from scorepipe.agent_facts import (  # noqa: E402
     validate_agent_facts,
 )
 from scorepipe.loader import load_pages  # noqa: E402
+from scorepipe.mscz_export import find_musescore  # noqa: E402
 from scorepipe.notation_patches import (  # noqa: E402
     load_patches,
     score_map,
@@ -110,19 +113,15 @@ def _timing(report_path: Path) -> dict:
 def _timing_report(baseline: dict | None, reviewed: dict | None) -> dict:
     before = baseline or {"count": 0, "violations": []}
     after = reviewed or {"count": 0, "violations": []}
-    before_set = {(item["measure"], item["detail"]) for item in before["violations"]}
-    after_set = {(item["measure"], item["detail"]) for item in after["violations"]}
+    before_counts = Counter((item["measure"], item["detail"]) for item in before["violations"])
+    after_counts = Counter((item["measure"], item["detail"]) for item in after["violations"])
+    introduced = sorted((after_counts - before_counts).elements(), key=lambda item: (item[0], item[1]))
+    resolved = sorted((before_counts - after_counts).elements(), key=lambda item: (item[0], item[1]))
     return {
         "baseline": before,
         "reviewed": after,
-        "introduced": [
-            {"measure": measure, "detail": detail}
-            for measure, detail in sorted(after_set - before_set, key=lambda item: (item[0], item[1]))
-        ],
-        "resolved": [
-            {"measure": measure, "detail": detail}
-            for measure, detail in sorted(before_set - after_set, key=lambda item: (item[0], item[1]))
-        ],
+        "introduced": [{"measure": measure, "detail": detail} for measure, detail in introduced],
+        "resolved": [{"measure": measure, "detail": detail} for measure, detail in resolved],
     }
 
 
@@ -154,6 +153,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--patches", help="notation patches JSON")
     parser.add_argument("--musescore", help="MuseScore executable")
     parser.add_argument("--python", help="interpreter for scorepipe")
+    parser.add_argument("--title", help="title credit to inject into the reviewed score")
+    parser.add_argument("--composer", help="composer credit to inject into the reviewed score")
+    parser.add_argument("--compare-golden", help="compare the reviewed MusicXML with a golden file")
     parser.add_argument("--allow-unresolved", action="store_true")
     parser.add_argument("--allow-corrections", action="store_true")
     parser.add_argument("--no-mscz", action="store_true")
@@ -162,15 +164,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mechanical-dir", help="baseline directory (default: <outdir>/mechanical)")
     parser.add_argument("--no-forced-truncation", action="store_true", help="skip the forced editable copy")
     parser.add_argument("--forced-dir", help="forced editable directory (default: <outdir>/forced-truncation)")
+    parser.add_argument(
+        "--allow-incomplete-delivery",
+        action="store_true",
+        help="explicitly allow skipped mechanical/forced artifacts (still recorded as interim)",
+    )
     args = parser.parse_args(argv)
 
     pdf = Path(args.pdf).resolve()
     page_dir = Path(args.pages).resolve()
     outdir = Path(args.outdir).resolve()
     outdir.mkdir(parents=True, exist_ok=True)
+    pdf_sha256 = hashlib.sha256(pdf.read_bytes()).hexdigest()
     facts_dir = Path(args.facts_dir).resolve() if args.facts_dir else outdir / "facts"
     python = args.python or os.environ.get("SCOREPIPE_PYTHON") or sys.executable
-    musescore = args.musescore or os.environ.get("MUSESCORE_EXE") or shutil.which("MuseScore4.exe")
+    musescore = find_musescore(args.musescore or os.environ.get("MUSESCORE_EXE"))
     page_count = _pdf_pages(pdf)
     if page_count is None:
         raise RuntimeError("pdfinfo is required to verify page coverage; install poppler or pass a supported PDF")
@@ -192,6 +200,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(problem)
             return 1
         facts = merge_agent_facts(normalized)
+    if args.title:
+        facts.setdefault("credits", []).append({"type": "title", "text": args.title})
+    if args.composer:
+        facts.setdefault("credits", []).append({"type": "composer", "text": args.composer})
     facts_path = outdir / "facts.json"
     _write(facts_path, facts)
     _write(
@@ -203,12 +215,34 @@ def main(argv: list[str] | None = None) -> int:
     unresolved = facts.get("unresolved") or []
     corrections = facts.get("corrections") or []
     blockers = []
+    overrides = []
+    artifacts_missing = []
     if missing_pages:
         blockers.append(f"missing pages: {missing_pages}")
-    if unresolved and not args.allow_unresolved:
-        blockers.append(f"{len(unresolved)} unresolved claim(s)")
-    if corrections and not args.allow_corrections:
-        blockers.append(f"{len(corrections)} proposed correction(s)")
+    if unresolved:
+        if args.allow_unresolved:
+            overrides.append(f"{len(unresolved)} unresolved claim(s)")
+        else:
+            blockers.append(f"{len(unresolved)} unresolved claim(s)")
+    if corrections:
+        if args.allow_corrections:
+            overrides.append(f"{len(corrections)} proposed correction(s)")
+        else:
+            blockers.append(f"{len(corrections)} proposed correction(s)")
+    if args.no_mechanical:
+        artifacts_missing.append("mechanical baseline")
+        if not args.allow_incomplete_delivery:
+            blockers.append("mechanical baseline skipped by --no-mechanical")
+    if args.no_forced_truncation:
+        artifacts_missing.append("forced-truncation tree")
+        if not args.allow_incomplete_delivery:
+            blockers.append("forced-truncation tree skipped by --no-forced-truncation")
+    if args.no_mscz:
+        artifacts_missing.append("mscz/forced-truncation")
+    if args.no_pdf:
+        artifacts_missing.append("pdf")
+    if artifacts_missing and not args.allow_incomplete_delivery:
+        blockers.append("required artifacts missing: " + ", ".join(artifacts_missing))
     if image_count != page_count:
         blockers.append(f"rendered {image_count} images for {page_count} pages")
 
@@ -272,6 +306,10 @@ def main(argv: list[str] | None = None) -> int:
 
     report = {
         "ready": not blockers,
+        "interim": bool(overrides or artifacts_missing),
+        "overrides": overrides,
+        "artifacts_missing": artifacts_missing,
+        "source_pdf": {"path": str(pdf), "sha256": pdf_sha256},
         "page_count": page_count,
         "rendered_pages": image_count,
         "covered_pages": covered,
@@ -311,6 +349,8 @@ def main(argv: list[str] | None = None) -> int:
     ]
     if args.patches:
         command.extend(["--patches", str(Path(args.patches).resolve())])
+    if args.compare_golden:
+        command.extend(["--compare-golden", str(Path(args.compare_golden).resolve())])
     mscz = None if args.no_mscz else outdir / "score.mscz"
     if mscz:
         command.extend(["--mscz-out", str(mscz)])
@@ -363,8 +403,9 @@ def main(argv: list[str] | None = None) -> int:
             report["forced_truncation"] = forced
             _write(forced_dir / "truncation-report.json", forced)
             print("forced truncation: skipped because --no-mscz was used")
-            report["ready"] = False
-            report["blockers"].append("forced truncation skipped by --no-mscz")
+            if not args.allow_incomplete_delivery:
+                report["ready"] = False
+                report["blockers"].append("forced truncation skipped by --no-mscz")
         else:
             forced_musicxml = forced_dir / "score.musicxml"
             forced_report = forced_dir / "report.json"
@@ -450,6 +491,9 @@ def main(argv: list[str] | None = None) -> int:
         {
             "reviewed": True,
             "ready": report["ready"],
+            "interim": report.get("interim"),
+            "source_pdf": report.get("source_pdf"),
+            "artifacts_missing": report.get("artifacts_missing"),
             "pipeline_exit": report.get("pipeline_exit"),
             "render_exit": report.get("render_exit"),
             "artifacts": report.get("artifacts"),

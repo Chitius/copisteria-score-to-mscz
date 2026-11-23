@@ -82,7 +82,8 @@ class TruncateOverfullMscx:
                     + "; ".join(
                         f"{'remove' if new is None else 'shorten'} {float(old):g}"
                         + (f"->{float(new):g}" if new is not None else "")
-                        for (old, new) in _describe(actions, items)
+                        + _describe_element(element)
+                        for (element, old, new) in _describe(actions, items)
                     )
                 )
         return PassResult(changed=changed, notes=notes)
@@ -153,7 +154,18 @@ def _describe(actions, items):
     by_element = {id(item.element): item for item in items}
     for element, new in actions:
         old = by_element[id(element)].beats
-        yield old, new
+        yield element, old, new
+
+
+def _describe_element(element) -> str:
+    if element.tag != "Chord":
+        return ""
+    pitches = []
+    for note in element.findall("Note"):
+        pitch = note.find("pitch")
+        if pitch is not None:
+            pitches.append(str(pitch.text or ""))
+    return f" [{','.join(pitches)}]" if pitches else ""
 
 
 def _shorten(element, beats: Fraction) -> None:

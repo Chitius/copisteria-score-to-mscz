@@ -78,15 +78,15 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 | D4 | P0 | `merge` without `--pages` performs no coverage check, and every example omits it. | `scripts/agent_facts.py:181-206`; docs commands | Require `--pages` or explicit `--allow-missing-pages`; update examples | fixed (batch3) |
 | D5 | P0 | Advertised quick path (`convert.py`) bypasses review: no facts/page coverage, no mechanical/forced trees, but `delivery.json.ready` can be true. | `SKILL.md:29-38`; `README.md:14-30`; `scripts/convert.py:205-224` | Make review mandatory or label output `reviewed:false`; align delivery checklist | fixed (batch3) |
 | D6 | P1 | Failed mechanical baseline does not block `ready`. | `scripts/review.py:242-253,266` | Add blocker/`artifacts_missing` when mechanical fails | fixed (batch3) |
-| D7 | P1 | `--no-mechanical` / `--no-forced-truncation` / `--no-pdf` can yield ready with required artifacts absent and no warning. | `scripts/review.py:157-162,340-402` | Record missing artifacts and set `interim:true`/`ready:false` unless explicitly allowed | open |
+| D7 | P1 | `--no-mechanical` / `--no-forced-truncation` / `--no-pdf` can yield ready with required artifacts absent and no warning. | `scripts/review.py:157-162,340-402` | Record missing artifacts and set `interim:true`/`ready:false` unless explicitly allowed | fixed (batch3) |
 | D8 | P1 | Forced-truncation warning is weak/backwards; CLI help does not say notes/rests may be deleted; review.md says the flag is for when the overfull copy is wanted. | `scorepipe/cli.py:48-52`; `references/review.md:84-86` | State deletion clearly; correct wording; print operations before writing | in progress (batch1) |
 | D9 | P1 | `accept` can record acceptance with an empty reviewer. | `scripts/notation_patches.py:45,60-62`; `references/agent-review.md:75` | Require non-empty `--reviewer`; record timestamp | fixed (batch3) |
 | D10 | P1 | No canonical delivery tree; convert uses `out/score`, review uses `review/score`, delivery.md requires one root with both trees. No command produces it; review does not write `delivery.json`. | `SKILL.md:34`; `references/review.md:16-21`; `references/delivery.md:3-28`; `scripts/review.py` | Pick one root and one sequence; make review write `delivery.json` or document convert as draft | fixed (batch3) |
 | D11 | P1 | Review/convert accept stale artifacts by existence; failed reruns can report old mscz/pdf. | `scripts/review.py:382-386`; `scripts/convert.py:218-224` | Clear/stamp outputs; include run id/time/hash; only report files created this run | fixed (batch3) |
-| D12 | P1 | Review cannot carry manual title/composer or compare to ground truth; MuseScore discovery differs from convert. | `scripts/review.py:171,288-303`; `scorepipe/cli.py:34,153-165` | Add `--title/--composer/--compare-golden`; reuse `_find_musescore` | open |
-| D13 | P1 | OMR wrapper does not enforce `pdfinfo pages == page count`; a dropped page silently shortens the score. | `references/omr.md:61-70`; `scripts/convert.py:142-147` | Compare page counts before merge; abort with both numbers | open |
+| D12 | P1 | Review cannot carry manual title/composer or compare to ground truth; MuseScore discovery differs from convert. | `scripts/review.py:171,288-303`; `scorepipe/cli.py:34,153-165` | Add `--title/--composer/--compare-golden`; reuse `_find_musescore` | fixed (batch3) |
+| D13 | P1 | OMR wrapper does not enforce `pdfinfo pages == page count`; a dropped page silently shortens the score. | `references/omr.md:61-70`; `scripts/convert.py:142-147` | Compare page counts before merge; abort with both numbers | fixed (batch3) |
 | D14 | P1 | Review does not clear old `source-*.png`; `_render_pages` counts stale pages and can fake coverage. | `scripts/review.py:73-87,178` | Remove old `source-*.png` before rendering; use page hashes | fixed (batch1) |
-| D15 | P2 | Timing comparison uses a set, losing duplicate `(measure, detail)` findings. | `scripts/review.py:102-126`; `tests/test_delivery_scripts.py:113-147` | Use Counter or list-aware diff | open |
+| D15 | P2 | Timing comparison uses a set, losing duplicate `(measure, detail)` findings. | `scripts/review.py:102-126`; `tests/test_delivery_scripts.py:113-147` | Use Counter or list-aware diff | fixed (batch3) |
 
 ## E. Documentation and UX
 
@@ -106,7 +106,7 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 | E12 | P2 | `validate_facts` rejects metronome-only marks though schema/agent validation allow them. | `scorepipe/facts.py:34`; `schemas/facts.schema.json:38,51-56` | Include `metronome` | open |
 | E13 | P3 | Lieder corpus README points at missing files/commands. | `tests/corpus/lieder/README.md:57-59` | Correct paths or remove | open |
 | E14 | P3 | Undocumented flags: `--no-mechanical`, `--mechanical-dir`, `--forced-dir`, `--images`, `--dpi`, `--max-rounds`, `--truncate-overfull`. | scripts/review.py, agent_facts.py, convert.py, cli.py | Add a per-script flag table | open |
-| E15 | P1 | Facts are not bound to the PDF/score: one `agent-page-all.json` can claim all pages; no PDF hash recorded. | `scorepipe/agent_facts.py:174-212`; shipped Zenzenzense facts | Require per-page files/markers; record PDF SHA-256; reject mismatches | open |
+| E15 | P1 | Facts are not bound to the PDF/score: one `agent-page-all.json` can claim all pages; no PDF hash recorded. | `scorepipe/agent_facts.py:174-212`; shipped Zenzenzense facts | Require per-page files/markers; record PDF SHA-256; reject mismatches | in progress (batch3) |
 | E16 | P1 | `convert.py` overwrites prior artifacts and arranger facts without warning; manifest omits facts.json. | `scripts/convert.py:149-150,171-186,218-225`; `SKILL.md:20` | Refuse without `--force`; separate arranger facts; include in manifest | open |
 
 ## Batch plan
@@ -152,11 +152,12 @@ is explicit; truncation has multi-voice/3-4 tests. Verification: 239 unittest / 
 
 Scope: D1–D7, D9–D15, E15, E16.
 
-**Progress 2026-11-23:** D1/D2/D4/D5/D6/D9/D10/D11 fixed; D7/D12/D13/D15/E15/E16 remain.
+**Progress 2026-11-23:** D1/D2/D4/D5/D6/D7/D9/D10/D11/D12/D13/D15 fixed; E15/E16 remain.
 The CLI/review now require an accepted patch (legacy patches without a status remain readable),
 `accept` handles ottava and requires `--reviewer`, `merge` requires `--pages` unless explicitly
-overridden, review writes `delivery.json` and blocks a failed mechanical baseline, and convert is
-labeled `reviewed:false`. Stale outputs are removed before reruns.
+overridden, review writes `delivery.json` with a PDF SHA-256 and blocks failed/mechanical/skipped
+artifacts, and convert is labeled `reviewed:false`. Stale outputs are removed before reruns;
+title/composer/compare-golden and the shared MuseScore resolver are wired into review.
 
 - One proposed→accepted state machine; require `accepted_by`; make ottava and tuplet consistent.
 - Require `--pages` for merge unless explicitly overridden.

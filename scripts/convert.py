@@ -76,6 +76,24 @@ def _find_musescore(explicit: str | None) -> Path | None:
     return None
 
 
+def _pdf_pages(pdf: Path) -> int | None:
+    from shutil import which
+
+    binary = which("pdfinfo")
+    if not binary:
+        return None
+    completed = subprocess.run(
+        [binary, str(pdf)], capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
+    for line in completed.stdout.splitlines():
+        if line.lower().startswith("pages:"):
+            try:
+                return int(line.split(":", 1)[1].strip())
+            except ValueError:
+                return None
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="PDF -> OMR -> scorepipe -> MuseScore delivery")
     parser.add_argument("pdf", help="input score PDF")
@@ -145,6 +163,13 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError(f"OMR produced no page MusicXML under {work} (exit {code})")
         if code != 0:
             print(f"warning: OMR exited {code} after writing {page_dir}; continuing with page files")
+
+    expected_pages = _pdf_pages(pdf)
+    actual_pages = len(list(page_dir.glob("*.musicxml")))
+    if expected_pages is not None and actual_pages != expected_pages:
+        raise RuntimeError(
+            f"page coverage mismatch: PDF has {expected_pages} pages, OMR wrote {actual_pages} page MusicXML files"
+        )
 
     musicxml = outdir / "score.musicxml"
     report = outdir / "report.json"

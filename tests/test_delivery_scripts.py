@@ -96,6 +96,7 @@ class ReviewFailureTest(unittest.TestCase):
                     "musescore",
                     "--no-mechanical",
                     "--no-forced-truncation",
+                    "--allow-incomplete-delivery",
                 ]
             )
 
