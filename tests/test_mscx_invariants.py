@@ -57,20 +57,30 @@ class MscxMeasureLengthTest(unittest.TestCase):
         )
         self.assertEqual(violations(rest + chord("whole", "47/48")), [])
 
-    def test_explicit_duration_is_not_scaled_by_tuplet(self):
+    def test_explicit_duration_is_scaled_by_tuplet(self):
+        # MuseScore stores the *written* duration in <duration>; a tuplet then
+        # divides it by actualNotes/normalNotes.  Four quarter notes inside a
+        # 3:2 tuplet therefore sound for 4/6 of a whole note, not 4/4.
         body = (
             "<Tuplet><normalNotes>2</normalNotes><actualNotes>3</actualNotes></Tuplet>"
             + chord(duration="1/4") * 4
             + "<endTuplet/>"
         )
-        self.assertEqual(violations(body), [])
+        result = violations(body)
+        self.assertEqual(len(result), 1)
+        self.assertIn("1280 ticks", result[0].detail)
 
     def test_nested_tuplets_enter_and_leave_the_ratio_stack(self):
         body = (
-            "<Tuplet><normalNotes>2</normalNotes><actualNotes>3</actualNotes></Tuplet>"
-            "<Tuplet><normalNotes>2</normalNotes><actualNotes>3</actualNotes></Tuplet>"
-            + chord() * 9
-            + "<endTuplet/><endTuplet/>"
+            "<Tuplet><normalNotes>2</normalNotes><actualNotes>3</actualNotes>"
+            "<baseNote>quarter</baseNote></Tuplet>"
+            "<Tuplet><normalNotes>2</normalNotes><actualNotes>3</actualNotes>"
+            "<baseNote>eighth</baseNote></Tuplet>"
+            + chord("eighth") * 3
+            + "<endTuplet/>"
+            + chord("eighth") * 4
+            + "<endTuplet/>"
+            + chord("half")
         )
         self.assertEqual(violations(body), [])
 

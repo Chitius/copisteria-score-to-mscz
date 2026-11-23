@@ -26,6 +26,12 @@ def rest(kind: str = "quarter") -> str:
     return f"<Rest><durationType>{kind}</durationType></Rest>"
 
 
+def _written_ticks(element) -> int:
+    from scorepipe.core.musescore_ticks import element_ticks
+
+    return element_ticks(element)
+
+
 class TruncateOverfullMscxTest(unittest.TestCase):
     def test_removes_only_a_trailing_rest_before_shortening_notes(self):
         doc = score(chord("whole") + rest("half"))
@@ -41,10 +47,9 @@ class TruncateOverfullMscxTest(unittest.TestCase):
         self.assertEqual(len(doc.root.findall(".//Rest")), 1)
         chords = doc.root.findall(".//Chord")
         self.assertEqual(len(chords), 1)
-        self.assertIsNotNone(chords[-1].find("duration"))
-        self.assertIsNone(chords[-1].find("durationType"))
+        self.assertEqual(_written_ticks(chords[-1]), 960)
         self.assertIn("[60]", " ".join(result.notes))
-        self.assertIn("[explicit-duration]", " ".join(result.notes))
+        self.assertIn("shorten 4->2", " ".join(result.notes))
 
     def test_shortens_last_chord_when_there_is_no_trailing_rest(self):
         doc = score(chord("half") + chord("whole"))
@@ -52,8 +57,8 @@ class TruncateOverfullMscxTest(unittest.TestCase):
         self.assertEqual(result.changed, 1)
         chords = doc.root.findall(".//Chord")
         self.assertEqual(len(chords), 2)
-        self.assertIsNone(chords[0].find("duration"))
-        self.assertIsNotNone(chords[-1].find("duration"))
+        self.assertEqual(_written_ticks(chords[0]), 960)
+        self.assertEqual(_written_ticks(chords[-1]), 960)
         second = TruncateOverfullMscx().run(doc, Context())
         self.assertEqual(second.changed, 0)
 
@@ -73,7 +78,7 @@ class TruncateOverfullMscxTest(unittest.TestCase):
         self.assertEqual(result.changed, 0)
         self.assertEqual(len(doc.root.findall(".//Chord")), 7)
         self.assertEqual(len(doc.root.findall(".//Rest")), 1)
-        self.assertTrue(any(note.startswith("UNRESOLVED") for note in result.notes))
+        self.assertTrue(any(note.startswith("DEFERRED") for note in result.notes))
 
     def test_short_secondary_voice_is_untouched(self):
         doc = MsxcDocument(

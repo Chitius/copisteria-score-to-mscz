@@ -187,6 +187,23 @@ class PaddingVoiceContentTest(unittest.TestCase):
         again = run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
         self.assertEqual(again.changes, 0)
 
+    def test_secondary_voice_dotted_rest_becomes_an_exact_gap(self):
+        doc = MsxcDocument(ElementTree.fromstring('''
+          <museScore><Score><Staff id="1"><Measure>
+            <voice><Chord><durationType>whole</durationType><Note><pitch>60</pitch></Note></Chord></voice>
+            <voice>
+              <Rest><dots>1</dots><durationType>quarter</durationType></Rest>
+              <Chord><durationType>quarter</durationType><Note><pitch>67</pitch></Note></Chord>
+            </voice>
+          </Measure></Staff></Score></museScore>'''))
+        run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        measure = doc.root.find("Score/Staff/Measure")
+        secondary = next(
+            voice for voice in measure.findall("voice")
+            if voice.find('.//Note[pitch="67"]') is not None
+        )
+        self.assertEqual(secondary.find('location/fractions').text, '3/8')
+
     def test_range_spanner_carrier_voice_is_removed(self):
         doc = MsxcDocument(ElementTree.fromstring('''
           <museScore><Score><Staff id="1"><Measure>

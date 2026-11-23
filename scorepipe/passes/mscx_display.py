@@ -6,6 +6,11 @@ from fractions import Fraction
 from xml.etree import ElementTree
 
 from ..core.mscx import MsxcDocument, has_text, note_count
+from ..core.musescore_ticks import (
+    element_written,
+    measure_expected_fraction,
+    voice_timeline,
+)
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
 
 
@@ -130,11 +135,11 @@ class DropSecondaryVoiceRests:
                     continue
                 if not voice.findall("Chord"):
                     continue
-                changed += _hide_secondary_rests(voice)
+                changed += _hide_secondary_rests(voice, measure_expected_fraction(measure))
         return PassResult(changed=changed)
 
 
-def _hide_secondary_rests(voice) -> int:
+def _hide_secondary_rests(voice, measure: Fraction) -> int:
     """Rests before a later chord become <location> gaps; rests after the last chord disappear."""
     children = list(voice)
     last_chord = max((index for index, child in enumerate(children) if child.tag == "Chord"), default=-1)
@@ -146,12 +151,15 @@ def _hide_secondary_rests(voice) -> int:
             voice.remove(child)
             changed += 1
             continue
-        length = _rest_beats(child)
-        if length <= 0:
+        if child.findtext("durationType") == "measure" and child.find("duration") is None:
+            continue
+        length = element_written(child, measure)
+        if length is None or length <= 0:
             continue
         location = ElementTree.Element("location")
-        fraction = Fraction(int(round(length * 4)), 16).limit_denominator(64)
-        ElementTree.SubElement(location, "fractions").text = f"{fraction.numerator}/{fraction.denominator}"
+        ElementTree.SubElement(location, "fractions").text = (
+            f"{length.numerator}/{length.denominator}"
+        )
         position = list(voice).index(child)
         voice.remove(child)
         voice.insert(position, location)
@@ -159,19 +167,11 @@ def _hide_secondary_rests(voice) -> int:
     return changed
 
 
-def _rest_beats(rest) -> float:
-    base = {
-        "breve": 8.0,
-        "whole": 4.0,
-        "half": 2.0,
-        "quarter": 1.0,
-        "eighth": 0.5,
-        "16th": 0.25,
-        "32nd": 0.125,
-        "64th": 0.0625,
-    }.get(rest.findtext("durationType"), 0.0)
-    dots = len(rest.findall("dot"))
-    return base * (2.0 - 1.0 / (2**dots)) if dots else base
+def _rest_beats(rest, measure: Fraction) -> float:
+    if rest.findtext("durationType") == "measure" and rest.find("duration") is None:
+        return 0.0
+    length = element_written(rest, measure)
+    return float(length) * 4.0 if length is not None else 0.0
 
 
 RANGE_SPANNER_TYPES = {
@@ -203,7 +203,7 @@ class NormalizeRangeSpanners:
             primary = next((voice for voice in voices if voice.findall("Chord")), None)
             if primary is None:
                 continue
-            targets = _anchor_map(primary)
+            targets = _anchor_map(primary, measure_expected_fraction(measure))
             for voice in voices:
                 if voice is primary or has_text(voice):
                     continue
@@ -214,7 +214,9 @@ class NormalizeRangeSpanners:
                     anchor = _next_anchor(voice, spanner)
                     if anchor is None:
                         continue
-                    target = targets.get(round(_anchor_tick(voice, anchor), 4))
+                    target = targets.get(
+                        round(_anchor_tick(voice, anchor, measure_expected_fraction(measure)), 4)
+                    )
                     if target is None:
                         continue
                     voice.remove(spanner)
@@ -226,54 +228,18 @@ class NormalizeRangeSpanners:
         return PassResult(changed=changed)
 
 
-def _element_beats(element) -> float:
-    base = {
-        "breve": 8.0,
-        "whole": 4.0,
-        "half": 2.0,
-        "quarter": 1.0,
-        "eighth": 0.5,
-        "16th": 0.25,
-        "32nd": 0.125,
-        "64th": 0.0625,
-    }.get(element.findtext("durationType"), 0.0)
-    dots = len(element.findall("dot"))
-    return base * (2.0 - 1.0 / (2**dots)) if dots else base
-
-
-def _location_beats(location) -> float:
-    text = location.findtext("fractions") or ""
-    if "/" not in text:
-        return 0.0
-    numerator, denominator = text.split("/", 1)
-    try:
-        return float(numerator) / float(denominator) * 4.0
-    except (ValueError, ZeroDivisionError):
-        return 0.0
-
-
-def _anchor_map(voice) -> dict[float, object]:
+def _anchor_map(voice, measure: Fraction) -> dict[float, object]:
     anchors = {}
-    cursor = 0.0
-    for child in voice:
-        if child.tag == "location":
-            cursor += _location_beats(child)
-        elif child.tag in ("Chord", "Rest"):
-            anchors.setdefault(round(cursor, 4), child)
-            cursor += _element_beats(child)
+    for item in voice_timeline(voice, measure).items:
+        anchors.setdefault(round(float(item.start) * 4.0, 4), item.element)
     return anchors
 
 
-def _anchor_tick(voice, anchor) -> float:
-    cursor = 0.0
-    for child in voice:
-        if child is anchor:
-            return cursor
-        if child.tag == "location":
-            cursor += _location_beats(child)
-        elif child.tag in ("Chord", "Rest"):
-            cursor += _element_beats(child)
-    return cursor
+def _anchor_tick(voice, anchor, measure: Fraction) -> float:
+    for item in voice_timeline(voice, measure).items:
+        if item.element is anchor:
+            return float(item.start) * 4.0
+    return 0.0
 
 
 def _next_anchor(voice, spanner):
@@ -357,7 +323,7 @@ class HidePickupLeadingRest:
             first_chord = next((child for child in children if child.tag == "Chord"), None)
             if first_chord is None or children.index(rest) > children.index(first_chord):
                 continue
-            if _rest_beats(rest) < 2.0:
+            if _rest_beats(rest, measure_expected_fraction(measure)) < 2.0:
                 continue
             if rest.find("pickupPadding") is None:
                 marker = ElementTree.Element("pickupPadding")

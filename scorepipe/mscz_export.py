@@ -102,7 +102,11 @@ def export_and_display(
                 unresolved = any(note.startswith("UNRESOLVED") for note in result.notes)
                 if unresolved or not result.changed:
                     break
-            normalized = normalize_explicit_durations(archive.document)
+            normalized, canonical_notes = normalize_explicit_durations(archive.document)
+            notes.extend(canonical_notes)
+            unresolved = unresolved or any(
+                note.startswith("UNRESOLVED") for note in canonical_notes
+            )
             if normalized:
                 notes.append(f"normalized {normalized} explicit duration(s)")
             if total_changed or notes:

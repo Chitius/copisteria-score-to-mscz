@@ -94,94 +94,96 @@ def empty_voices(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     return out
 
 
-DURATIONS = {
-    "breve": Fraction(8),
-    "whole": Fraction(4),
-    "half": Fraction(2),
-    "quarter": Fraction(1),
-    "eighth": Fraction(1, 2),
-    "16th": Fraction(1, 4),
-    "32nd": Fraction(1, 8),
-    "64th": Fraction(1, 16),
-    "128th": Fraction(1, 32),
-    "256th": Fraction(1, 64),
-}
-
-
-def _beats(element, meter: Fraction = Fraction(4), tuplet: Fraction = Fraction(1)) -> Fraction:
-    name = element.findtext("durationType") or "quarter"
-    if name == "measure":
-        return meter
-    explicit = element.findtext("duration")
-    if explicit:
-        try:
-            # MuseScore's optional duration is an actual fraction of a whole note.
-            return Fraction(explicit) * 4
-        except (ValueError, ZeroDivisionError):
-            pass
-    base = DURATIONS.get(name, Fraction(1))
-    dots = int(element.findtext("dots") or 0)
-    multiplier = sum((Fraction(1, 2) ** index for index in range(dots + 1)), Fraction(0))
-    return base * multiplier * tuplet
-
-
-def _tuplet_ratio(tuplet) -> Fraction:
-    try:
-        normal = Fraction(tuplet.findtext("normalNotes") or "")
-        actual = Fraction(tuplet.findtext("actualNotes") or "")
-        if normal <= 0 or actual <= 0:
-            return Fraction(1)
-        return normal / actual
-    except (ValueError, ZeroDivisionError):
-        return Fraction(1)
-
-
 def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
-    """MuseScore's tick model, not a local beat approximation."""
-    from .musescore_ticks import location_ticks, measure_expected_ticks, voice_ticks
+    """MuseScore's tick model, not a local beat approximation.
+
+    A secondary voice may end early (MuseScore fills gap rests itself), but an
+    overlong voice is always reported.  Overlapping Chord/Rest events - the old
+    negative-location bug - are reported even when the final tick happens to
+    match.
+    """
+    from .musescore_ticks import measure_expected_fraction, voice_timeline
 
     out: list[Violation] = []
     meters = {}
     for staff, index, measure in doc.iter_measures():
-        meter = meters.get(id(staff), Fraction(1))
+        meter = meters.get(id(staff), Fraction(4, 4))
         for time in measure.iter("TimeSig"):
             try:
                 meter = Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4))
             except (ValueError, ZeroDivisionError):
                 pass
         meters[id(staff)] = meter
-        expected = measure_expected_ticks(measure, Fraction(round(meter * 1920), 1))
+        expected = measure_expected_fraction(measure, meter)
         primary = _primary_voice(measure)
         primary_voice = primary[0] if primary else None
         for voice in measure.findall("voice"):
-            actual = location_ticks(voice) + voice_ticks(voice)
-            if actual <= 0 or actual == expected:
+            timeline = voice_timeline(voice, expected)
+            actual = timeline.end
+            if actual <= 0:
+                continue
+            if timeline.overlaps:
+                out.append(
+                    Violation(
+                        "mscx-measure-length",
+                        index,
+                        "overlapping Chord/Rest "
+                        f"at {float(timeline.overlaps[0][0]) * 4:g} beats",
+                    )
+                )
+                continue
+            if actual == expected:
                 continue
             if voice is primary_voice or actual > expected:
                 out.append(
                     Violation(
                         "mscx-measure-length",
                         index,
-                        f"voice {actual / 480:g} beats ({actual} ticks), "
-                        f"expected {expected / 480:g} beats ({expected} ticks)",
+                        f"voice {float(actual) * 4:g} beats "
+                        f"({float(actual) * 1920:g} ticks), "
+                        f"expected {float(expected) * 4:g} beats "
+                        f"({float(expected) * 1920:g} ticks)",
                     )
                 )
     return out
 
 
-def _measure_target(measure, meter: Fraction) -> Fraction:
-    raw = measure.get("len")
-    if not raw:
-        return meter
-    try:
-        target = Fraction(raw) * 4
-        return target if target <= meter else meter
-    except (ValueError, ZeroDivisionError):
-        return meter
+def tuplet_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
+    """Every tuplet must contain exactly ``baseNote * actualNotes`` written."""
+    from .musescore_ticks import measure_expected_fraction, voice_timeline
+
+    out: list[Violation] = []
+    meters = {}
+    for staff, index, measure in doc.iter_measures():
+        meter = meters.get(id(staff), Fraction(4, 4))
+        for time in measure.iter("TimeSig"):
+            try:
+                meter = Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4))
+            except (ValueError, ZeroDivisionError):
+                pass
+        meters[id(staff)] = meter
+        expected = measure_expected_fraction(measure, meter)
+        for voice in measure.findall("voice"):
+            for span in voice_timeline(voice, expected).invalid_tuplets:
+                out.append(
+                    Violation(
+                        "mscx-tuplet-length",
+                        index,
+                        f"tuplet at {float(span.start) * 4:g} beats has "
+                        f"{float(span.written) * 4:g} written beats, "
+                        f"expected {float(span.target_written) * 4:g}",
+                    )
+                )
+    return out
 
 
 def _primary_voice(measure):
-    """Only voice 1 must fill the measure; later voices may start or end early by design."""
+    """The verifier reports a short measure for the first chord voice only.
+
+    MuseScore itself fills gaps in secondary voices; the canonicalizer still
+    tries to make every note-bearing voice exact, but a short secondary voice
+    is not a measure-length error.
+    """
     voices = measure.findall("voice")
     for voice in voices:
         if voice.findall("Chord"):
@@ -196,4 +198,5 @@ MSCX_VERIFIERS = (
     voice_order,
     empty_voices,
     measure_lengths,
+    tuplet_lengths,
 )

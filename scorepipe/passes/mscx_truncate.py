@@ -1,33 +1,22 @@
-"""Trim overfull mscx voices from the tail so an editable copy can be opened.
+"""Exact tick-level trimming and duration normalization for the display mscx.
 
-Rules:
-* only the tail is changed;
-* a rest before a later chord is positional padding and is never removed;
-* anything inside a flat ``<Tuplet>``/``<endTuplet>`` range is never edited;
-* an operation that cannot be completed without touching a tuplet or a positional rest is
-  reported as ``UNRESOLVED`` and no partial edit is applied.
-
-The pass is intentionally a last-resort repair for MuseScore editability, not a musical
-reconstruction.
+The old pass reasoned in beats, ignored ``<location>`` deltas and protected
+tuplets with a flat bracket counter.  It now shares the exact voice model in
+:mod:`scorepipe.core.musescore_ticks`; a voice is edited only when the trimmed
+result ends on the measure's tick length.  If the tail is protected (inside a
+tuplet, or the excess is unreachable), the voice is left untouched and the
+operation is reported as ``UNRESOLVED``.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from fractions import Fraction
+from xml.etree import ElementTree
 
 from ..core.mscx import MsxcDocument
-from ..core.mscx_invariants import DURATIONS, _beats, _tuplet_ratio
-from .mscx_canonical import canonicalize
+from ..core.musescore_ticks import duration_parts, voice_timeline
+from .mscx_canonical import canonicalize, fix_dots_order, make_voice_exact
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
-
-
-@dataclass
-class _Item:
-    element: object
-    beats: Fraction
-    rest: bool
-    tuplet: bool
 
 
 class TruncateOverfullMscx:
@@ -44,54 +33,58 @@ class TruncateOverfullMscx:
         meters: dict[int, Fraction] = {}
         changed = 0
         notes: list[str] = []
-        staff_number = 0
         for staff, index, measure in doc.iter_measures():
-            staff_number += 1
-            staff_label = staff.get("id") or str(staff_number)
-            meter = meters.get(id(staff), Fraction(4))
+            staff_label = staff.get("id") or "?"
+            meter = meters.get(id(staff), Fraction(4, 4))
             for time in measure.iter("TimeSig"):
                 try:
-                    meter = Fraction(time.findtext("sigN") or 4) * 4 / Fraction(
-                        time.findtext("sigD") or 4
-                    )
+                    meter = Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4))
                 except (ValueError, ZeroDivisionError):
                     pass
             meters[id(staff)] = meter
-            target = _measure_target(measure, meter)
-            raw_len = measure.get("len")
-            if raw_len:
-                try:
-                    if Fraction(raw_len) * 4 > meter:
-                        del measure.attrib["len"]
-                except (ValueError, ZeroDivisionError):
-                    pass
+            target = Fraction(measure.get("len")) if measure.get("len") else meter
+            if target > meter:
+                # A stale irregular length longer than the nominal signature.
+                measure.attrib.pop("len", None)
+                target = meter
             for voice in doc.voices(measure):
-                items = _items(voice, target)
-                total = sum(item.beats for item in items)
-                excess = total - target
-                if excess <= 0:
+                if not voice.findall("Chord"):
                     continue
-                actions, remaining = _plan_tail(items, excess, target)
-                if remaining > 0:
+                before = voice_timeline(voice, target)
+                if before.end <= target:
+                    continue
+                if before.overlaps:
+                    # Canonicalization owns overlap repair (usually stale hidden
+                    # padding around a negative location).
                     notes.append(
-                        f"UNRESOLVED m{index} staff {staff_label}: {float(total):g} beats, "
-                        f"{float(remaining):g} left; tuplet/positional-rest tail is protected"
+                        f"DEFERRED m{index} staff {staff_label}: "
+                        "overlapping Chord/Rest; canonicalization owns the repair"
                     )
                     continue
-                for element, new_beats in actions:
-                    if new_beats is None:
-                        voice.remove(element)
-                    else:
-                        _shorten(element, new_beats, voice)
-                changed += 1
-                notes.append(
-                    f"m{index} staff {staff_label}: {float(total):g}->{float(target):g}; "
-                    + "; ".join(
-                        f"{'remove' if new is None else 'shorten'} {float(old):g}"
-                        + (f"->{float(new):g}" if new is not None else "")
-                        + _describe_element(element)
-                        for (element, old, new) in _describe(actions, items)
+                if before.invalid_tuplets:
+                    # Canonicalization owns tuplet retiming/filling.
+                    notes.append(
+                        f"DEFERRED m{index} staff {staff_label}: "
+                        "tuplet is not full; canonicalization will retime it"
                     )
+                    continue
+                actions: list[tuple[str, object, Fraction, Fraction | None]] = []
+                edits, reason = make_voice_exact(
+                    voice, target, allow_pad=False, log=actions
+                )
+                if reason is not None:
+                    notes.append(
+                        f"UNRESOLVED m{index} staff {staff_label}: {reason}; "
+                        "tuplet/positional-rest tail is protected"
+                    )
+                    continue
+                if not edits:
+                    continue
+                changed += edits
+                detail = "; ".join(_action_text(action) for action in actions)
+                notes.append(
+                    f"m{index} staff {staff_label}: {float(before.end) * 4:g}->"
+                    f"{float(target) * 4:g} beats; {detail}"
                 )
             for voice in measure.findall("voice"):
                 if not list(voice):
@@ -99,84 +92,13 @@ class TruncateOverfullMscx:
         return PassResult(changed=changed, notes=notes)
 
 
-def _measure_target(measure, meter: Fraction) -> Fraction:
-    """MuseScore records irregular/pickup bar length as a fraction of a whole note."""
-    raw = measure.get("len")
-    if not raw:
-        return meter
-    try:
-        target = Fraction(raw) * 4
-        return target if target <= meter else meter
-    except (ValueError, ZeroDivisionError):
-        return meter
-
-
-def _items(voice, meter: Fraction) -> list[_Item]:
-    items: list[_Item] = []
-    tuplets: list[Fraction] = []
-    for child in voice:
-        if child.tag == "Tuplet":
-            tuplets.append(_tuplet_ratio(child))
-        elif child.tag == "endTuplet":
-            if tuplets:
-                tuplets.pop()
-        elif child.tag in ("Chord", "Rest"):
-            ratio = Fraction(1)
-            for tuplet in tuplets:
-                ratio *= tuplet
-            items.append(
-                _Item(
-                    element=child,
-                    beats=_beats(child, meter, ratio),
-                    rest=child.tag == "Rest",
-                    tuplet=bool(tuplets),
-                )
-            )
-    return items
-
-
-def _plan_tail(items: list[_Item], excess: Fraction, meter: Fraction) -> tuple[list[tuple[object, Fraction | None]], Fraction]:
-    """Plan edits from the end; return (edits, unhandled beats)."""
-    remaining = excess
-    edits: list[tuple[object, Fraction | None]] = []
-    # Trailing rests, but stop at the last chord. A rest before a later chord is never touched.
-    index = len(items) - 1
-    last_chord = max((i for i, item in enumerate(items) if not item.rest), default=-1)
-    while index > last_chord and remaining > 0:
-        item = items[index]
-        if item.tuplet or not item.rest:
-            break
-        if item.beats <= remaining:
-            edits.append((item.element, None))
-            remaining -= item.beats
-            index -= 1
-        else:
-            edits.append((item.element, item.beats - remaining))
-            remaining = Fraction(0)
-            break
-    # Then shorten/remove the final chord. Do not walk past a preceding rest.
-    while remaining > 0 and index >= 0:
-        item = items[index]
-        if item.tuplet:
-            break
-        if item.rest:
-            break
-        if item.beats <= remaining:
-            edits.append((item.element, None))
-            remaining -= item.beats
-            index -= 1
-        else:
-            edits.append((item.element, item.beats - remaining))
-            remaining = Fraction(0)
-            break
-    return edits, remaining
-
-
-def _describe(actions, items):
-    by_element = {id(item.element): item for item in items}
-    for element, new in actions:
-        old = by_element[id(element)].beats
-        yield element, old, new
+def _action_text(action: tuple[str, object, Fraction, Fraction | None]) -> str:
+    kind, element, old, new = action
+    if kind == "remove":
+        return f"remove {float(old) * 4:g}{_describe_element(element)}"
+    return (
+        f"shorten {float(old) * 4:g}->{float(new) * 4:g}{_describe_element(element)}"
+    )
 
 
 def _describe_element(element) -> str:
@@ -198,101 +120,35 @@ def _describe_element(element) -> str:
     return (f" [{','.join(pitches)}]" if pitches else "") + suffix
 
 
-def _set_legal(element, name: str, dots: int) -> None:
-    for tag in ("durationType", "dots", "duration"):
-        for node in element.findall(tag):
-            element.remove(node)
-    for node in element.findall("NoteDot"):
-        element.remove(node)
-    from xml.etree import ElementTree
+def normalize_explicit_durations(doc: MsxcDocument) -> tuple[int, list[str]]:
+    """Make explicit ``<duration>`` values consistent with legal note values.
 
-    ElementTree.SubElement(element, "durationType").text = name
-    if dots:
-        ElementTree.SubElement(element, "dots").text = str(dots)
-
-
-def _shorten(element, beats: Fraction, voice) -> None:
-    """Write legal note values; split an exact multi-value chord/rest.
-
-    A single arbitrary fraction (A7) is not a legal MuseScore note value. If the
-    duration decomposes exactly into standard values, emit those values instead.
-    """
-    parts = _decompose(beats)
-    if len(parts) > 1 and sum((part[2] for part in parts), Fraction(0)) == beats:
-        import copy
-
-        index = list(voice).index(element)
-        for offset, (name, dots, _) in enumerate(parts):
-            piece = element if offset == 0 else copy.deepcopy(element)
-            if offset:
-                voice.insert(index + offset, piece)
-            _set_legal(piece, name, dots)
-        return
-    for tag in ("durationType", "dots"):
-        for node in element.findall(tag):
-            element.remove(node)
-    for node in element.findall("NoteDot"):
-        element.remove(node)
-    text = Fraction(beats) / 4
-    node = element.find("duration")
-    if node is None:
-        from xml.etree import ElementTree
-
-        node = ElementTree.SubElement(element, "duration")
-    node.text = f"{text.numerator}/{text.denominator}"
-
-
-TRUNCATE_OVERFULL_MSCX = TruncateOverfullMscx()
-
-
-def normalize_explicit_durations(doc: MsxcDocument) -> int:
-    """Make explicit ``<duration>`` values consistent with MuseScore's note values.
-
-    Outside a tuplet the fraction is authoritative, so stale type/dots are removed.
-    Inside a tuplet the base note value is authoritative; the fraction is converted
-    back to a type so MuseScore does not count the tuplet twice.
+    ``<duration>`` is always the *written* duration, inside a tuplet too.  When
+    it equals a legal note value (with up to two dots) it is converted to
+    ``durationType``/``dots``; otherwise it is kept verbatim and stale type/dot
+    children are removed so MuseScore reads the exact fraction.
     """
     changed = 0
     for _staff, _index, measure in doc.iter_measures():
         for voice in measure.findall("voice"):
-            tuplets: list[Fraction] = []
             for element in list(voice):
-                if element.tag == "Tuplet":
-                    tuplets.append(_tuplet_ratio(element))
+                if element.tag not in ("Chord", "Rest"):
                     continue
-                if element.tag == "endTuplet":
-                    if tuplets:
-                        tuplets.pop()
-                    continue
-                if element.tag not in ("Chord", "Rest") or element.find("duration") is None:
-                    continue
-                if tuplets:
-                    ratio = Fraction(1)
-                    for tuplet in tuplets:
-                        ratio *= tuplet
-                    actual = Fraction(element.findtext("duration") or "0") * 4
-                    value = _duration_value(actual / ratio)
-                    if value is None:
+                explicit = element.findtext("duration")
+                if explicit:
+                    try:
+                        written = Fraction(explicit)
+                    except (ValueError, ZeroDivisionError):
                         continue
-                    name, dots = value
+                    values = duration_parts(written)
                     for tag in ("durationType", "dots"):
                         for node in element.findall(tag):
                             element.remove(node)
-                    from xml.etree import ElementTree
-
-                    ElementTree.SubElement(element, "durationType").text = name
-                    if dots:
-                        ElementTree.SubElement(element, "dots").text = str(dots)
-                    element.remove(element.find("duration"))
+                    if values is not None:
+                        name, dots = values
+                        element.remove(element.find("duration"))
+                        _insert_duration_type(element, name, dots)
                     changed += 1
-                else:
-                    stale = False
-                    for tag in ("durationType", "dots"):
-                        for node in element.findall(tag):
-                            element.remove(node)
-                            stale = True
-                    if stale:
-                        changed += 1
                 dots = int(element.findtext("dots") or 0)
                 note_dots = element.findall("NoteDot")
                 if dots:
@@ -300,63 +156,32 @@ def normalize_explicit_durations(doc: MsxcDocument) -> int:
                         for visible in dot.findall("visible"):
                             dot.remove(visible)
                     if not note_dots:
-                        from xml.etree import ElementTree
-
                         ElementTree.SubElement(element, "NoteDot")
                 else:
                     for dot in note_dots:
                         element.remove(dot)
+                fix_dots_order(element)
         for voice in measure.findall("voice"):
             if voice.findall("Chord") or voice.findall("Rest"):
                 continue
-            if not any(child.tag in ("Expression", "StaffText", "SystemText", "Tempo") for child in voice):
+            if not any(
+                child.tag in ("Expression", "StaffText", "SystemText", "Tempo")
+                for child in voice
+            ):
                 continue
-            from xml.etree import ElementTree
-
             rest = ElementTree.SubElement(voice, "Rest")
             ElementTree.SubElement(rest, "durationType").text = "measure"
             ElementTree.SubElement(rest, "visible").text = "0"
             changed += 1
-    for element in doc.root.iter():
-        if element.tag not in ("Chord", "Rest"):
-            continue
-        if int(element.findtext("dots") or 0):
-            for dot in element.findall("NoteDot"):
-                for visible in dot.findall("visible"):
-                    dot.remove(visible)
-    changed += canonicalize(doc)
-    return changed
+    notes: list[str] = []
+    changed += canonicalize(doc, notes)
+    return changed, notes
 
 
-def _duration_value(beats: Fraction) -> tuple[str, int] | None:
-    for name, base in DURATIONS.items():
-        dots = 0
-        value = base
-        while dots <= 2:
-            if value == beats:
-                return name, dots
-            dots += 1
-            value += base / (2**dots)
-    return None
+def _insert_duration_type(element, name: str, dots: int) -> None:
+    if dots:
+        ElementTree.SubElement(element, "dots").text = str(dots)
+    ElementTree.SubElement(element, "durationType").text = name
 
 
-def _decompose(beats: Fraction) -> list[tuple[str, int, Fraction]]:
-    candidates: list[tuple[str, int, Fraction]] = []
-    for name, base in DURATIONS.items():
-        dots = 0
-        value = base
-        while dots <= 2:
-            if value <= beats:
-                candidates.append((name, dots, value))
-            dots += 1
-            value += base / (2**dots)
-    candidates.sort(key=lambda item: item[2], reverse=True)
-    out: list[tuple[str, int, Fraction]] = []
-    remaining = beats
-    while remaining > 0:
-        match = next((item for item in candidates if item[2] <= remaining), None)
-        if match is None:
-            break
-        out.append(match)
-        remaining -= match[2]
-    return out
+TRUNCATE_OVERFULL_MSCX = TruncateOverfullMscx()
