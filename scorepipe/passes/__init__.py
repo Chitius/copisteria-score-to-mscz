@@ -11,6 +11,7 @@ from .mscx_display import (
     UnhideRealRests,
 )
 from .mscx_fragments import FRAGMENTS, SplitChordFragments
+from .mscx_truncate import TRUNCATE_OVERFULL_MSCX, TruncateOverfullMscx
 from .mscx_ties import MSXC_TIES, RestoreMscxTies
 from .page_restore import (
     RESTORE_PAGE_ARPEGGIOS,
@@ -48,6 +49,7 @@ from .xml_rebase import DROP_OVERFLOW_RESTS, REBASE_MEASURES, RebaseMeasures
 from .xml_redundant_voices import DROP_REDUNDANT_VOICES, DropRedundantVoices
 from .xml_slurs import SLUR_PASS, SanitizeSlurs
 from .xml_tail import DROP_DUPLICATE_TAIL, DropTrailingDuplicateMeasure
+from .xml_truncate import TRUNCATE_OVERFULL, TruncateOverfullVoices
 from .xml_voice_merge import MERGE_STAFF_VOICES, MergeStaffVoices
 from .xml_slur_chains import MERGE_ADJACENT_SLURS, MergeAdjacentSlurs
 from .xml_tie_slurs import RECONCILE_TIE_SLURS, ReconcileTieSlurs
@@ -95,6 +97,10 @@ __all__ = [
     "DISPLAY_PASSES",
     "INJECT_PASSES",
     "ANALYSIS_PASSES",
+    "TRUNCATE_OVERFULL",
+    "TRUNCATE_OVERFULL_MSCX",
+    "TruncateOverfullVoices",
+    "TruncateOverfullMscx",
     "MeasureLengthReport",
     "DedupeTies",
     "DropRedundantTimeSignatures",

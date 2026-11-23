@@ -19,7 +19,7 @@ from .loader import load_pages, merge_pages
 from .mscz_export import export_and_display
 from .notation_patches import apply_patches, load_patches, validate_patches, verify_patches
 from .omr import run_omr
-from .passes import DISPLAY_PASSES, INJECT_PASSES, STRUCTURAL_PASSES
+from .passes import DISPLAY_PASSES, INJECT_PASSES, STRUCTURAL_PASSES, TRUNCATE_OVERFULL
 from .producers import resolve as resolve_producer
 
 
@@ -45,6 +45,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--title", help="title credit to inject (agent-recognised for scans)")
     parser.add_argument("--composer", help="composer credit to inject")
     parser.add_argument("--max-rounds", type=int, default=32)
+    parser.add_argument(
+        "--truncate-overfull",
+        action="store_true",
+        help="force overfull voices back to the bar line (editable-repair copy; recorded in trace)",
+    )
     args = parser.parse_args(argv)
 
     groups = {
@@ -121,11 +126,14 @@ def main(argv: list[str] | None = None) -> int:
     if tuplets_payload and tuplets_payload["patches"]:
         changed = apply_patches(doc, tuplets_payload)
         print(f"patches: {changed} tuplet change(s)")
-    ctx = Context(facts=facts, pages=pages)
+    ctx = Context(facts=facts, pages=pages, options={"truncate_overfull": args.truncate_overfull})
+    structural_passes = STRUCTURAL_PASSES
+    if args.truncate_overfull:
+        structural_passes = STRUCTURAL_PASSES + [TRUNCATE_OVERFULL]
     report = run_pipeline(
         doc,
         ctx,
-        structural=STRUCTURAL_PASSES,
+        structural=structural_passes,
         inject=INJECT_PASSES,
         verifiers=VERIFIERS,
         max_rounds=args.max_rounds,
@@ -229,6 +237,7 @@ def _write_report(report: RunReport, path: str | None) -> None:
                 "round": entry.round,
                 "pass": entry.pass_name,
                 "changed": entry.changed,
+                "notes": entry.notes,
             }
             for entry in report.trace
         ],

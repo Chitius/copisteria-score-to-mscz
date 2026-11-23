@@ -162,6 +162,10 @@ python scripts/review.py "score.pdf" --pages path/to/omr-pages \
 `score.*` 是经过 review 的版本。交付时必须两套都保留，不能用 reviewed 覆盖 mechanical。
 `timing-report.json` 对比两套的 measure-length findings，并列出 introduced/resolved。
 
+同时默认生成 `forced-truncation/`：对 overfull voice 做强制收尾，让 MuseScore 可以打开和编辑。
+它必须标记 `semantic_authority: false`，`truncation-report.json` 列出每个被删/被缩短的 rest 或
+note。CLI 会打印操作摘要，agent 必须转告用户；不要把它说成语义修复。
+
 ### 4d. Agent 检查与提案契约
 
 Agent 是 producer，不是改谱者。完整协议见 `references/agent-review.md`，最低要求：
@@ -198,7 +202,7 @@ docs/SANITY.md            pass 契约审计
 
 ## 当前状态（2026-11）
 
-- `unittest`：220 个测试；`pytest`：302 个测试。
+- `unittest`：224 个测试；`pytest`：306 个测试。
 - Gute Nacht：sounding notes 98.94% / 99.0%（vocal/piano），verifier clean。
 - `aus_meinen_traenen`：91.38% / 90.10%；`die_wetterfahne`：98.97% / 97.75%。
 - `der_lindenbaum` P2 仍是 OMR 质量异常项（约 51%）。

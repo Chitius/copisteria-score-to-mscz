@@ -16,8 +16,8 @@ from .core.document import Document
 from .core.mscz import MsczArchive
 from .core.mscx_invariants import MSCX_VERIFIERS
 from .core.pass_base import Context
-from .core.pipeline import RunReport, run_display
-from .passes import DISPLAY_PASSES
+from .core.pipeline import PhaseReport, RunReport, TraceEntry, run_display
+from .passes import DISPLAY_PASSES, TRUNCATE_OVERFULL_MSCX
 
 COMMON_PATHS = (
     r"S:\Program Files\MuseScore 4\bin\MuseScore4.exe",
@@ -74,7 +74,38 @@ def export_and_display(
         options.setdefault("ties", extract_ties(document))
         options.setdefault("chord_fragments", extract_chord_fragments(document))
         display_ctx = Context(facts=dict(ctx.facts), options=options)
-        report = run_display(archive.document, display_ctx, DISPLAY_PASSES, MSCX_VERIFIERS)
+        display_passes = list(DISPLAY_PASSES)
+        report = run_display(archive.document, display_ctx, display_passes, MSCX_VERIFIERS)
+        if options.get("truncate_overfull"):
+            before = archive.document.state_hash()
+            final_result = None
+            final_notes: list[str] = []
+            total_changed = 0
+            for _ in range(3):
+                result = TRUNCATE_OVERFULL_MSCX.run(archive.document, display_ctx)
+                total_changed += result.changed
+                final_notes.extend(result.notes)
+                final_result = result
+                if not result.changed:
+                    break
+            if total_changed:
+                report.trace.append(
+                    TraceEntry(
+                        phase="display-final",
+                        round=1,
+                        pass_name=TRUNCATE_OVERFULL_MSCX.spec.name,
+                        changed=total_changed,
+                        hash_before=before[:12],
+                        hash_after=archive.document.state_hash()[:12],
+                        notes=final_notes,
+                    )
+                )
+                report.phases.append(
+                    PhaseReport(phase="display-final", rounds=1, changes=total_changed, stable=True)
+                )
+                report.verifier = [
+                    violation for verifier in MSCX_VERIFIERS for violation in verifier(archive.document, display_ctx)
+                ]
         archive.save(destination)
         return report
     finally:

@@ -16,10 +16,16 @@ out/score/
     score.mscz
     score.pdf
     report.json
+  forced-truncation/      editable copy; semantic_authority=false
+    score.musicxml
+    score.mscz
+    score.pdf
+    truncation-report.json
 ```
 
 The reviewed artifacts are the root files; `mechanical/` is the no-agent-proposal baseline kept for
-comparison and audit. Do not deliver only one of the two trees.
+comparison and audit. `forced-truncation/` is the default overfull-voice repair: it is kept so the
+measure can be edited, but it is not a semantic master. Do not deliver only one of these trees.
 
 If MuseScore is unavailable, deliver MusicXML + report and state that the `.mscz`/PDF were not
 produced. Do not fabricate a render.

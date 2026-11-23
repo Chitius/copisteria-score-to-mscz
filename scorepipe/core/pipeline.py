@@ -16,6 +16,7 @@ class TraceEntry:
     changed: int
     hash_before: str
     hash_after: str
+    notes: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -73,6 +74,7 @@ def run_phase(
                         changed=result.changed,
                         hash_before=hash_before[:12],
                         hash_after=hash_after[:12],
+                        notes=list(result.notes),
                     )
                 )
         report.changes += round_changes

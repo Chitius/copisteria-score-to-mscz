@@ -27,6 +27,7 @@ kept because they explain the current code; open items are the hand-off list for
 | Delivery review loop | `scripts/review.py` blocks incomplete coverage/unresolved/corrections, runs pipeline and writes before/after review report |
 | Dual delivery baseline | reviewed artifacts stay at the root; a no-agent-facts/no-patches mechanical tree is kept under `mechanical/` |
 | Timing comparison | `timing-report.json` records baseline/reviewed measure-length findings, introduced and resolved |
+| Forced editable copy | default `forced-truncation/` trims overfull voices to the bar line; `semantic_authority: false` and operations are reported |
 | Real 8va range correction | Sincerely OMR 8va was on staff 2/m28–m29; replaced with staff 1/m31 beat 1–4, covering the last five notes |
 | Constrained tuplet correction | accepted same-voice tuplet patches are validated and applied before the structural fixpoint |
 | Post-pipeline patch verification | ottava/tuplet targets are re-checked after structural passes; accepted status is explicit |

@@ -148,15 +148,17 @@ The review stops before the pipeline when pages are missing, unresolved claims o
 corrections remain. `--allow-unresolved` / `--allow-corrections` are explicit interim overrides;
 the report still lists what was overridden. A no-facts/no-patches baseline is written to
 `mechanical/`; the root `score.*` files are the reviewed version. Keep both. `timing-report.json`
-compares measure-length findings between the two. See [`references/review.md`](references/review.md).
+compares measure-length findings between the two. The default `forced-truncation/` tree trims
+overfull voices so MuseScore can edit them; it is marked `semantic_authority: false` and records
+every operation in `truncation-report.json`. See [`references/review.md`](references/review.md).
 
 ## Current status (2026-11-21)
 
 Tests:
 
 ```text
-python -m unittest discover -s tests   # 220 tests
-python -m pytest tests -q              # 302 tests
+python -m unittest discover -s tests   # 224 tests
+python -m pytest tests -q              # 306 tests
 ```
 
 Corpus (sounding-note match; rests excluded from the primary score):

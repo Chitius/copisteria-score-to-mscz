@@ -63,15 +63,31 @@ review/score/
     score.pdf
     report.json
     rendered/source-*.png
+  forced-truncation/
+    score.musicxml
+    score.mscz
+    score.pdf
+    report.json
+    truncation-report.json
+    rendered/source-*.png
 ```
 
 `mechanical/` is the pipeline output without agent facts or patches. It is the comparison/baseline
 artifact, not an alternative final delivery. `review-report.json` records page coverage, missing
 pages, unresolved claims, corrections, patch count, the mechanical baseline exits and artifact
 paths. `timing-report.json` compares `measure-length` / `mscx-measure-length` findings between the
-mechanical baseline and the reviewed output, with `introduced` and `resolved` lists. If the reviewed
-pipeline fails after producing an MSCZ, review still renders and rasterises that draft when possible,
-then writes the report with `ready: false`; the failed run remains non-deliverable.
+mechanical baseline and the reviewed output, with `introduced` and `resolved` lists.
+
+`forced-truncation/` is enabled by default. It is the reviewed score with overfull voices forced to
+the bar line so the measure can be opened and edited in MuseScore. It is **not** semantically
+authoritative (`semantic_authority: false`); `truncation-report.json` lists every removed or
+shortened rest/note and the review report includes the same operations. Use
+`--no-forced-truncation` only when the overfull copy is explicitly wanted. If the forced copy is
+not verifier-clean, the review is blocked.
+
+If the reviewed pipeline fails after producing an MSCZ, review still renders and rasterises that
+draft when possible, then writes the report with `ready: false`; the failed run remains
+non-deliverable.
 
 ## Required human checks
 

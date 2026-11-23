@@ -95,6 +95,7 @@ class ReviewFailureTest(unittest.TestCase):
                     "--musescore",
                     "musescore",
                     "--no-mechanical",
+                    "--no-forced-truncation",
                 ]
             )
 
