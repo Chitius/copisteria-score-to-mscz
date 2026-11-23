@@ -64,7 +64,7 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 | C5 | P1 | Delivery tests are stateful/mocked, skip forced truncation, and have no success/stale-artifact/`--no-mscz` matrices. | `tests/test_delivery_scripts.py:13-14,98`; `scripts/convert.py:218-224` | Use tmp_path; assert artifacts from this run; test forced success/failure/skip | open |
 | C6 | P1 | `test_cli` asserts exit 0 where the real patch verifier should fail; it enshrines B2. | `tests/test_cli.py:109-149` | Integration test: clean verifier + failed patch verify => exit 1 | fixed (batch2) |
 | C7 | P1 | Lieder corpus tests compare ground truth to itself; no pipeline run. | `tests/test_lieder_corpus.py:42-51` | Add one end-to-end threshold case or label as fixture-integrity only | open |
-| C8 | P1 | Plain pytest fails on ACL-denied cache dirs; tests write into repo `.runs` and rely on CWD. | repo root `.pytest_cache`, `pytest-cache-files-*`; `test_delivery_scripts.py:13-14`; `from scripts import` | Add `conftest.py`/`testpaths`, tmp_path, sys.path fixture; clean cache dirs | in progress (batch4) |
+| C8 | P1 | Plain pytest fails on ACL-denied cache dirs; tests write into repo `.runs` and rely on CWD. | repo root `.pytest_cache`, `pytest-cache-files-*`; `test_delivery_scripts.py:13-14`; `from scripts import` | Add `conftest.py`/`testpaths`, tmp_path, sys.path fixture; clean cache dirs | fixed (batch4) |
 | C9 | P1 | No XSD validation and no MuseScore import/render round-trip in tests. | `tests/`; `tests/test_mscz_export.py` is skipped without MuseScore | Add an opt-in MuseScore integration test and XSD validation for a fixture | in progress (batch4) |
 | C10 | P2 | `run_pipeline` `repairable` outer-round path is dead; analysis `mutated` and non-convergence are untested. | `scorepipe/core/pipeline.py:84-98,137-153`; `scorepipe/cli.py:129` | Enable/test a repairable pass; assert stable=False on cap; test analysis mutation | open |
 
@@ -170,11 +170,11 @@ title/composer/compare-golden and the shared MuseScore resolver are wired into r
 
 Scope: C7, C8, C10, E1–E14.
 
-**Progress 2026-11-23:** E1, E2, E3, E5, E6, E7, E8, E10, E11, E12, E13, E16 fixed; C7/C8/C10,
-E4/E9/E14 remain. Historical docs are marked, current paths and agent filenames are normalized,
+**Progress 2026-11-23:** E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, E11, E12, E13, E14, E16 fixed;
+C8 fixed; C7/C10 remain. Historical docs are marked, current paths and agent filenames are normalized,
 the corpus README points at real files, the label-stripping code preserves the printed wording in
-evidence, blocked reports share the `blockers` schema, and convert refuses existing outputs unless
-`--force` is explicit.
+evidence, blocked reports share the `blockers` schema, convert refuses existing outputs unless
+`--force` is explicit, and plain pytest now disables the ACL-hostile cache provider.
 
 - Mark historical docs; regenerate pass/test counts.
 - Normalize score paths and artifact names.
