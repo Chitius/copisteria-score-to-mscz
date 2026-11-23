@@ -18,6 +18,8 @@ def hidden_non_measure_rests(doc: MsxcDocument, ctx: Context) -> list[Violation]
                     continue
                 if rest.find("pickupPadding") is not None:
                     continue
+                if rest.find("padding") is not None:
+                    continue
                 visible = rest.find("visible")
                 if visible is None:
                     continue
