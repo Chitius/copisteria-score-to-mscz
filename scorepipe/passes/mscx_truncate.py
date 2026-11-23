@@ -1,17 +1,32 @@
-"""Force overfull mscx voices to the bar line for an editable copy.
+"""Trim overfull mscx voices from the tail so an editable copy can be opened.
 
-The display IR has no backup syntax: each ``<voice>`` is a self-contained event stream.  Prefer
-removing/shortening rests, then shorten the final Chord, and never touch a Tuplet block.  Every
-change is reported so a forced copy cannot be mistaken for a semantic repair.
+Rules:
+* only the tail is changed;
+* a rest before a later chord is positional padding and is never removed;
+* anything inside a flat ``<Tuplet>``/``<endTuplet>`` range is never edited;
+* an operation that cannot be completed without touching a tuplet or a positional rest is
+  reported as ``UNRESOLVED`` and no partial edit is applied.
+
+The pass is intentionally a last-resort repair for MuseScore editability, not a musical
+reconstruction.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
 
 from ..core.mscx import MsxcDocument
 from ..core.mscx_invariants import _beats, _tuplet_ratio
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
+
+
+@dataclass
+class _Item:
+    element: object
+    beats: Fraction
+    rest: bool
+    tuplet: bool
 
 
 class TruncateOverfullMscx:
@@ -20,7 +35,7 @@ class TruncateOverfullMscx:
         phase=Phase.DISPLAY,
         kind=Kind.MECHANICAL,
         owns=("overfull-mscx-voice-durations",),
-        description="trim overfull mscx voices to the bar line for manual repair",
+        description="trim overfull mscx voices from the tail for manual repair",
         measure="mscx voices longer than the active time signature",
     )
 
@@ -38,57 +53,43 @@ class TruncateOverfullMscx:
         meter = Fraction(4)
         changed = 0
         notes: list[str] = []
-        for staff_id, index, measure in doc.iter_measures():
+        staff_number = 0
+        for staff, index, measure in doc.iter_measures():
+            staff_number += 1
+            staff_label = staff.get("id") or str(staff_number)
             meter = signatures.get(index, meter)
             for voice in doc.voices(measure):
-                total = _voice_total(voice, meter)
+                items = _items(voice, meter)
+                total = sum(item.beats for item in items)
                 excess = total - meter
                 if excess <= 0:
                     continue
-                remaining = excess
-                actions: list[str] = []
-                for child in reversed(list(voice)):
-                    if remaining <= 0:
-                        break
-                    if child.tag != "Rest":
-                        continue
-                    duration = _beats(child, meter)
-                    if duration <= 0 or child.findtext("durationType") == "measure":
-                        continue
-                    if duration <= remaining:
-                        voice.remove(child)
-                        remaining -= duration
-                        actions.append(f"removed rest {float(duration):g} beats")
-                    else:
-                        _shorten(child, duration - remaining)
-                        actions.append(f"shortened rest {float(duration):g}->{float(duration - remaining):g}")
-                        remaining = 0
-                while remaining > 0:
-                    chords = [child for child in voice if child.tag == "Chord"]
-                    if not chords:
-                        break
-                    child = chords[-1]
-                    duration = _beats(child, meter)
-                    if duration <= 0:
-                        break
-                    if duration <= remaining:
-                        voice.remove(child)
-                        remaining -= duration
-                        actions.append(f"removed chord {float(duration):g} beats")
-                    else:
-                        _shorten(child, duration - remaining)
-                        actions.append(f"shortened chord {float(duration):g}->{float(duration - remaining):g}")
-                        remaining = 0
+                actions, remaining = _plan_tail(items, excess, meter)
                 if remaining > 0:
-                    notes.append(f"m{index} staff {staff_id} voice: unresolved {float(remaining):g} beats")
+                    notes.append(
+                        f"UNRESOLVED m{index} staff {staff_label}: {float(total):g} beats, "
+                        f"{float(remaining):g} left; tuplet/positional-rest tail is protected"
+                    )
                     continue
+                for element, new_beats in actions:
+                    if new_beats is None:
+                        voice.remove(element)
+                    else:
+                        _shorten(element, new_beats)
                 changed += 1
-                notes.append(f"m{index} staff {staff_id}: {float(total):g}->{float(meter):g}; " + "; ".join(actions))
+                notes.append(
+                    f"m{index} staff {staff_label}: {float(total):g}->{float(meter):g}; "
+                    + "; ".join(
+                        f"{'remove' if new is None else 'shorten'} {float(old):g}"
+                        + (f"->{float(new):g}" if new is not None else "")
+                        for (old, new) in _describe(actions, items)
+                    )
+                )
         return PassResult(changed=changed, notes=notes)
 
 
-def _voice_total(voice, meter: Fraction) -> Fraction:
-    total = Fraction(0)
+def _items(voice, meter: Fraction) -> list[_Item]:
+    items: list[_Item] = []
     tuplets: list[Fraction] = []
     for child in voice:
         if child.tag == "Tuplet":
@@ -100,8 +101,59 @@ def _voice_total(voice, meter: Fraction) -> Fraction:
             ratio = Fraction(1)
             for tuplet in tuplets:
                 ratio *= tuplet
-            total += _beats(child, meter, ratio)
-    return total
+            items.append(
+                _Item(
+                    element=child,
+                    beats=_beats(child, meter, ratio),
+                    rest=child.tag == "Rest",
+                    tuplet=bool(tuplets),
+                )
+            )
+    return items
+
+
+def _plan_tail(items: list[_Item], excess: Fraction, meter: Fraction) -> tuple[list[tuple[object, Fraction | None]], Fraction]:
+    """Plan edits from the end; return (edits, unhandled beats)."""
+    remaining = excess
+    edits: list[tuple[object, Fraction | None]] = []
+    # Trailing rests, but stop at the last chord. A rest before a later chord is never touched.
+    index = len(items) - 1
+    last_chord = max((i for i, item in enumerate(items) if not item.rest), default=-1)
+    while index > last_chord and remaining > 0:
+        item = items[index]
+        if item.tuplet or not item.rest:
+            break
+        if item.beats <= remaining:
+            edits.append((item.element, None))
+            remaining -= item.beats
+            index -= 1
+        else:
+            edits.append((item.element, item.beats - remaining))
+            remaining = Fraction(0)
+            break
+    # Then shorten/remove the final chord. Do not walk past a preceding rest.
+    while remaining > 0 and index >= 0:
+        item = items[index]
+        if item.tuplet:
+            break
+        if item.rest:
+            break
+        if item.beats <= remaining:
+            edits.append((item.element, None))
+            remaining -= item.beats
+            index -= 1
+        else:
+            edits.append((item.element, item.beats - remaining))
+            remaining = Fraction(0)
+            break
+    return edits, remaining
+
+
+def _describe(actions, items):
+    by_element = {id(item.element): item for item in items}
+    for element, new in actions:
+        old = by_element[id(element)].beats
+        yield old, new
 
 
 def _shorten(element, beats: Fraction) -> None:

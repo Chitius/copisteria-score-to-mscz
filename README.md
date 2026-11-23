@@ -157,8 +157,8 @@ every operation in `truncation-report.json`. See [`references/review.md`](refere
 Tests:
 
 ```text
-python -m unittest discover -s tests   # 224 tests
-python -m pytest tests -q              # 306 tests
+python -m unittest discover -s tests   # 226 tests
+python -m pytest tests -q              # 308 tests
 ```
 
 Corpus (sounding-note match; rests excluded from the primary score):

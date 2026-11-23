@@ -145,8 +145,13 @@ class CliTest(unittest.TestCase):
                 ]
             )
 
-        self.assertEqual(code, 0)
+        self.assertEqual(code, 1)
         self.assertEqual(events, ["tuplet", "pipeline", "ottava"])
+
+    def test_truncate_overfull_requires_an_mscz_output(self):
+        with self.assertRaises(SystemExit) as raised:
+            main([str(Path(__file__).parent / "fixtures" / "tiny.musicxml"), "--truncate-overfull"])
+        self.assertNotEqual(raised.exception.code, 0)
 
 
 if __name__ == "__main__":

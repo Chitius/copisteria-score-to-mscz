@@ -48,9 +48,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--truncate-overfull",
         action="store_true",
-        help="force overfull voices back to the bar line (editable-repair copy; recorded in trace)",
+        help="trim overfull voices for an editable .mscz; may delete/shorten notes and rests; requires --mscz-out",
     )
     args = parser.parse_args(argv)
+    if args.truncate_overfull and (not args.mscz_out or args.check):
+        parser.error("--truncate-overfull requires --mscz-out and cannot be used with --check")
 
     groups = {
         Phase.STRUCTURAL: STRUCTURAL_PASSES,
@@ -142,12 +144,16 @@ def main(argv: list[str] | None = None) -> int:
     if ottava_payload and ottava_payload["patches"]:
         changed = apply_patches(doc, ottava_payload)
         print(f"patches: {changed} octave direction(s)")
+    patch_failed = False
     if args.patches:
         patch_problems = verify_patches(doc, patches_payload)
         for problem in patch_problems:
             print(f"patches: {problem}")
         if patch_problems:
-            status = 1
+            patch_failed = True
+            report.analysis.append(
+                {"phase": "patches", "pass": "verify_patches", "notes": patch_problems}
+            )
     if args.output and not args.check:
         doc.save(args.output)
     if args.compare_golden:
@@ -164,6 +170,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"compare: worst missing {result['missing_by_measure']}")
             print(f"compare: worst extra   {result['extra_by_measure']}")
     status = 0 if not report.verifier else 1
+    if patch_failed:
+        status = 1
     if args.mscz_out and not args.check:
         display_report = export_and_display(
             doc, args.mscz_out, ctx, args.musescore, work_musicxml=args.output

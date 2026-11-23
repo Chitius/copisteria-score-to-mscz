@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from .core.document import Document
@@ -65,7 +66,15 @@ def export_and_display(
 ) -> RunReport:
     """Write the MusicXML, convert it, run the display fixpoint and re-save the archive."""
     destination = Path(mscz_path)
-    intermediate = Path(work_musicxml) if work_musicxml else destination.with_suffix(".musicxml")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    created_temp = False
+    if work_musicxml:
+        intermediate = Path(work_musicxml)
+    else:
+        fd, temp_name = tempfile.mkstemp(prefix=".scorepipe-", suffix=".musicxml", dir=destination.parent)
+        os.close(fd)
+        intermediate = Path(temp_name)
+        created_temp = True
     document.save(intermediate)
     try:
         convert(intermediate, destination, musescore)
@@ -78,30 +87,39 @@ def export_and_display(
         report = run_display(archive.document, display_ctx, display_passes, MSCX_VERIFIERS)
         if options.get("truncate_overfull"):
             before = archive.document.state_hash()
-            final_result = None
-            final_notes: list[str] = []
+            notes: list[str] = []
             total_changed = 0
-            for _ in range(3):
+            rounds = 0
+            unresolved = False
+            last_changed = 0
+            for round_number in range(1, 4):
+                rounds = round_number
                 result = TRUNCATE_OVERFULL_MSCX.run(archive.document, display_ctx)
                 total_changed += result.changed
-                final_notes.extend(result.notes)
-                final_result = result
-                if not result.changed:
+                last_changed = result.changed
+                notes.extend(result.notes)
+                unresolved = any(note.startswith("UNRESOLVED") for note in result.notes)
+                if unresolved or not result.changed:
                     break
-            if total_changed:
+            if total_changed or notes:
                 report.trace.append(
                     TraceEntry(
                         phase="display-final",
-                        round=1,
+                        round=rounds,
                         pass_name=TRUNCATE_OVERFULL_MSCX.spec.name,
                         changed=total_changed,
                         hash_before=before[:12],
                         hash_after=archive.document.state_hash()[:12],
-                        notes=final_notes,
+                        notes=notes,
                     )
                 )
                 report.phases.append(
-                    PhaseReport(phase="display-final", rounds=1, changes=total_changed, stable=True)
+                    PhaseReport(
+                        phase="display-final",
+                        rounds=rounds,
+                        changes=total_changed,
+                        stable=not unresolved and last_changed == 0,
+                    )
                 )
                 report.verifier = [
                     violation for verifier in MSCX_VERIFIERS for violation in verifier(archive.document, display_ctx)
@@ -109,8 +127,8 @@ def export_and_display(
         archive.save(destination)
         return report
     finally:
-        if work_musicxml is None and intermediate.exists():
-            intermediate.unlink()
+        if created_temp:
+            intermediate.unlink(missing_ok=True)
 
 
 def extract_ties(document: Document) -> list[dict]:

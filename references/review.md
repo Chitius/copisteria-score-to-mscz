@@ -81,9 +81,10 @@ mechanical baseline and the reviewed output, with `introduced` and `resolved` li
 `forced-truncation/` is enabled by default. It is the reviewed score with overfull voices forced to
 the bar line so the measure can be opened and edited in MuseScore. It is **not** semantically
 authoritative (`semantic_authority: false`); `truncation-report.json` lists every removed or
-shortened rest/note and the review report includes the same operations. Use
-`--no-forced-truncation` only when the overfull copy is explicitly wanted. If the forced copy is
-not verifier-clean, the review is blocked.
+shortened rest/note and the review report includes the same operations. The default is to create
+this forced copy; use `--no-forced-truncation` only for a diagnostic run that intentionally omits
+the editable repair tree (the review then records that artifact as missing). If the forced copy is
+not verifier-clean or has `UNRESOLVED` operations, the review is blocked.
 
 If the reviewed pipeline fails after producing an MSCZ, review still renders and rasterises that
 draft when possible, then writes the report with `ready: false`; the failed run remains

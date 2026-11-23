@@ -75,6 +75,8 @@ def _render_pages(pdf: Path, outdir: Path) -> int:
     if not binary:
         raise RuntimeError("pdftoppm not found")
     outdir.mkdir(parents=True, exist_ok=True)
+    for old in outdir.glob("source-*.png"):
+        old.unlink()
     completed = subprocess.run(
         [binary, "-png", "-r", "150", str(pdf), str(outdir / "source")],
         capture_output=True,
@@ -131,7 +133,7 @@ def _truncation_notes(report_path: Path) -> list[str]:
     return [
         note
         for entry in data.get("trace") or []
-        if entry.get("pass") in ("truncate_overfull_voices", "truncate_overfull_mscx")
+        if entry.get("pass") == "truncate_overfull_mscx"
         for note in entry.get("notes") or []
     ]
 
@@ -171,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
     musescore = args.musescore or os.environ.get("MUSESCORE_EXE") or shutil.which("MuseScore4.exe")
     page_count = _pdf_pages(pdf)
     if page_count is None:
-        page_count = len(_parts(facts_dir))
+        raise RuntimeError("pdfinfo is required to verify page coverage; install poppler or pass a supported PDF")
 
     merged = load_pages(page_dir)
     _write(outdir / "score-map.json", score_map(merged.document))
@@ -340,66 +342,97 @@ def main(argv: list[str] | None = None) -> int:
     forced = None
     if not args.no_forced_truncation:
         forced_dir = Path(args.forced_dir).resolve() if args.forced_dir else outdir / "forced-truncation"
-        forced_musicxml = forced_dir / "score.musicxml"
-        forced_report = forced_dir / "report.json"
-        forced_mscz = None if args.no_mscz else forced_dir / "score.mscz"
-        forced_command = [
-            python,
-            "-m",
-            "scorepipe.cli",
-            str(page_dir),
-            "-o",
-            str(forced_musicxml),
-            "--report",
-            str(forced_report),
-            "--facts",
-            str(facts_path),
-            "--truncate-overfull",
-        ]
-        if args.patches:
-            forced_command.extend(["--patches", str(Path(args.patches).resolve())])
-        if forced_mscz:
+        if args.no_mscz:
+            forced = {
+                "semantic_authority": False,
+                "status": "skipped",
+                "reason": "--no-mscz prevents mscx truncation; forced repair requires a .mscz",
+                "dir": str(forced_dir),
+                "operations": [],
+                "unresolved": [],
+                "ready": False,
+            }
+            report["forced_truncation"] = forced
+            _write(forced_dir / "truncation-report.json", forced)
+            print("forced truncation: skipped because --no-mscz was used")
+            report["ready"] = False
+            report["blockers"].append("forced truncation skipped by --no-mscz")
+        else:
+            forced_musicxml = forced_dir / "score.musicxml"
+            forced_report = forced_dir / "report.json"
+            forced_mscz = forced_dir / "score.mscz"
+            forced_command = [
+                python,
+                "-m",
+                "scorepipe.cli",
+                str(page_dir),
+                "-o",
+                str(forced_musicxml),
+                "--report",
+                str(forced_report),
+                "--facts",
+                str(facts_path),
+                "--truncate-overfull",
+            ]
+            if args.patches:
+                forced_command.extend(["--patches", str(Path(args.patches).resolve())])
             forced_command.extend(["--mscz-out", str(forced_mscz)])
             if musescore:
                 forced_command.extend(["--musescore", str(musescore)])
-        print("+ forced-truncation copy (editable only; semantic_authority=false)")
-        forced_exit = _run(forced_command, ROOT)
-        operations = _truncation_notes(forced_report)
-        forced_pdf = None
-        forced_render_exit = None
-        if forced_mscz and forced_mscz.is_file() and not args.no_pdf and musescore:
-            forced_pdf = forced_dir / "score.pdf"
-            forced_render_exit = _run([musescore, "-f", "-o", str(forced_pdf), str(forced_mscz)], ROOT)
-            if forced_render_exit == 0 and forced_pdf.is_file():
-                try:
-                    _render_pages(forced_pdf, forced_dir / "rendered")
-                except RuntimeError as exc:
-                    report["forced_truncation"] = {"render_error": str(exc)}
-        forced = {
-            "semantic_authority": False,
-            "purpose": "make overfull measures editable; may remove or shorten notes/rests",
-            "dir": str(forced_dir),
-            "musicxml": str(forced_musicxml) if forced_musicxml.is_file() else None,
-            "mscz": str(forced_mscz) if forced_mscz and forced_mscz.is_file() else None,
-            "pdf": str(forced_pdf) if forced_pdf and forced_pdf.is_file() else None,
-            "report": str(forced_report) if forced_report.is_file() else None,
-            "pipeline_exit": forced_exit,
-            "render_exit": forced_render_exit,
-            "operations": operations,
-            "verifier_count": _verifier_count(forced_report),
-        }
-        forced["ready"] = forced_exit == 0 and forced["verifier_count"] == 0
-        report["forced_truncation"] = forced
-        _write(forced_dir / "truncation-report.json", forced)
-        if operations:
-            print(f"forced truncation: {len(operations)} operation(s); see {forced_dir / 'truncation-report.json'}")
-            for operation in operations:
-                print(f"  {operation}")
-        else:
-            print("forced truncation: no operation needed")
-        if not forced["ready"]:
-            report["ready"] = False
-            report["blockers"].append("forced-truncation copy is not verifier-clean")
+            print("+ forced-truncation copy (editable only; semantic_authority=false)")
+            forced_exit = _run(forced_command, ROOT)
+            operations = _truncation_notes(forced_report)
+            unresolved = [note for note in operations if note.startswith("UNRESOLVED")]
+            forced_pdf = None
+            forced_render_exit = None
+            if forced_mscz.is_file() and not args.no_pdf and musescore:
+                forced_pdf = forced_dir / "score.pdf"
+                forced_render_exit = _run([musescore, "-f", "-o", str(forced_pdf), str(forced_mscz)], ROOT)
+                if forced_render_exit == 0 and forced_pdf.is_file():
+                    try:
+                        _render_pages(forced_pdf, forced_dir / "rendered")
+                    except RuntimeError as exc:
+                        report["forced_truncation"] = {"render_error": str(exc)}
+            forced = {
+                "semantic_authority": False,
+                "status": (
+                    "failed"
+                    if forced_exit != 0
+                    else "unresolved"
+                    if unresolved
+                    else "applied"
+                    if operations
+                    else "noop"
+                ),
+                "purpose": "make overfull measures editable; may remove or shorten notes/rests",
+                "dir": str(forced_dir),
+                "musicxml": str(forced_musicxml) if forced_musicxml.is_file() else None,
+                "mscz": str(forced_mscz) if forced_mscz.is_file() else None,
+                "pdf": str(forced_pdf) if forced_pdf and forced_pdf.is_file() else None,
+                "report": str(forced_report) if forced_report.is_file() else None,
+                "pipeline_exit": forced_exit,
+                "render_exit": forced_render_exit,
+                "operations": operations,
+                "unresolved": unresolved,
+                "verifier_count": _verifier_count(forced_report),
+            }
+            forced["ready"] = (
+                forced_exit == 0
+                and forced["verifier_count"] == 0
+                and not unresolved
+                and forced_mscz.is_file()
+            )
+            report["forced_truncation"] = forced
+            _write(forced_dir / "truncation-report.json", forced)
+            if operations:
+                print(f"forced truncation: {len(operations)} operation(s); see {forced_dir / 'truncation-report.json'}")
+                for operation in operations:
+                    print(f"  {operation}")
+            else:
+                print("forced truncation: no operation needed")
+            if not forced["ready"]:
+                report["ready"] = False
+                report["blockers"].append("forced-truncation copy is not clean/complete")
 
     _write(outdir / "review-report.json", report)
     print(f"review ready: {report['ready']}")
