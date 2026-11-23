@@ -129,7 +129,7 @@ Scope: A1, A2, A3, A4, A5, A6, A9, B2, D8.
 tail, preserves positional rests, never edits inside flat tuplets, reports `UNRESOLVED` without
 partial mutation, uses staff ids, records real rounds/stability, and rejects `--truncate-overfull`
 without `--mscz-out`. The intermediate MusicXML is isolated. C4/D8 remain in progress. Verification:
-251 unittest / 335 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
+256 unittest / 340 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
 unchanged with no forced operations.
 
 ### Batch 2 — verifier and pass-sanity integrity
@@ -143,7 +143,7 @@ duration; MSCX length checks all overfull voices while allowing short secondary 
 the sanity framework compares state hashes and verifier details/multiplicity; display pass inventory
 and idempotence are tested; truncation tests cover multi-voice, 3/4, `Measure@len`, tuplets,
 unresolved and spanner risk; explicit-duration and spanner-risk operations are surfaced as separate
-fields. Verification: 251 unittest / 335 pytest.
+fields. Verification: 256 unittest / 340 pytest.
 
 - Strengthen `verify_patches` and add five drift tests.
 - Check every voice; fix hidden-rest semantics; add empty/implicit/multipart/grace cases.
