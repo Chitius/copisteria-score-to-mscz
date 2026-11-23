@@ -128,21 +128,17 @@ def _tuplet_ratio(tuplet) -> Fraction:
 
 def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     """What MuseScore flags as an incomplete measure: a voice whose ticks miss the time signature."""
-    signatures: dict[int, Fraction] = {}
+    out: list[Violation] = []
     for staff in doc.root.iter("Staff"):
+        meter = Fraction(4)
         for index, measure in enumerate(staff.findall("Measure"), start=1):
             for time in measure.iter("TimeSig"):
                 try:
-                    signatures[index] = Fraction(time.findtext("sigN") or 4) * 4 / Fraction(
+                    meter = Fraction(time.findtext("sigN") or 4) * 4 / Fraction(
                         time.findtext("sigD") or 4
                     )
                 except (ValueError, ZeroDivisionError):
                     pass
-    out: list[Violation] = []
-    meter = Fraction(4)
-    for staff in doc.root.iter("Staff"):
-        for index, measure in enumerate(staff.findall("Measure"), start=1):
-            meter = signatures.get(index, meter)
             target = _measure_target(measure, meter)
             primary = _primary_voice(measure)
             primary_voice = primary[0] if primary else None

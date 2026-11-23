@@ -136,6 +136,23 @@ class TruncateOverfullMscxTest(unittest.TestCase):
         result = TruncateOverfullMscx().run(doc, Context())
         self.assertIn("spanner-risk:Tie", " ".join(result.notes))
 
+    def test_per_staff_meters_are_independent(self):
+        four = "<Chord><durationType>quarter</durationType><Note><pitch>60</pitch></Note></Chord>"
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score>"
+                "<Staff id='1'><Measure><TimeSig><sigN>3</sigN><sigD>4</sigD></TimeSig>"
+                f"<voice>{four * 4}</voice></Measure></Staff>"
+                "<Staff id='2'><Measure><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>"
+                f"<voice>{four * 4}</voice></Measure></Staff>"
+                "</Score></museScore>"
+            )
+        )
+        result = TruncateOverfullMscx().run(doc, Context())
+        self.assertEqual(result.changed, 1)
+        self.assertEqual(len(doc.root.findall(".//Staff")[0].findall(".//Chord")), 3)
+        self.assertEqual(len(doc.root.findall(".//Staff")[1].findall(".//Chord")), 4)
+
 
 if __name__ == "__main__":
     unittest.main()

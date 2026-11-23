@@ -40,24 +40,22 @@ class TruncateOverfullMscx:
     )
 
     def run(self, doc: MsxcDocument, ctx: Context) -> PassResult:
-        signatures: dict[int, Fraction] = {}
-        for staff in doc.root.iter("Staff"):
-            for index, measure in enumerate(staff.findall("Measure"), start=1):
-                for time in measure.iter("TimeSig"):
-                    try:
-                        signatures[index] = Fraction(time.findtext("sigN") or 4) * 4 / Fraction(
-                            time.findtext("sigD") or 4
-                        )
-                    except (ValueError, ZeroDivisionError):
-                        pass
-        meter = Fraction(4)
+        meters: dict[int, Fraction] = {}
         changed = 0
         notes: list[str] = []
         staff_number = 0
         for staff, index, measure in doc.iter_measures():
             staff_number += 1
             staff_label = staff.get("id") or str(staff_number)
-            meter = signatures.get(index, meter)
+            meter = meters.get(id(staff), Fraction(4))
+            for time in measure.iter("TimeSig"):
+                try:
+                    meter = Fraction(time.findtext("sigN") or 4) * 4 / Fraction(
+                        time.findtext("sigD") or 4
+                    )
+                except (ValueError, ZeroDivisionError):
+                    pass
+            meters[id(staff)] = meter
             target = _measure_target(measure, meter)
             for voice in doc.voices(measure):
                 items = _items(voice, target)

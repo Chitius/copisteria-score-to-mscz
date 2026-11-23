@@ -39,7 +39,7 @@ Status values: **open**, **in progress**, **fixed**, **deferred**, **wontfix**.
 | A7 | P1 | `_shorten` keeps the original `durationType` and `dots` while adding an explicit `<duration>`, producing inconsistent notation (dotted 32nd lasting 1/6 beat; half rest lasting 2.75). No MuseScore round-trip proof. | `mscx_truncate.py:107-115`; forced mscz m75/m222 | Emit valid notation or a documented irregular representation; add a MuseScore re-import/render assertion | fixed (documented) |
 | A8 | P1 | Chord deletion reports only “removed chord N beats”; no pitches/onsets; can leave dangling ties/slurs/spanners. | `mscx_truncate.py:66-81` | Report deleted pitches/onsets; prune/flag spanners; prefer shortening over deletion | fixed (reported/flagged) |
 | A9 | P1 | The intermediate MusicXML path can overwrite and then delete a user file: `destination.with_suffix(".musicxml")` is unlinked when `work_musicxml` is not passed. | `scorepipe/mscz_export.py:68,111-113` | Use an isolated temp directory; only delete files the function created | fixed (batch1) |
-| A10 | P1 | Meter model ignores `Measure@len`/pickup metadata and keys signatures only by measure index across all staves. | `mscx_truncate.py:28-42`; `mscx_invariants.py:125-141` | Read `Measure@len`/pickup, keep meter per staff, add pickup fixture | in progress (batch2) |
+| A10 | P1 | Meter model ignores `Measure@len`/pickup metadata and keys signatures only by measure index across all staves. | `mscx_truncate.py:28-42`; `mscx_invariants.py:125-141` | Read `Measure@len`/pickup, keep meter per staff, add pickup fixture | fixed (batch2) |
 
 ## B. Verifiers and patch validation
 
@@ -129,7 +129,7 @@ Scope: A1, A2, A3, A4, A5, A6, A9, B2, D8.
 tail, preserves positional rests, never edits inside flat tuplets, reports `UNRESOLVED` without
 partial mutation, uses staff ids, records real rounds/stability, and rejects `--truncate-overfull`
 without `--mscz-out`. The intermediate MusicXML is isolated. C4/D8 remain in progress. Verification:
-248 unittest / 332 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
+249 unittest / 333 pytest; Zenzenzense forced copy: 20 edits, 2 rounds, verifier clean; Sincerely
 unchanged with no forced operations.
 
 ### Batch 2 — verifier and pass-sanity integrity
@@ -143,7 +143,7 @@ duration; MSCX length checks all overfull voices while allowing short secondary 
 the sanity framework compares state hashes and verifier details/multiplicity; display pass inventory
 and idempotence are tested; truncation tests cover multi-voice, 3/4, `Measure@len`, tuplets,
 unresolved and spanner risk; explicit-duration and spanner-risk operations are surfaced as separate
-fields. Verification: 248 unittest / 332 pytest.
+fields. Verification: 249 unittest / 333 pytest.
 
 - Strengthen `verify_patches` and add five drift tests.
 - Check every voice; fix hidden-rest semantics; add empty/implicit/multipart/grace cases.
