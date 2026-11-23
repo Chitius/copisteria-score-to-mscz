@@ -207,6 +207,11 @@ def main(argv: list[str] | None = None) -> int:
         facts.setdefault("credits", []).append({"type": "title", "text": args.title})
     if args.composer:
         facts.setdefault("credits", []).append({"type": "composer", "text": args.composer})
+    declared_pdf_hash = (facts.get("producer") or {}).get("pdf_sha256")
+    if declared_pdf_hash and declared_pdf_hash != pdf_sha256:
+        facts.setdefault("producer", {})["pdf_sha256_mismatch"] = True
+    else:
+        facts.setdefault("producer", {})["pdf_sha256"] = pdf_sha256
     facts_path = outdir / "facts.json"
     _write(facts_path, facts)
     _write(
@@ -220,6 +225,8 @@ def main(argv: list[str] | None = None) -> int:
     blockers = []
     overrides = []
     artifacts_missing = []
+    if (facts.get("producer") or {}).get("pdf_sha256_mismatch"):
+        blockers.append("facts were produced for a different source PDF (sha256 mismatch)")
     if missing_pages:
         blockers.append(f"missing pages: {missing_pages}")
     if unresolved:

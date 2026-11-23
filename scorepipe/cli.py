@@ -46,6 +46,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--composer", help="composer credit to inject")
     parser.add_argument("--max-rounds", type=int, default=32)
     parser.add_argument(
+        "--repair-measure-length",
+        action="store_true",
+        help="allow one bounded structural outer round for new measure-length violations",
+    )
+    parser.add_argument(
         "--truncate-overfull",
         action="store_true",
         help="trim overfull voices for an editable .mscz; may delete/shorten notes and rests; requires --mscz-out",
@@ -128,7 +133,14 @@ def main(argv: list[str] | None = None) -> int:
     if tuplets_payload and tuplets_payload["patches"]:
         changed = apply_patches(doc, tuplets_payload)
         print(f"patches: {changed} tuplet change(s)")
-    ctx = Context(facts=facts, pages=pages, options={"truncate_overfull": args.truncate_overfull})
+    ctx = Context(
+        facts=facts,
+        pages=pages,
+        options={
+            "truncate_overfull": args.truncate_overfull,
+            "repairable": {"measure-length"} if args.repair_measure_length else set(),
+        },
+    )
     structural_passes = STRUCTURAL_PASSES
     report = run_pipeline(
         doc,
