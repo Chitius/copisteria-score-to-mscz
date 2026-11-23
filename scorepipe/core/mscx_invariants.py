@@ -137,49 +137,27 @@ def _tuplet_ratio(tuplet) -> Fraction:
 
 
 def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
-    """What MuseScore flags as an incomplete measure: a voice whose ticks miss the time signature."""
+    """MuseScore's tick model, not a local beat approximation."""
+    from .musescore_ticks import location_ticks, measure_expected_ticks, voice_ticks
+
     out: list[Violation] = []
-    for staff in doc.root.iter("Staff"):
-        meter = Fraction(4)
-        for index, measure in enumerate(staff.findall("Measure"), start=1):
-            for time in measure.iter("TimeSig"):
-                try:
-                    meter = Fraction(time.findtext("sigN") or 4) * 4 / Fraction(
-                        time.findtext("sigD") or 4
+    for _staff, index, measure in doc.iter_measures():
+        expected = measure_expected_ticks(measure)
+        primary = _primary_voice(measure)
+        primary_voice = primary[0] if primary else None
+        for voice in measure.findall("voice"):
+            actual = location_ticks(voice) + voice_ticks(voice)
+            if actual <= 0 or actual == expected:
+                continue
+            if voice is primary_voice or actual > expected:
+                out.append(
+                    Violation(
+                        "mscx-measure-length",
+                        index,
+                        f"voice {actual / 480:g} beats ({actual} ticks), "
+                        f"expected {expected / 480:g} beats ({expected} ticks)",
                     )
-                except (ValueError, ZeroDivisionError):
-                    pass
-            target = _measure_target(measure, meter)
-            primary = _primary_voice(measure)
-            primary_voice = primary[0] if primary else None
-            for voice in measure.findall("voice"):
-                total = Fraction(0)
-                tuplets: list[Fraction] = []
-                for child in voice:
-                    if child.tag == "Tuplet":
-                        tuplets.append(_tuplet_ratio(child))
-                    elif child.tag == "endTuplet":
-                        if tuplets:
-                            tuplets.pop()
-                    elif child.tag in ("Chord", "Rest"):
-                        ratio = Fraction(1)
-                        for tuplet in tuplets:
-                            ratio *= tuplet
-                        total += _beats(child, target, ratio)
-                if total <= 0:
-                    continue
-                # The primary voice must fill the bar. Secondary voices may intentionally stop
-                # early, but they must never be overfull: that is what the editable repair edits.
-                if abs(total - target) <= Fraction(1, 1_000_000):
-                    continue
-                if voice is primary_voice or total > target:
-                    out.append(
-                        Violation(
-                            "mscx-measure-length",
-                            index,
-                            f"voice {float(total):g} beats, metre {float(target):g}",
-                        )
-                    )
+                )
     return out
 
 

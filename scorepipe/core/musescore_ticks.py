@@ -62,7 +62,7 @@ def tuplet_ratio(tuplet: ElementTree.Element) -> Fraction:
 
 
 def voice_ticks(voice: ElementTree.Element) -> int:
-    total = 0
+    total = Fraction(0)
     tuplets: list[Fraction] = []
     for child in voice:
         if child.tag == "Tuplet":
@@ -76,8 +76,11 @@ def voice_ticks(voice: ElementTree.Element) -> int:
                 ratio *= tuplet
             ticks = element_ticks(child)
             if ticks >= 0:
-                total += round(ticks * ratio)
-    return total
+                if child.find("duration") is not None:
+                    total += ticks
+                else:
+                    total += Fraction(ticks) * ratio
+    return round(total)
 
 
 def location_ticks(voice: ElementTree.Element) -> int:

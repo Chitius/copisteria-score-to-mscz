@@ -54,17 +54,12 @@ def canonicalize(doc: MsxcDocument, only=None) -> int:
             start = location_ticks(voice)
             duration = voice_ticks(voice)
             end = start + duration
-            if start <= 0:
-                continue
             if end > expected:
-                if duration <= expected:
+                if start > 0 and duration <= expected:
                     _set_location(voice, expected - duration)
                     changed += 1
             elif end < expected:
                 changed += _fill(voice, expected - end)
-        for voice in measure.findall("voice"):
-            if location_ticks(voice) + voice_ticks(voice) > expected:
-                raise ValueError(f"canonicalization left m{index} voice beyond the bar")
     return changed
 
 
@@ -92,4 +87,25 @@ def _fill(voice, ticks: int) -> int:
             ElementTree.SubElement(rest, "visible").text = "0"
             remaining -= value
             changed += 1
+    if remaining:
+        # A few ticks cannot be written as a single legal note value.
+        # Use a hidden 128th triplet so the tick total remains exact.
+        normal, actual = _reduce(remaining, 15)
+        tuplet = ElementTree.SubElement(voice, "Tuplet")
+        ElementTree.SubElement(tuplet, "normalNotes").text = str(normal)
+        ElementTree.SubElement(tuplet, "actualNotes").text = str(actual)
+        ElementTree.SubElement(tuplet, "baseNote").text = "128th"
+        rest = ElementTree.SubElement(voice, "Rest")
+        ElementTree.SubElement(rest, "padding").text = "1"
+        ElementTree.SubElement(rest, "durationType").text = "128th"
+        ElementTree.SubElement(rest, "visible").text = "0"
+        ElementTree.SubElement(voice, "endTuplet")
+        changed += 1
     return changed
+
+
+def _reduce(numerator: int, denominator: int) -> tuple[int, int]:
+    import math
+
+    divisor = math.gcd(numerator, denominator)
+    return numerator // divisor, denominator // divisor
