@@ -19,7 +19,7 @@ from .loader import load_pages, merge_pages
 from .mscz_export import export_and_display
 from .notation_patches import apply_patches, load_patches, validate_patches, verify_patches
 from .omr import run_omr
-from .passes import DISPLAY_PASSES, INJECT_PASSES, STRUCTURAL_PASSES, TRUNCATE_OVERFULL
+from .passes import DISPLAY_PASSES, INJECT_PASSES, STRUCTURAL_PASSES
 from .producers import resolve as resolve_producer
 
 
@@ -128,8 +128,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"patches: {changed} tuplet change(s)")
     ctx = Context(facts=facts, pages=pages, options={"truncate_overfull": args.truncate_overfull})
     structural_passes = STRUCTURAL_PASSES
-    if args.truncate_overfull:
-        structural_passes = STRUCTURAL_PASSES + [TRUNCATE_OVERFULL]
     report = run_pipeline(
         doc,
         ctx,
