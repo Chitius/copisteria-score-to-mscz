@@ -18,6 +18,7 @@ from fractions import Fraction
 
 from ..core.mscx import MsxcDocument
 from ..core.mscx_invariants import DURATIONS, _beats, _tuplet_ratio
+from .mscx_canonical import canonicalize
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
 
 
@@ -323,6 +324,7 @@ def normalize_explicit_durations(doc: MsxcDocument) -> int:
             for dot in element.findall("NoteDot"):
                 for visible in dot.findall("visible"):
                     dot.remove(visible)
+    changed += canonicalize(doc)
     return changed
 
 
