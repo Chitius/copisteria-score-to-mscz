@@ -142,13 +142,18 @@ How the two sides are aligned:
   must detect the same number; a mismatch leaves that column **untinted** and records
   `render_layout_mismatch` / `scan_layout_mismatch`. A tinted wrong bar is worse than a plain one;
 - measure numbers are global (page offsets are summed from the earlier pages' measure counts) and
-  `≠` marks a bar with a measure-length violation from the scorepipe report.
+  `≠` marks a bar with a measure-length violation from the scorepipe report;
+- a tall-page render spreads its systems over 30 inches, so blank bands taller than 5% of the page
+  are collapsed before drawing (the count is recorded as `render_collapsed_bands`); the scan keeps
+  its real spacing;
+- a sliver cell (a stem read as a barline) is folded into its neighbour, except for the first and
+  last bar of a system, which are short for real.
 
 The old tool also *stacked* a page whose MusicXML rendered as several pages; that is kept.
 
-Known limit: on dense piano writing the ink test over-detects stems as barlines on the render side,
-so the render stays plain while the scan (anchored by the reader's detections) is tinted. That is
-the same "do not overlay unless the count verifies" rule, not a silent misalignment.
+Known limit: the ink test can still over- or under-detect a bar on a dense page. When the counts
+disagree the offending column stays plain and the page is reported incomplete -- the same "do not
+overlay unless the count verifies" rule, not a silent misalignment.
 
 ## Required human checks
 

@@ -245,3 +245,77 @@ def test_a_broken_detection_cache_falls_back_to_ink():
 
     assert report["scan_measures"] == 2, report
     assert any("detection cache" in warning for warning in report["warnings"])
+
+
+# ---------------------------------------------------------------------------
+# page-layout gaps and sliver cells
+# ---------------------------------------------------------------------------
+
+
+def test_a_tall_blank_band_is_collapsed():
+    from PIL import Image, ImageDraw
+
+    root = workspace("collapse")
+    image = Image.new("RGB", (400, 1200), (255, 255, 255))
+    draw = ImageDraw.Draw(image)
+    for y in (100, 104, 108, 112, 116):
+        draw.line((40, y, 360, y), fill=(0, 0, 0), width=2)
+    for y in (1000, 1004, 1008, 1012, 1016):
+        draw.line((40, y, 360, y), fill=(0, 0, 0), width=2)
+    path = root / "tall.png"
+    image.save(path)
+
+    collapsed, removed = proof_sheet.collapse_blank_bands(Image.open(path).convert("RGB"))
+    assert removed, "the gap between the two staffs must be found"
+    assert collapsed.height < 200, collapsed.height
+    assert collapsed.width == 400
+
+
+def test_normal_spacing_is_left_alone():
+    from PIL import Image, ImageDraw
+
+    root = workspace("collapse_noop")
+    image = Image.new("RGB", (400, 320), (255, 255, 255))
+    draw = ImageDraw.Draw(image)
+    for top in (20, 70):
+        for line in range(5):
+            draw.line((40, top + line * 8, 360, top + line * 8), fill=(0, 0, 0), width=2)
+    path = root / "p.png"
+    image.save(path)
+
+    original = Image.open(path).convert("RGB")
+    collapsed, removed = proof_sheet.collapse_blank_bands(original)
+    # The empty margins are candidates; the 14 px gap between the two staves is music spacing.
+    assert removed, "the empty margins should be found"
+    assert not any(start >= 56 and end <= 104 for start, end in removed), (
+        f"the gap between the staves is music spacing and must stay: {removed}"
+    )
+    assert collapsed.height < original.height
+    assert collapsed.height >= 100, collapsed.height
+
+
+def test_an_interior_sliver_is_merged_but_the_edges_are_not():
+    cells = [
+        (0, 0, 200, 30),
+        (200, 0, 450, 30),
+        (450, 0, 462, 30),
+        (462, 0, 700, 30),
+        (700, 0, 900, 30),
+    ]
+    merged = proof_sheet._merge_narrow_cells(cells)
+    assert len(merged) == 4, merged
+    assert merged[0] == cells[0], "the first bar of a system may be short for real"
+    assert merged[-1] == cells[-1], "the final bar of a system may be short for real"
+    assert (450, 0, 462, 30) not in merged, "the sliver is gone"
+
+
+def test_the_narrow_filter_can_be_switched_off():
+    from PIL import Image
+
+    root = workspace("narrow_off")
+    image = staff_page(root / "p.png", [40, 300, 620])
+    plain, _, _ = proof_sheet.detect_measures(Image.open(image).convert("RGB"))
+    filtered, _, _ = proof_sheet.detect_measures(
+        Image.open(image).convert("RGB"), narrow_filter=True
+    )
+    assert len(filtered) <= len(plain)

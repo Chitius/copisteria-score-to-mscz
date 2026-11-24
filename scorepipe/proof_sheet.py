@@ -40,6 +40,12 @@ TALL_PAGE_HEIGHT = 30.0
 COVER_FRAC = 0.40
 SIDE_FRAC = 0.30
 SIDE_CLEARANCE = 4
+# A bar cannot be this much narrower than its neighbours in the same system.  MuseScore output
+# sometimes gets a stem accepted as a barline; merging the sliver back is what turns 36 detected
+# cells into the 32 the page MusicXML declares.
+MIN_CELL_FRACTION = 0.55
+# Blank bands taller than this share of the page are page-layout gaps, not music spacing.
+BLANK_BAND_FRACTION = 0.05
 
 
 @dataclass(frozen=True)
@@ -172,20 +178,46 @@ def barline_columns(ink, band: tuple[int, int], height: int) -> list[int]:
     return [(group[0] + group[-1]) // 2 for group in groups]
 
 
-def measure_cells(ink, systems: Sequence[tuple[int, int]]) -> list[list[tuple[int, int, int, int]]]:
+def measure_cells(
+    ink, systems: Sequence[tuple[int, int]], *, narrow_filter: bool = False
+) -> list[list[tuple[int, int, int, int]]]:
     """Per system, the cells between barlines detected from ink: ``(x0, y0, x1, y1)``."""
     height = ink.shape[0]
     cells: list[list[tuple[int, int, int, int]]] = []
     for top, bottom in systems:
         xs = _merge(barline_columns(ink, (top, bottom), height))
-        cells.append(
-            [
-                (xs[index], top, xs[index + 1], bottom)
-                for index in range(len(xs) - 1)
-                if xs[index + 1] - xs[index] > 12
-            ]
-        )
+        row = [
+            (xs[index], top, xs[index + 1], bottom)
+            for index in range(len(xs) - 1)
+            if xs[index + 1] - xs[index] > 12
+        ]
+        cells.append(_merge_narrow_cells(row) if narrow_filter else row)
     return cells
+
+
+def _merge_narrow_cells(
+    cells: Sequence[tuple[int, int, int, int]], fraction: float = MIN_CELL_FRACTION
+) -> list[tuple[int, int, int, int]]:
+    """Fold an interior sliver into the cell on its left; a stem read as a barline makes exactly that.
+
+    The first and last cell of a system are never merged: they are often short for real (a pickup
+    and a final bar), and merging them cost a correct bar on the measured page (36 detected cells
+    merged down to 31 instead of 32).
+    """
+    if len(cells) < 3:
+        return list(cells)
+    widths = sorted(cell[2] - cell[0] for cell in cells)
+    median = widths[len(widths) // 2]
+    if not median:
+        return list(cells)
+    merged: list[tuple[int, int, int, int]] = [cells[0]]
+    for cell in cells[1:-1]:
+        if (cell[2] - cell[0]) < median * fraction:
+            merged[-1] = (merged[-1][0], merged[-1][1], cell[2], merged[-1][3])
+        else:
+            merged.append(cell)
+    merged.append(cells[-1])
+    return merged
 
 
 def barline_columns_from_dets(
@@ -223,13 +255,17 @@ def _merge(xs: Iterable[int], tolerance: int = 8) -> list[int]:
 
 
 def detect_rows(
-    image, detections: Sequence[dict] | None = None, max_width: int = DETECT_WIDTH
+    image,
+    detections: Sequence[dict] | None = None,
+    max_width: int = DETECT_WIDTH,
+    *,
+    narrow_filter: bool = False,
 ) -> tuple[list[list[tuple[int, int, int, int]]], list[tuple[int, int]], float]:
     """Measure cells per system (image coordinates), the systems, and the mask-to-image scale."""
     ink, mask_to_image = ink_mask(image, max_width)
     bands = staff_bands(ink, ink.shape[1])
     systems = systems_from_ink(ink, bands)
-    cells = measure_cells(ink, systems)
+    cells = measure_cells(ink, systems, narrow_filter=narrow_filter)
     scale = mask_to_image
     if detections:
         # The detections are the reader's own barlines: use them *instead of* the ink guess, not
@@ -237,25 +273,82 @@ def detect_rows(
         # 32 -> 37 cells on one page, which then fails the count check for the wrong reason).
         scaled_systems = [tuple(round(value * scale) for value in system) for system in systems]
         rows = barline_columns_from_dets(detections, systems, scale)
-        cells = [
-            [
+        built = []
+        for (top, bottom), xs in zip(scaled_systems, rows):
+            row = [
                 (xs[index], top, xs[index + 1], bottom)
                 for index in range(len(xs) - 1)
                 if xs[index + 1] - xs[index] > 12
             ]
-            for (top, bottom), xs in zip(scaled_systems, rows)
-        ]
+            built.append(_merge_narrow_cells(row) if narrow_filter else row)
+        cells = built
     systems_scaled = [tuple(round(value * scale) for value in system) for system in systems]
     return cells, systems_scaled, scale
 
 
 def detect_measures(
-    image, detections: Sequence[dict] | None = None, max_width: int = DETECT_WIDTH
+    image,
+    detections: Sequence[dict] | None = None,
+    max_width: int = DETECT_WIDTH,
+    *,
+    narrow_filter: bool = False,
 ) -> tuple[list[tuple[int, int, int, int]], list[tuple[int, int]], float]:
     """Measure boxes in reading order, the systems, and the scale from detection space to pixels."""
-    rows, systems, scale = detect_rows(image, detections, max_width)
+    rows, systems, scale = detect_rows(image, detections, max_width, narrow_filter=narrow_filter)
     flat = [cell for row in rows for cell in row]
     return flat, systems, scale
+
+
+def collapse_blank_bands(
+    image, *, min_fraction: float = BLANK_BAND_FRACTION, margin: int = 12
+):
+    """Remove page-layout gaps taller than ``min_fraction`` of the page height.
+
+    A tall-page render spreads the systems over 30 inches, so the sheet was mostly white.  Removing
+    the gaps (keeping a margin around the music) makes the two columns comparable at one glance
+    without touching the notation.
+    """
+    numpy = _numpy()
+    from PIL import Image
+
+    gray = numpy.asarray(image.convert("L"))
+    ink_rows = (gray < 200).any(axis=1)
+    height = len(ink_rows)
+    if height == 0 or not ink_rows.any():
+        return image, []
+    runs: list[tuple[int, int]] = []
+    start = None
+    for y, has_ink in enumerate(ink_rows):
+        if not has_ink and start is None:
+            start = y
+        elif has_ink and start is not None:
+            runs.append((start, y))
+            start = None
+    if start is not None:
+        runs.append((start, height))
+    removed = [(a, b) for a, b in runs if (b - a) > height * min_fraction]
+    if not removed:
+        return image, []
+    keep = numpy.ones(height, dtype=bool)
+    for a, b in removed:
+        keep[a + margin : b - margin] = False
+    rows = numpy.nonzero(keep)[0]
+    segments: list[tuple[int, int]] = []
+    segment_start = int(rows[0])
+    previous = int(rows[0])
+    for y in rows[1:]:
+        if int(y) != previous + 1:
+            segments.append((segment_start, previous + 1))
+            segment_start = int(y)
+        previous = int(y)
+    segments.append((segment_start, previous + 1))
+    total = sum(b - a for a, b in segments)
+    canvas = Image.new(image.mode, (image.width, total), (255, 255, 255))
+    top = 0
+    for a, b in segments:
+        canvas.paste(image.crop((0, a, image.width, b)), (0, top))
+        top += b - a
+    return canvas, removed
 
 
 def ink_crop_box(image, margin: int = 26) -> tuple[int, int, int, int]:
@@ -625,14 +718,18 @@ def build_sheet(
             panels = []
             flat: list[tuple[int, int, int, int]] = []
             offset_y = 0
+            collapsed: list[tuple[int, int]] = []
             for path in render_page_musicxml(page.musicxml, musescore, render_dir):
                 panel = crop_to_ink(Image.open(path).convert("RGB"))
-                cells, _, _ = detect_measures(panel)
+                panel, removed = collapse_blank_bands(panel)
+                collapsed.extend(removed)
+                cells, _, _ = detect_measures(panel, narrow_filter=True)
                 flat.extend(
                     (x0, y0 + offset_y, x1, y1 + offset_y) for x0, y0, x1, y1 in cells
                 )
                 panels.append(panel)
                 offset_y += panel.height + 12  # matches the gap in stack()
+            report["render_collapsed_bands"] = len(collapsed)
             report["render_measures"] = len(flat)
             if len(panels) > 1:
                 warnings.append(f"the page MusicXML rendered as {len(panels)} pages; stacked in order")
