@@ -350,9 +350,11 @@ class DropFirstTimeSignature:
         phase=Phase.DISPLAY,
         kind=Kind.MECHANICAL,
         owns=("initial-time-signature",),
-        description="delete the initial courtesy 4/4 instead of leaving it invisible",
-        measure="initial time signature when the score never changes metre",
+        description="delete an initial courtesy 4/4 instead of leaving it invisible",
+        measure="initial 4/4 time signature when the score never changes metre",
     )
+
+    DEFAULT_METER = (4, 4)
 
     def run(self, doc: MsxcDocument, ctx: Context) -> PassResult:
         staves = list(doc.root.iter("Staff"))
@@ -366,6 +368,16 @@ class DropFirstTimeSignature:
                 continue
             for voice in measure.findall("voice"):
                 for time_sig in list(voice.findall("TimeSig")):
+                    # Only 4/4 is MuseScore's default, so only 4/4 can be a courtesy that is safe
+                    # to delete.  Removing any other metre makes MuseScore fall back to 4/4 and
+                    # every 3/4 bar becomes an irregular 3-beat bar (measured on the Schubert
+                    # page: 33 mscx-measure-length violations from this pass alone).
+                    meter = (
+                        int(time_sig.findtext("sigN") or 4),
+                        int(time_sig.findtext("sigD") or 4),
+                    )
+                    if meter != self.DEFAULT_METER:
+                        continue
                     voice.remove(time_sig)
                     changed += 1
         return PassResult(changed=changed)

@@ -69,3 +69,29 @@ class LoaderTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MultiPartPageTest(unittest.TestCase):
+    def test_a_page_with_two_parts_is_refused_instead_of_losing_one(self):
+        page = PAGES / "page1.musicxml"
+        root_text = page.read_text(encoding="utf-8")
+        # duplicate the single part into a second part, as a two-staff piano page would arrive
+        import xml.etree.ElementTree as ElementTree
+
+        root = ElementTree.fromstring(root_text)
+        part = root.find("part")
+        clone = ElementTree.fromstring(ElementTree.tostring(part))
+        clone.set("id", "P2")
+        root.append(clone)
+        score_part = root.find("part-list/score-part")
+        clone_list = ElementTree.fromstring(ElementTree.tostring(score_part))
+        clone_list.set("id", "P2")
+        root.find("part-list").append(clone_list)
+        target = Path(__file__).parent / ".runs" / "two_parts.musicxml"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        ElementTree.ElementTree(root).write(target, encoding="utf-8", xml_declaration=True)
+
+        with self.assertRaises(ValueError) as raised:
+            merge_pages([target])
+        self.assertIn("2 parts", str(raised.exception))
+        self.assertIn("silently", str(raised.exception))

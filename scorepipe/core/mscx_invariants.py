@@ -98,6 +98,38 @@ def empty_voices(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     return out
 
 
+def signature_timeline(doc: MsxcDocument) -> list[tuple[int, Fraction]]:
+    """The first staff that declares time signatures, as `(measure_index, metre)` events.
+
+    MuseScore prints the signature on the top staff of a system; the others inherit it.  This is
+    the timeline a staff without its own signature has to follow.
+    """
+    for staff in doc.staves():
+        events: list[tuple[int, Fraction]] = []
+        for index, measure in enumerate(staff.findall("Measure"), start=1):
+            for time in measure.iter("TimeSig"):
+                try:
+                    events.append(
+                        (index, Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4)))
+                    )
+                except (ValueError, ZeroDivisionError):
+                    continue
+        if events:
+            return events
+    return []
+
+
+def meter_at(events: list[tuple[int, Fraction]], index: int) -> Fraction:
+    """The metre in force at `index`; 4/4 before the first declared signature."""
+    meter = Fraction(4, 4)
+    for at, value in events:
+        if at <= index:
+            meter = value
+        else:
+            break
+    return meter
+
+
 def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     """MuseScore's tick model, not a local beat approximation.
 
@@ -110,8 +142,20 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
 
     out: list[Violation] = []
     meters = {}
+    # MuseScore writes the time signature on the top staff only; a stave without one shares the
+    # system's metre.  Seeding every staff at 4/4 made a 3/4 score report 33 false violations
+    # (measured on the Schubert page) because the piano staff never carries the signature.
+    fallback = signature_timeline(doc)
+    own_signature = {
+        id(staff)
+        for staff in doc.staves()
+        if any(True for measure in staff.findall("Measure") for _ in measure.iter("TimeSig"))
+    }
     for staff, index, measure in doc.iter_measures():
-        meter = meters.get(id(staff), Fraction(4, 4))
+        if id(staff) in own_signature:
+            meter = meters.get(id(staff), Fraction(4, 4))
+        else:
+            meter = meter_at(fallback, index)
         for time in measure.iter("TimeSig"):
             try:
                 meter = Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4))
@@ -179,8 +223,20 @@ def tuplet_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
 
     out: list[Violation] = []
     meters = {}
+    # MuseScore writes the time signature on the top staff only; a stave without one shares the
+    # system's metre.  Seeding every staff at 4/4 made a 3/4 score report 33 false violations
+    # (measured on the Schubert page) because the piano staff never carries the signature.
+    fallback = signature_timeline(doc)
+    own_signature = {
+        id(staff)
+        for staff in doc.staves()
+        if any(True for measure in staff.findall("Measure") for _ in measure.iter("TimeSig"))
+    }
     for staff, index, measure in doc.iter_measures():
-        meter = meters.get(id(staff), Fraction(4, 4))
+        if id(staff) in own_signature:
+            meter = meters.get(id(staff), Fraction(4, 4))
+        else:
+            meter = meter_at(fallback, index)
         for time in measure.iter("TimeSig"):
             try:
                 meter = Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4))

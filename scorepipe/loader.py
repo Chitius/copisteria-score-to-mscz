@@ -39,6 +39,17 @@ def merge_pages(paths: list[str | Path]) -> MergedPages:
     part_list = first.find("part-list")
     if part_list is None:
         raise ValueError("page MusicXML has no part-list")
+    # The merge keeps one <part> per page.  A page with more than one part would lose every part
+    # after the first *silently* -- measured on the Schubert page: the piano (526 notes) vanished
+    # and only the vocal line came out.  Refuse instead, and say what to do about it.
+    for path, page_root in zip(paths, roots):
+        parts = page_root.findall("part")
+        if len(parts) > 1:
+            raise ValueError(
+                f"{path}: page MusicXML has {len(parts)} parts; this loader merges one part per "
+                "page and would drop the rest silently. Split the page by part before loading "
+                "(or extend the loader to all parts)."
+            )
     divisions = _target_divisions(roots)
     root = ElementTree.Element("score-partwise", {"version": first.get("version") or "4.0"})
     root.append(ElementTree.fromstring(ElementTree.tostring(part_list)))

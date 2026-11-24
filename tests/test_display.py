@@ -262,3 +262,31 @@ class PaddingVoiceContentTest(unittest.TestCase):
         self.assertIsNotNone(measure.find('.//Note'))
         again = run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
         self.assertEqual(again.changes, 0)
+
+
+class FirstTimeSignatureTest(unittest.TestCase):
+    def _doc(self, beats: str) -> MsxcDocument:
+        return MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score><Staff id='1'><Measure><voice>"
+                f"<TimeSig><sigN>{beats}</sigN><sigD>4</sigD></TimeSig>"
+                "<Chord><durationType>measure</durationType><Note><pitch>60</pitch></Note></Chord>"
+                "</voice></Measure></Staff></Score></museScore>"
+            )
+        )
+
+    def test_a_courtesy_four_four_is_dropped(self):
+        from scorepipe.passes.mscx_display import DropFirstTimeSignature
+
+        doc = self._doc("4")
+        result = DropFirstTimeSignature().run(doc, Context())
+        self.assertEqual(result.changed, 1)
+        self.assertEqual([ts.findtext("sigN") for ts in doc.root.iter("TimeSig")], [])
+
+    def test_a_three_four_signature_is_kept(self):
+        from scorepipe.passes.mscx_display import DropFirstTimeSignature
+
+        doc = self._doc("3")
+        result = DropFirstTimeSignature().run(doc, Context())
+        self.assertEqual(result.changed, 0)
+        self.assertEqual([ts.findtext("sigN") for ts in doc.root.iter("TimeSig")], ["3"])

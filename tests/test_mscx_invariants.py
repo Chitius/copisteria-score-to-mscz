@@ -207,3 +207,35 @@ def _doc_with_voices(voices: str) -> MsxcDocument:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MeterInheritanceTest(unittest.TestCase):
+    """MuseScore writes the signature on the top staff; the others share the system metre."""
+
+    def _two_staves(self, include_time_on_second: bool) -> MsxcDocument:
+        timesig = "<TimeSig><sigN>3</sigN><sigD>4</sigD></TimeSig>"
+        second = timesig if include_time_on_second else ""
+        return MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score>"
+                "<Staff id='1'><Measure><voice>"
+                + timesig
+                + "<Chord><durationType>half</durationType><Note><pitch>60</pitch></Note></Chord>"
+                + "<Chord><durationType>quarter</durationType><Note><pitch>62</pitch></Note></Chord>"
+                + "</voice></Measure></Staff>"
+                "<Staff id='2'><Measure><voice>"
+                + second
+                + "<Chord><durationType>half</durationType><Note><pitch>40</pitch></Note></Chord>"
+                + "<Chord><durationType>quarter</durationType><Note><pitch>41</pitch></Note></Chord>"
+                + "</voice></Measure></Staff>"
+                "</Score></museScore>"
+            )
+        )
+
+    def test_the_second_staff_inherits_three_four(self):
+        found = measure_lengths(self._two_staves(False), Context())
+        self.assertEqual(found, [], [str(v) for v in found])
+
+    def test_a_second_staff_with_its_own_signature_still_works(self):
+        found = measure_lengths(self._two_staves(True), Context())
+        self.assertEqual(found, [], [str(v) for v in found])
