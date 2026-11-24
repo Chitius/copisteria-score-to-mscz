@@ -16,6 +16,7 @@ wrong bar is worse than none.  Exit 0 = every page aligned, 1 = some page did no
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -68,9 +69,14 @@ def main() -> int:
     parser.add_argument("--report", type=Path, help="scorepipe report.json; marks measure-length mismatches with =")
     parser.add_argument("--out", type=Path, help="output directory (default: <pages>/sheet)")
     parser.add_argument("--musescore", help="MuseScore executable (default: discover)")
-    parser.add_argument("--red", type=float, default=2.0, help="score at or above which a bar is red")
-    parser.add_argument("--yellow", type=float, default=0.8, help="score at which a bar turns yellow")
-    parser.add_argument("--width", type=int, default=900, help="width of each column in pixels")
+    parser.add_argument("--red", type=float, default=proof_sheet.RED_MIN, help="score at or above which a bar is red (default 3.0)")
+    parser.add_argument("--yellow", type=float, default=proof_sheet.YELLOW_MIN, help="score at which a bar turns yellow (default 1.5)")
+    parser.add_argument("--width", type=int, default=proof_sheet.COLUMN_WIDTH, help="width of each column in pixels")
+    parser.add_argument(
+        "--no-offset",
+        action="store_true",
+        help="number measures from 1 on every page instead of continuing across the score",
+    )
     args = parser.parse_args()
 
     if args.pages is None and args.work_dir is None:
@@ -83,6 +89,13 @@ def main() -> int:
         parser.error(f"page directory not found: {directory}")
     scan_dir = args.scan_dir or (None if args.pages else args.work_dir / "pages")
     pages = build_pages(directory, scan_dir)
+    if args.no_offset:
+        pages = [
+            proof_sheet.SheetPage(
+                stem=page.stem, scan=page.scan, musicxml=page.musicxml, reading=page.reading, dets=page.dets
+            )
+            for page in pages
+        ]
     if not pages:
         parser.error(f"no page MusicXML in {directory}")
 
@@ -98,11 +111,16 @@ def main() -> int:
         width=args.width,
     )
     for page in summary["outputs"]["pages"]:
-        print(f"{page['page']}: {Path(page['image']).name}")
+        report = json.loads(Path(page["json"]).read_text(encoding="utf-8"))
+        warn = f" ({len(report['warnings'])} warning(s))" if report["warnings"] else ""
+        print(
+            f"{page['page']}: red {len(report['red'])} / yellow {len(report['yellow'])} "
+            f"/ {report['measures']} measure(s){warn}"
+        )
     for failure in summary["failures"]:
         print(f"{failure.get('page')}: {failure['code']}: {failure['message']}", file=sys.stderr)
     print(f"status: {summary['status']} ({summary['pages']}/{summary['requested_pages']} pages)")
-    print(f"out: {out_dir}")
+    print(f"priority list: {summary['outputs']['markdown']}")
     return 1 if summary["status"] == "incomplete" else 0
 
 

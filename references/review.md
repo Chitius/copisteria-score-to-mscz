@@ -135,19 +135,30 @@ python scripts/review_sheet.py --pages review/pages --scan-dir review/scans --mu
 
 How the two sides are aligned:
 
+- every page is analyzed first, then built; the tiers are absolute (`red >= 3.0`, `yellow >= 1.5`,
+  the same heads and weights everywhere) so a score means the same thing on every page, and the
+  priority list is ranked across the whole score;
 - both columns are cut into measures by measured barlines; on the scan the reader's own
   `barLine_*` detections (`<stem>.dets_*.json`) are used when present, with the ink test as a
   fallback;
 - the render must detect exactly as many measures as the page MusicXML declares, and the scan
   must detect the same number; a mismatch leaves that column **untinted** and records
   `render_layout_mismatch` / `scan_layout_mismatch`. A tinted wrong bar is worse than a plain one;
-- measure numbers are global (page offsets are summed from the earlier pages' measure counts) and
-  `≠` marks a bar with a measure-length violation from the scorepipe report;
-- a tall-page render spreads its systems over 30 inches, so blank bands taller than 5% of the page
-  are collapsed before drawing (the count is recorded as `render_collapsed_bands`); the scan keeps
-  its real spacing;
-- a sliver cell (a stem read as a barline) is folded into its neighbour, except for the first and
-  last bar of a system, which are short for real.
+- measure numbers are global (page offsets are summed from the earlier pages' measure counts; use
+  `--no-offset` to number every page from 1) and `≠` marks a bar with a measure-length violation
+  from the scorepipe report;
+- both sides get the same colour and the same filled badge; a tall-page render spreads its systems
+  over 30 inches, so blank bands taller than 5% of the page are collapsed before drawing (the count
+  is recorded as `render_collapsed_bands`), while the scan keeps its real spacing;
+- the legend (red/yellow rows, the `≠` row when there are length errors, and a footnote) sits in
+  the caption band under both columns, never over the music.
+
+Outputs, named after the previous skill: `<page>.compare.png`, `<page>.compare.json`,
+`review_sheet.md` (the score-wide priority list: objective length errors first, then by score) and
+`review_sheet_summary.json` (three-state status, red/yellow/length counts, exit 1 when incomplete).
+
+A sliver cell (a stem read as a barline) is folded into its neighbour, except for the first and
+last bar of a system, which are short for real.
 
 The old tool also *stacked* a page whose MusicXML rendered as several pages; that is kept.
 

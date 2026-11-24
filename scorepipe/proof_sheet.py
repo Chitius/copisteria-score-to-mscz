@@ -31,11 +31,22 @@ from xml.etree import ElementTree
 from .confidence import summarise
 
 RED = (214, 39, 40)
-YELLOW = (255, 196, 0)
-TINT_ALPHA = 46
-RENDER_DPI = 110
+YELLOW = (235, 170, 0)
+TINT_ALPHA = 64
+RENDER_DPI = 150
 DETECT_WIDTH = 1500
 TALL_PAGE_HEIGHT = 30.0
+# The tiers are absolute: the same heads and weights everywhere, so a score means the same thing
+# on every page.  Red is "a class or position was rewritten, or existence plus something else";
+# yellow is "a routine context override, or a weak low-probability signal".
+RED_MIN = 3.0
+YELLOW_MIN = 1.5
+COLUMN_WIDTH = 900
+COLUMN_GAP = 28
+CAPTION_BAND = 96
+LEGEND_MARGIN = 18
+LEGEND_PAD = 12
+BACKGROUND = (250, 250, 247)
 # Barline vs stem: a barline is tall and has nothing beside it; a stem is tall with ink around.
 COVER_FRAC = 0.40
 SIDE_FRAC = 0.30
@@ -532,27 +543,71 @@ def _font(size: int):
     return ImageFont.load_default()
 
 
-def _badge(draw, text: str, box, colour, font) -> None:
-    x0, y0, x1, _ = box
-    left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
-    width = (right - left) + 14
-    height = (bottom - top) + 10
-    x = int(x0) + 2
-    y = int(y0) - height - 4
-    if y < 0:
-        y = int(y0) + 2
-    x = max(0, min(x, max(0, int(x1) - width)))
+def _badge(draw, text: str, box, colour, font, ink=None, image_size=None) -> None:
+    """A filled badge above the measure, nudged until it covers no ink.
+
+    A filled badge with white text is what the previous skill drew, and it stays readable over
+    staff lines.  The nudge order matters: shift right first, then up, and stop at the bar's own
+    right edge -- a label that drifts onto the neighbouring bar is worse than one that overlaps.
+    """
+    left, upper, right, lower = draw.textbbox((0, 0), text, font=font)
+    text_width, text_height = right - left, lower - upper
+    width_px = text_width + int(font.size * 0.7)
+    height_px = text_height + int(font.size * 0.45)
+    x0, y0, x1, _ = (int(value) for value in box)
+    x = x0 + 2
+    y = max(0, y0 - height_px - max(6, int(font.size * 0.55)))
+    max_x = x1 - width_px + 6
+
+    def ink_share(candidate: tuple[int, int]) -> float:
+        if ink is None or image_size is None:
+            return 0.0
+        cx, cy = candidate
+        x0c, y0c = max(0, cx), max(0, cy)
+        x1c, y1c = min(image_size[0], cx + width_px), min(image_size[1], cy + height_px)
+        if x1c <= x0c or y1c <= y0c:
+            return 1.0
+        patch = ink[y0c:y1c, x0c:x1c]
+        return float(patch.mean()) if patch.size else 1.0
+
+    for dx, dy in [(0, 0)] + [(int(width_px * step), 0) for step in (0.8, 1.6, 2.4)] + [(0, -int(height_px * 1.5))]:
+        bx, by = x + dx, y + dy
+        if bx < 0 or by < 0 or image_size is None:
+            continue
+        if bx + width_px > image_size[0] or by + height_px > image_size[1]:
+            continue
+        if max_x is not None and bx > max_x:
+            continue
+        if ink_share((bx, by)) < 0.04:
+            x, y = bx, by
+            break
     draw.rounded_rectangle(
-        (x, y, x + width, y + height), radius=6, fill=colour + (245,), outline=(255, 255, 255, 220)
+        (x, y, x + width_px, y + height_px),
+        radius=max(3, font.size // 5),
+        fill=colour + (240,),
+        outline=(255, 255, 255, 210),
+        width=max(1, font.size // 12),
     )
-    draw.text((x + 7 - left, y + 5 - top), text, font=font, fill=(255, 255, 255, 255))
+    draw.text(
+        (x + (width_px - text_width) / 2 - left, y + (height_px - text_height) / 2 - upper),
+        text,
+        font=font,
+        fill=(255, 255, 255, 255),
+    )
 
 
-def annotate(image, cells: Sequence[tuple[int, int, int, int]], colours: dict[int, tuple], labels: dict[int, str]):
+def annotate(
+    image,
+    cells: Sequence[tuple[int, int, int, int]],
+    colours: dict[int, tuple],
+    labels: dict[int, str],
+):
     """Tint the given cells (0-based index) and label them with the global measure number."""
+    numpy = _numpy()
     from PIL import Image, ImageDraw
 
     rgba = image.convert("RGBA")
+    ink = numpy.asarray(image.convert("L")) < 190
     overlay = Image.new("RGBA", rgba.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     font = _font(max(13, round(22 * image.height / 1700)))
@@ -562,48 +617,150 @@ def annotate(image, cells: Sequence[tuple[int, int, int, int]], colours: dict[in
             continue
         box = cells[index]
         draw.rectangle(box, fill=colour + (TINT_ALPHA,), outline=colour + (210,), width=thickness)
-        _badge(draw, labels.get(index, str(index + 1)), box, colour, font)
+        _badge(draw, labels.get(index, str(index + 1)), box, colour, font, ink=ink, image_size=image.size)
     return Image.alpha_composite(rgba, overlay).convert("RGB")
 
 
 def stack(panels: Sequence):
-    """Stack render pages into one column."""
+    """Stack render pages into one column, keeping each panel's y offset."""
     from PIL import Image
 
     if len(panels) == 1:
-        return panels[0]
-    gap = 12
+        return panels[0], [0]
     width = max(panel.width for panel in panels)
-    height = sum(panel.height for panel in panels) + gap * (len(panels) - 1)
-    canvas = Image.new("RGB", (width, height), (255, 255, 255))
+    height = sum(panel.height for panel in panels) + 24 * (len(panels) - 1)
+    canvas = Image.new("RGB", (width, height), BACKGROUND)
+    offsets = []
     top = 0
     for panel in panels:
         canvas.paste(panel, (0, top))
-        top += panel.height + gap
-    return canvas
+        offsets.append(top)
+        top += panel.height + 24
+    return canvas, offsets
 
 
-def compose(left, right, left_caption: str, right_caption: str, width: int = 900):
-    """Put the two columns at one width with captions underneath."""
+ROW_LABELS = (
+    "confidence lowest: check for a wrong class or a missing/extra symbol",
+    "confidence medium: routine voice/dot/onset fixes, fewer errors",
+)
+LIST_LABELS = ("red", "yellow")
+FOOTNOTE = (
+    "Source: copisteria per-symbol posteriors and evidence. Colour is a reading order, not a "
+    "verdict; an unmarked bar is not proven correct."
+)
+
+
+def legend_size(canvas, red: int, yellow: int, length_count: int, font, small) -> tuple[int, int]:
+    """Wide enough for its longest line, so the text never spills out of the box."""
+    from PIL import ImageDraw
+
+    probe = ImageDraw.Draw(canvas)
+    rows = list(ROW_LABELS)
+    if length_count:
+        rows.append("also: bars whose voices do not add up to the metre (badge has ≠)")
+    width = max(
+        max(probe.textlength(text, font=font) for text in rows) + 2 * (20 + 8) + 16,
+        probe.textlength(FOOTNOTE, font=small),
+    )
+    big = probe.textbbox((0, 0), rows[0], font=font)
+    small_box = probe.textbbox((0, 0), FOOTNOTE, font=small)
+    height = (
+        2 * LEGEND_PAD
+        + len(rows) * (big[3] - big[1] + 6)
+        + 8
+        + (small_box[3] - small_box[1])
+    )
+    return int(width) + 2 * LEGEND_PAD + 8, int(height)
+
+
+def draw_legend(canvas, box, red: int, yellow: int, length_count: int, font, small) -> None:
+    from PIL import ImageDraw
+
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    x0, y0, _, _ = box
+    draw.rounded_rectangle(box, radius=8, fill=(255, 255, 255, 236), outline=(150, 150, 150, 255), width=1)
+
+    def row(text: str, colour: tuple[int, int, int], top: int) -> int:
+        left, upper, right, lower = draw.textbbox((0, 0), text, font=font)
+        text_height = lower - upper
+        swatch = max(12, text_height)
+        centre = top + text_height / 2
+        draw.rectangle(
+            (x0 + LEGEND_PAD, centre - swatch / 2, x0 + LEGEND_PAD + swatch, centre + swatch / 2),
+            fill=colour + (80,),
+            outline=colour + (220,),
+            width=2,
+        )
+        draw.text((x0 + LEGEND_PAD + swatch + 8, top - upper), text, font=font, fill=(30, 30, 30, 255))
+        return int(text_height) + 6
+
+    line_height = row(ROW_LABELS[0], RED, y0 + LEGEND_PAD)
+    line_height = row(ROW_LABELS[1], YELLOW, y0 + LEGEND_PAD + line_height)
+    top = y0 + LEGEND_PAD + 2 * line_height
+    if length_count:
+        top += row("also: bars whose voices do not add up to the metre (badge has ≠)", (28, 32, 40), top)
+    draw.text((x0 + LEGEND_PAD, top + 8), FOOTNOTE, font=small, fill=(90, 90, 90, 255))
+
+
+def compose(
+    left,
+    right,
+    left_caption: str,
+    right_caption: str,
+    *,
+    red: int,
+    yellow: int,
+    length_count: int,
+    width: int = COLUMN_WIDTH,
+):
+    """Two columns at one width, captions under each, legend in the caption band."""
     from PIL import Image, ImageDraw
 
     def fit(panel):
         return panel.resize((width, max(1, round(panel.height * width / panel.width))), Image.LANCZOS)
 
     left, right = fit(left), fit(right)
-    gap = 24
-    caption_band = 54
     body = max(left.height, right.height)
-    canvas = Image.new(
-        "RGB", (width * 2 + gap, body + caption_band), (255, 255, 255)
-    )
+    right_x = width + COLUMN_GAP
+    canvas = Image.new("RGB", (right_x + width, body + CAPTION_BAND), BACKGROUND)
     canvas.paste(left, (0, 0))
-    canvas.paste(right, (width + gap, 0))
+    canvas.paste(right, (right_x, 0))
+
     draw = ImageDraw.Draw(canvas)
-    font = _font(15)
-    draw.line((width + gap // 2, 0, width + gap // 2, body), fill=(200, 200, 200))
-    draw.text((8, body + 8), left_caption, font=font, fill=(60, 60, 60))
-    draw.text((width + gap + 8, body + 8), right_caption, font=font, fill=(60, 60, 60))
+    rule_y = body + 20
+    caption_font = _font(24)
+    caption_ink = (72, 72, 68)
+    for x, text in ((0, left_caption), (right_x, right_caption)):
+        inset = 44
+        draw.line((x + inset, rule_y, x + width - inset, rule_y), fill=(206, 204, 197), width=1)
+        left_box = draw.textbbox((0, 0), text, font=caption_font)
+        text_width = left_box[2] - left_box[0]
+        draw.text(
+            (x + (width - text_width) / 2 - left_box[0], rule_y + 16 - left_box[1]),
+            text,
+            font=caption_font,
+            fill=caption_ink,
+        )
+    draw.line((right_x - COLUMN_GAP // 2, 0, right_x - COLUMN_GAP // 2, body + CAPTION_BAND - 24), fill=(232, 230, 223))
+
+    font = _font(20)
+    small = _font(15)
+    legend_w, legend_h = legend_size(canvas, red, yellow, length_count, font, small)
+    band_height = CAPTION_BAND + legend_h + 24
+    extended = Image.new("RGB", (canvas.width, body + band_height), BACKGROUND)
+    extended.paste(canvas, (0, 0))
+    canvas = extended
+    draw = ImageDraw.Draw(canvas)
+    draw.line((right_x - COLUMN_GAP // 2, 0, right_x - COLUMN_GAP // 2, body + band_height - 24), fill=(232, 230, 223))
+    draw_legend(
+        canvas,
+        (LEGEND_MARGIN, body + CAPTION_BAND + 6, LEGEND_MARGIN + legend_w, body + CAPTION_BAND + 6 + legend_h),
+        red,
+        yellow,
+        length_count,
+        font,
+        small,
+    )
     return canvas
 
 
@@ -612,21 +769,10 @@ def compose(left, right, left_caption: str, right_caption: str, width: int = 900
 # ---------------------------------------------------------------------------
 
 
-def build_sheet(
-    page: SheetPage,
-    out_dir: Path,
-    *,
-    musescore: str | None,
-    report_path: Path | None = None,
-    red_min: float = 2.0,
-    yellow_min: float = 0.8,
-    width: int = 900,
-) -> dict:
-    """Render the page, align both sides by measured bar count and write ``<stem>.sheet.png``."""
+def analyze_page(page: SheetPage, report_path: Path | None = None) -> dict:
+    """Everything that does not need the engraver: the scan's measures and the score buckets."""
     from PIL import Image
 
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
     expected = page_measure_count(page.musicxml)
     warnings: list[str] = []
     failures: list[dict] = []
@@ -637,12 +783,15 @@ def build_sheet(
         "reading": str(page.reading),
         "offset": page.offset,
         "measures_declared": expected,
+        "measures": 0,
         "unplaced_symbols": None,
         "red": [],
         "yellow": [],
         "length_issues": [],
+        "measure_scores": [],
         "render_measures": None,
         "scan_measures": None,
+        "render_collapsed_bands": 0,
         "aligned": False,
         "warnings": warnings,
         "failures": failures,
@@ -685,14 +834,56 @@ def build_sheet(
         origin=(origin_x, origin_y),
         system_counts=counts,
     )
+    lengths = length_measures(report_path, page.offset, expected)
+
+    report["unplaced_symbols"] = unplaced
+    report["length_issues"] = lengths
+    report["scan_measures"] = len(scan_cells)
+    report["detections"] = str(page.dets) if detections else None
+    report["measure_scores"] = [
+        {"measure": page.offset + measure, "score": bucket["score"], "symbols": bucket["symbols"]}
+        for measure, bucket in sorted(scores.items())
+    ]
+    return {
+        "report": report,
+        "scan": scan_crop,
+        "cells": scan_cells,
+        "scores": scores,
+        "expected": expected,
+        "lengths": lengths,
+    }
+
+
+def build_sheet(
+    page: SheetPage,
+    analysis: dict,
+    out_dir: Path,
+    *,
+    musescore: str | None,
+    red_min: float = RED_MIN,
+    yellow_min: float = YELLOW_MIN,
+    width: int = COLUMN_WIDTH,
+) -> dict:
+    """Render the page, align both sides by measured bar count and write ``<stem>.sheet.png``."""
+    from PIL import Image
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report = analysis["report"]
+    scan_crop = analysis["scan"]
+    scan_cells = analysis["cells"]
+    scores = analysis["scores"]
+    expected = analysis["expected"]
+    lengths = analysis["lengths"]
+    warnings = report["warnings"]
+    failures = report["failures"]
+
     measures = sorted(scores)
     red = [measure for measure in measures if scores[measure]["score"] >= red_min]
     yellow = [measure for measure in measures if yellow_min <= scores[measure]["score"] < red_min]
-    lengths = length_measures(report_path, page.offset, expected)
-    report["unplaced_symbols"] = unplaced
+    report["measures"] = expected
     report["red"] = [page.offset + measure for measure in red]
     report["yellow"] = [page.offset + measure for measure in yellow]
-    report["length_issues"] = lengths
 
     colours: dict[int, tuple] = {}
     for measure in red:
@@ -702,8 +893,6 @@ def build_sheet(
     labels = {index: str(page.offset + index + 1) for index in range(expected)}
     for measure in lengths:
         labels[measure - page.offset - 1] = f"{measure}≠"
-    report["scan_measures"] = len(scan_cells)
-    report["detections"] = str(page.dets) if detections else None
 
     left = None
     if musescore is None:
@@ -716,20 +905,20 @@ def build_sheet(
                 shutil.rmtree(render_dir, ignore_errors=True)
             render_dir.mkdir(parents=True, exist_ok=True)
             panels = []
-            flat: list[tuple[int, int, int, int]] = []
-            offset_y = 0
+            cells_by_panel = []
             collapsed: list[tuple[int, int]] = []
             for path in render_page_musicxml(page.musicxml, musescore, render_dir):
                 panel = crop_to_ink(Image.open(path).convert("RGB"))
                 panel, removed = collapse_blank_bands(panel)
                 collapsed.extend(removed)
                 cells, _, _ = detect_measures(panel, narrow_filter=True)
-                flat.extend(
-                    (x0, y0 + offset_y, x1, y1 + offset_y) for x0, y0, x1, y1 in cells
-                )
                 panels.append(panel)
-                offset_y += panel.height + 12  # matches the gap in stack()
+                cells_by_panel.append(cells)
             report["render_collapsed_bands"] = len(collapsed)
+            stacked, panel_offsets = stack(panels)
+            flat: list[tuple[int, int, int, int]] = []
+            for cells, offset_y in zip(cells_by_panel, panel_offsets):
+                flat.extend((x0, y0 + offset_y, x1, y1 + offset_y) for x0, y0, x1, y1 in cells)
             report["render_measures"] = len(flat)
             if len(panels) > 1:
                 warnings.append(f"the page MusicXML rendered as {len(panels)} pages; stacked in order")
@@ -740,9 +929,9 @@ def build_sheet(
                 )
                 warnings.append(message)
                 failures.append({"code": "render_layout_mismatch", "message": message})
-                left = stack(panels)
+                left = stacked
             else:
-                left = annotate(stack(panels), flat, colours, labels)
+                left = annotate(stacked, flat, colours, labels)
         except Exception as error:  # noqa: BLE001 - a renderer problem must not cost the sheet
             message = f"render failed: {error}"
             warnings.append(message)
@@ -767,14 +956,17 @@ def build_sheet(
     sheet = compose(
         left,
         right,
-        f"render of {page.musicxml.name}",
-        f"scan of {page.stem} (tinted bars are the ones to check)",
+        f"OMR result \u00b7 MuseScore re-engraving of {page.musicxml.name}",
+        f"original page \u00b7 scan of {page.stem}",
+        red=len(red),
+        yellow=len(yellow),
+        length_count=len(lengths),
         width=width,
     )
-    image_path = out_dir / f"{page.stem}.sheet.png"
+    image_path = out_dir / f"{page.stem}.compare.png"
     sheet.save(image_path)
-    report["outputs"] = {"image": str(image_path), "json": str(out_dir / f"{page.stem}.sheet.json")}
-    (out_dir / f"{page.stem}.sheet.json").write_text(
+    report["outputs"] = {"image": str(image_path), "json": str(out_dir / f"{page.stem}.compare.json")}
+    (out_dir / f"{page.stem}.compare.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8"
     )
     return report
@@ -791,54 +983,151 @@ def status(issues: int, incomplete: bool) -> str:
     return "complete_with_issues" if issues else "complete_no_issues"
 
 
-def review_sheets(pages: Sequence[SheetPage], out_dir: Path, **kwargs) -> dict:
-    reports: list[dict] = []
+def write_priority_list(reports: Sequence[dict], out_dir: Path, summary: dict) -> str:
+    """One list across the whole score: which measures to open first, page by page.
+
+    The tiers are absolute (same heads and weights everywhere), so the numbers compare across
+    pages; the order below is the score-wide ranking, which is what decides what to read first.
+    """
+    rows: list[tuple[float, int, str, str]] = []
+    objective: list[dict] = []
+    for report in reports:
+        red = set(report["red"])
+        yellow = set(report["yellow"])
+        for entry in report["measure_scores"]:
+            tier = (
+                LIST_LABELS[0]
+                if entry["measure"] in red
+                else (LIST_LABELS[1] if entry["measure"] in yellow else "")
+            )
+            if tier:
+                rows.append((entry["score"], entry["measure"], report["page"], tier))
+        for measure in report["length_issues"]:
+            objective.append({"measure": measure, "page": report["page"]})
+    rows.sort(reverse=True)
+    objective.sort(key=lambda item: (item["measure"], item["page"]))
+    objective_measures = {item["measure"] for item in objective}
+
+    lines = ["# Score-wide review order", "", f"Status: **{summary['status']}**.", ""]
+    if summary["status"] == "incomplete":
+        lines.append(
+            "This review is incomplete; the list covers only what was processed and cannot be used "
+            "to claim the rest is clean."
+        )
+        lines.append("")
+    for failure in summary.get("failures", []):
+        lines.append(f"- failed ({failure.get('page', 'global')}): {failure['message']}")
+    for skipped in summary.get("skipped_pages", []):
+        lines.append(f"- skipped ({skipped['page']}): {skipped['reason']}")
+    if summary.get("failures") or summary.get("skipped_pages"):
+        lines.append("")
+    total = sum(report["measures"] for report in reports)
+    reds = sum(len(report["red"]) for report in reports)
+    yellows = sum(len(report["yellow"]) for report in reports)
+    lines.append(f"{len(reports)} page(s), {total} measure(s); red {reds}, yellow {yellows}.")
+    lines.append(
+        "Tiers are absolute (red = a class or position was rewritten, or existence is ambiguous; "
+        "yellow = a routine voice/dot/onset fix), so they compare across pages."
+    )
+    lines.append("The order below is by score, across the whole score.")
+    lines.append("")
+    if objective:
+        lines.append("## Objective errors: voices that do not add up to the metre")
+        lines.append("")
+        for detail in objective:
+            lines.append(
+                f"- measure {detail['measure']} ({detail['page']}): check for a missed or extra note"
+            )
+        lines.append("")
+    lines.append("## By suspicion")
+    lines.append("")
+    if not rows:
+        if summary["status"] == "incomplete":
+            lines.append(
+                "Nothing reached the yellow tier in what was processed, but the review is incomplete."
+            )
+        else:
+            lines.append("No measure reached the yellow tier: nothing here looks doubtful.")
+    for score, measure, page, tier in rows:
+        mark = " (length also wrong)" if measure in objective_measures else ""
+        lines.append(f"- measure {measure} ({page}, {tier}, score {score:.2f}){mark}")
+    lines.append("")
+    lines.append("Per page: `<page>.sheet.png`; per page numbers: `<page>.sheet.json`.")
+    markdown = "\n".join(lines) + "\n"
+    (out_dir / "review_sheet.md").write_text(markdown, encoding="utf-8")
+    return markdown
+
+
+def review_sheets(
+    pages: Sequence[SheetPage],
+    out_dir: Path,
+    *,
+    musescore: str | None = None,
+    report_path: Path | None = None,
+    red_min: float = RED_MIN,
+    yellow_min: float = YELLOW_MIN,
+    width: int = COLUMN_WIDTH,
+) -> dict:
+    """Analyze every page first, then build the sheets; the ranking is score-wide."""
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
     failures: list[dict] = []
+    skipped: list[dict] = []
+
+    analyses: list[tuple[SheetPage, dict]] = []
     for page in pages:
         try:
-            report = build_sheet(page, out_dir, **kwargs)
-        except Exception as error:  # noqa: BLE001 - one page must not hide the others
-            failures.append({"page": page.stem, "code": "page_failed", "message": str(error)})
+            analyses.append((page, analyze_page(page, report_path)))
+        except Exception as error:  # noqa: BLE001 - one page must not stop the score
+            failures.append({"page": page.stem, "code": "page_analysis_failed", "message": str(error)})
+            skipped.append({"page": page.stem, "reason": str(error)})
+
+    reports: list[dict] = []
+    for page, analysis in analyses:
+        try:
+            report = build_sheet(
+                page,
+                analysis,
+                out_dir,
+                musescore=musescore,
+                red_min=red_min,
+                yellow_min=yellow_min,
+                width=width,
+            )
+        except Exception as error:  # noqa: BLE001 - same rule
+            failures.append({"page": page.stem, "code": "page_build_failed", "message": str(error)})
             continue
         reports.append(report)
         failures.extend({"page": page.stem, **failure} for failure in report["failures"])
-    issues = sum(len(report["red"]) + len(report["yellow"]) for report in reports)
-    overall = status(issues, bool(failures))
+
+    reds = sum(len(report["red"]) for report in reports)
+    yellows = sum(len(report["yellow"]) for report in reports)
+    length_count = sum(len(report["length_issues"]) for report in reports)
+    issue_total = reds + yellows + length_count
+    overall = status(issue_total, bool(failures or skipped))
     summary = {
         "status": overall,
         "pages": len(reports),
         "requested_pages": len(pages),
-        "issues": issues,
+        "skipped": len(skipped),
+        "skipped_pages": skipped,
         "failures": failures,
-        "outputs": {"pages": [{"page": report["page"], **report["outputs"]} for report in reports]},
+        "failure_count": len(failures),
+        "issues": {
+            "total": issue_total,
+            "red": reds,
+            "yellow": yellows,
+            "length": length_count,
+            "length_measures": len({measure for report in reports for measure in report["length_issues"]}),
+        },
+        "outputs": {
+            "markdown": str(out_dir / "review_sheet.md"),
+            "summary": str(out_dir / "review_sheet_summary.json"),
+            "pages": [{"page": report["page"], "json": report["outputs"]["json"], "image": report["outputs"]["image"]} for report in reports],
+        },
     }
-    (Path(out_dir) / "summary.json").write_text(
+    write_priority_list(reports, out_dir, summary)
+    (out_dir / "review_sheet_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8"
     )
-    (Path(out_dir) / "sheets.md").write_text(render_markdown(reports, summary), encoding="utf-8")
     return summary
-
-
-def render_markdown(reports: Sequence[dict], summary: dict) -> str:
-    lines = ["# Page proof sheets", "", f"Status: **{summary['status']}**.", ""]
-    if summary["status"] == "incomplete":
-        lines.append("Some pages could not be aligned; an unaligned sheet does not prove anything.")
-        lines.append("")
-    for report in reports:
-        lines.append(f"## {report['page']}")
-        lines.append("")
-        lines.append(
-            f"{report['measures_declared']} measure(s); {report['scan_measures']} detected on the "
-            f"scan, {report['render_measures']} on the render; aligned: "
-            f"{'yes' if report['aligned'] else 'no'}."
-        )
-        if report["red"] or report["yellow"]:
-            lines.append("")
-            lines.append(f"- red (check first): {report['red']}")
-            lines.append(f"- yellow (check too): {report['yellow']}")
-        if report["length_issues"]:
-            lines.append(f"- measure length mismatch: {report['length_issues']}")
-        for warning in report["warnings"]:
-            lines.append(f"- warning: {warning}")
-        lines.append("")
-    return "\n".join(lines) + "\n"

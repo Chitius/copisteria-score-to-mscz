@@ -181,10 +181,12 @@ def test_compose_puts_both_columns_side_by_side():
     root = workspace("compose")
     left = Image.new("RGB", (400, 600), (250, 250, 250))
     right = Image.new("RGB", (400, 500), (240, 240, 240))
-    canvas = proof_sheet.compose(left, right, "render", "scan", width=300)
-    assert canvas.width == 300 * 2 + 24, canvas.width
-    # Both columns are scaled to 300 px wide: the taller (600 px) becomes 450, plus the caption band.
-    assert canvas.height == 450 + 54, canvas.height
+    canvas = proof_sheet.compose(
+        left, right, "render", "scan", red=2, yellow=3, length_count=0, width=300
+    )
+    assert canvas.width == 300 * 2 + proof_sheet.COLUMN_GAP, canvas.width
+    # Both columns are scaled to 300 px wide: the taller (600 px) becomes 450, plus caption and legend.
+    assert canvas.height > 450 + proof_sheet.CAPTION_BAND, canvas.height
 
 
 def test_page_measure_count_reads_the_first_part():
@@ -210,11 +212,14 @@ def test_without_musescore_the_sheet_still_aligns_the_scan():
     )
     xml = musicxml(root / "p1.musicxml", 2)
     page = proof_sheet.SheetPage(stem="p1", scan=scan, musicxml=xml, reading=read)
-    report = proof_sheet.build_sheet(page, root / "out", musescore=None, width=420)
+    analysis = proof_sheet.analyze_page(page)
+    report = proof_sheet.build_sheet(page, analysis, root / "out", musescore=None, width=420)
 
     assert report["scan_measures"] == 2, report
     assert report["aligned"] is True
-    assert report["red"] == [1], report["red"]
+    # Existence uncertainty alone is 2.0: yellow under the absolute tiers (red needs 3.0).
+    assert report["yellow"] == [1], report["yellow"]
+    assert report["red"] == [], report["red"]
     assert Path(report["outputs"]["image"]).is_file()
     with Image.open(report["outputs"]["image"]) as image:
         assert image.width > 800
@@ -226,7 +231,8 @@ def test_a_measure_count_mismatch_is_reported_and_not_painted():
     read = reading(root / "p1.reading.json", [], {"1": {"real": {"p": 0.5}}})
     xml = musicxml(root / "p1.musicxml", 5)
     page = proof_sheet.SheetPage(stem="p1", scan=scan, musicxml=xml, reading=read)
-    report = proof_sheet.build_sheet(page, root / "out", musescore=None, width=420)
+    analysis = proof_sheet.analyze_page(page)
+    report = proof_sheet.build_sheet(page, analysis, root / "out", musescore=None, width=420)
 
     assert report["scan_measures"] == 2
     assert report["aligned"] is False
@@ -241,7 +247,8 @@ def test_a_broken_detection_cache_falls_back_to_ink():
     read = reading(root / "p1.reading.json", [], {})
     xml = musicxml(root / "p1.musicxml", 2)
     page = proof_sheet.SheetPage(stem="p1", scan=scan, musicxml=xml, reading=read, dets=dets)
-    report = proof_sheet.build_sheet(page, root / "out", musescore=None, width=420)
+    analysis = proof_sheet.analyze_page(page)
+    report = proof_sheet.build_sheet(page, analysis, root / "out", musescore=None, width=420)
 
     assert report["scan_measures"] == 2, report
     assert any("detection cache" in warning for warning in report["warnings"])
@@ -319,3 +326,70 @@ def test_the_narrow_filter_can_be_switched_off():
         Image.open(image).convert("RGB"), narrow_filter=True
     )
     assert len(filtered) <= len(plain)
+
+
+# ---------------------------------------------------------------------------
+# score-wide tiers and the priority list
+# ---------------------------------------------------------------------------
+
+
+def _two_page_score(root: Path, first_score: dict, second_score: dict):
+    pages = []
+    for stem, token, offset in (("p1", first_score, 0), ("p2", second_score, 2)):
+        scan = staff_page(root / f"{stem}.png", [40, 300, 620])
+        read = reading(
+            root / f"{stem}.reading.json",
+            [{"sym": 1, "bar": 0, "staff": 0, "box": [60, 40, 90, 76]}],
+            {"1": token},
+        )
+        xml = musicxml(root / f"{stem}.musicxml", 2)
+        pages.append(
+            proof_sheet.SheetPage(stem=stem, scan=scan, musicxml=xml, reading=read, offset=offset)
+        )
+    return pages
+
+
+def test_tiers_use_one_absolute_scale_across_pages():
+    root = workspace("tiers")
+    pages = _two_page_score(
+        root,
+        {"real": {"p": 0.5}},  # 2.0
+        {"cls": {"det": "note", "v": "rest", "p": 0.99}},  # 3.0+
+    )
+    # No MuseScore here, so the run is incomplete by contract; what matters is that one score
+    # scale produced one yellow (2.0) and one red (3.0+) across two different pages.
+    summary = proof_sheet.review_sheets(pages, root / "out", musescore=None, width=420)
+    assert summary["issues"]["yellow"] == 1, summary["issues"]
+    assert summary["issues"]["red"] == 1, summary["issues"]
+
+
+def test_the_priority_list_is_ranked_across_the_whole_score():
+    root = workspace("priority")
+    pages = _two_page_score(
+        root,
+        {"real": {"p": 0.5}},  # page 1: yellow, 2.0
+        {"cls": {"det": "note", "v": "rest", "p": 0.99}},  # page 2: red, higher
+    )
+    proof_sheet.review_sheets(pages, root / "out", musescore=None, width=420)
+    markdown = (root / "out" / "review_sheet.md").read_text(encoding="utf-8")
+    assert "Score-wide review order" in markdown
+    red_line = next(line for line in markdown.splitlines() if "p2" in line and "red" in line)
+    yellow_line = next(line for line in markdown.splitlines() if "p1" in line and "yellow" in line)
+    assert markdown.index(red_line) < markdown.index(yellow_line), markdown
+
+
+def test_a_length_issue_is_listed_as_an_objective_error():
+    root = workspace("objective")
+    pages = _two_page_score(root, {"real": {"p": 0.5}}, {})
+    report_path = root / "report.json"
+    report_path.write_text(
+        json.dumps({"verifier": [{"code": "measure-length", "measure": 1, "detail": "2 beats"}]}),
+        encoding="utf-8",
+    )
+    summary = proof_sheet.review_sheets(
+        pages, root / "out", musescore=None, report_path=report_path, width=420
+    )
+    markdown = (root / "out" / "review_sheet.md").read_text(encoding="utf-8")
+    assert "Objective errors" in markdown
+    assert "measure 1" in markdown
+    assert summary["issues"]["length"] == 1, summary["issues"]

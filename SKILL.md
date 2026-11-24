@@ -118,9 +118,12 @@ python scripts/review_confidence.py --work-dir out/song/work
 python scripts/review_sheet.py --pages out/song/work/copisteria --report out/song/report.json
 ```
 
-两侧都按实测小节线切小节；扫描优先用 OMR 自己的 `barLine_*` 检测（`<stem>.dets_*.json`）。渲染侧
-检出的小节数必须等于该页 MusicXML 声明的小节数，扫描侧也必须一致，否则该侧**不上色**并记
-`render_layout_mismatch` / `scan_layout_mismatch`——标错小节比不标更糟。
+先分析全谱、再统一分档：红 ≥ 3.0、黄 ≥ 1.5，权重全谱一致，所以分数跨页可比；`review_sheet.md`
+是按分数跨全谱排的待看清单（时值不符的小节单列在最前）。两侧都按实测小节线切小节，扫描优先用
+OMR 自己的 `barLine_*` 检测（`<stem>.dets_*.json`）；渲染侧检出的小节数必须等于该页 MusicXML
+声明的小节数，扫描侧也必须一致，否则该侧**不上色**并记 `render_layout_mismatch` /
+`scan_layout_mismatch`——标错小节比不标更糟。图例在两侧下方：红＝最低档、黄＝中档、`≠`＝时值不符。
+产物：`<page>.compare.png`、`<page>.compare.json`、`review_sheet.md`、`review_sheet_summary.json`。
 
 文字层可以提供标题、作曲、速度文字、排练号和说明文字。添加 facts 前先读
 `references/facts.md`。facts 是数据：在注入 pass 应用前不会改谱，每个已应用 fact 必须可追溯。
