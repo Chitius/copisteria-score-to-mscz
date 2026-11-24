@@ -111,6 +111,17 @@ python scripts/review_confidence.py --work-dir out/song/work
 “先看谁”的顺序，不是判定。JSON 保留所有正分符号（含没有 bbox 的）。`review.py` 会自动跑这一步
 （`--no-confidence` 关闭）；它只是审查辅助，失败只记录在报告里，不会阻断交付。
 
+符号级之后是**小节级页面对照图**：每一页用它自己的 MusicXML 单独渲染，和该页扫描并排，两侧同一
+小节同色同号（全局小节号；`≠` 表示时值不符）：
+
+```bash
+python scripts/review_sheet.py --pages out/song/work/copisteria --report out/song/report.json
+```
+
+两侧都按实测小节线切小节；扫描优先用 OMR 自己的 `barLine_*` 检测（`<stem>.dets_*.json`）。渲染侧
+检出的小节数必须等于该页 MusicXML 声明的小节数，扫描侧也必须一致，否则该侧**不上色**并记
+`render_layout_mismatch` / `scan_layout_mismatch`——标错小节比不标更糟。
+
 文字层可以提供标题、作曲、速度文字、排练号和说明文字。添加 facts 前先读
 `references/facts.md`。facts 是数据：在注入 pass 应用前不会改谱，每个已应用 fact 必须可追溯。
 `rit.`/`rall.`/`accel.` 这类渐慢渐快术语必须同时给 `gradual`，否则只会变成纯文字，不会生成

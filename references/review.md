@@ -121,6 +121,35 @@ python scripts/review_confidence.py --pages out/song/work/copisteria \
 decide anything. Rendered pages are paired by stem; `--pair-rendered-order` pairs them
 positionally and is only correct when the render is paginated like the scan.
 
+## Page proof sheets (measure-level comparison)
+
+`scripts/review_sheet.py` renders **each page's own MusicXML** and puts it beside that page's scan,
+with the same bars tinted on both sides and the same global measure number above them. This is the
+measure-level companion to the symbol heat map: the heat map says which glyph is doubtful, the
+sheet says whether the render and the page agree bar for bar.
+
+```bash
+python scripts/review_sheet.py --pages out/song/work/copisteria --report out/song/report.json
+python scripts/review_sheet.py --pages review/pages --scan-dir review/scans --musescore "...\MuseScore4.exe"
+```
+
+How the two sides are aligned:
+
+- both columns are cut into measures by measured barlines; on the scan the reader's own
+  `barLine_*` detections (`<stem>.dets_*.json`) are used when present, with the ink test as a
+  fallback;
+- the render must detect exactly as many measures as the page MusicXML declares, and the scan
+  must detect the same number; a mismatch leaves that column **untinted** and records
+  `render_layout_mismatch` / `scan_layout_mismatch`. A tinted wrong bar is worse than a plain one;
+- measure numbers are global (page offsets are summed from the earlier pages' measure counts) and
+  `≠` marks a bar with a measure-length violation from the scorepipe report.
+
+The old tool also *stacked* a page whose MusicXML rendered as several pages; that is kept.
+
+Known limit: on dense piano writing the ink test over-detects stems as barlines on the render side,
+so the render stays plain while the scan (anchored by the reader's detections) is tinted. That is
+the same "do not overlay unless the count verifies" rule, not a silent misalignment.
+
 ## Required human checks
 
 - Start from `review/confidence/review.md`: it ranks what to verify first, per page.
