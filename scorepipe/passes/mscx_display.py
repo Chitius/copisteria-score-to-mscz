@@ -30,6 +30,11 @@ class DropTextVoiceRests:
             for voice in doc.voices(measure):
                 if voice.findall("Chord") or not has_text(voice):
                     continue
+                if not any(other.findall("Chord") for other in doc.voices(measure) if other is not voice):
+                    # The text voice is the staff's only content: its whole-measure rest *is* the
+                    # measure (Suzume m1: Tempo + Dynamic + Rest). Removing it left a 0-length
+                    # measure, which MuseScore shows as an incomplete bar.
+                    continue
                 for rest in list(voice.findall("Rest")):
                     voice.remove(rest)
                     changed += 1

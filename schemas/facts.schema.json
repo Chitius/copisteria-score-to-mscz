@@ -37,6 +37,13 @@
           "rehearsal": {"type": "string"},
           "tempo": {"type": "number", "exclusiveMinimum": 0},
           "metronome": {"type": "number", "exclusiveMinimum": 0},
+          "gradual": {
+            "type": "string",
+            "enum": ["ritardando", "rallentando", "accelerando", "stringendo", "allargando"],
+            "description": "a gradual tempo word that becomes a GradualTempoChange spanner"
+          },
+          "length_measures": {"type": "integer", "minimum": 1},
+          "length_fractions": {"type": "string", "pattern": "^-?(\\d+/\\d+)?$"},
           "beat_unit": {"type": "string", "enum": ["whole", "half", "quarter", "eighth", "16th", "32nd"]},
           "italic": {"type": "boolean"},
           "font_size": {"type": "number"},

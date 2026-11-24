@@ -14,6 +14,15 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+try:  # the probe must still run when the pipeline package itself is broken
+    from scorepipe.discovery import find_musescore as _discover_musescore
+except Exception:  # pragma: no cover - reported by the scorepipe import check
+    _discover_musescore = None
+
 
 @dataclass
 class Check:
@@ -77,11 +86,14 @@ def _find_converter(explicit: str | None) -> Path | None:
 
 
 def _find_musescore(explicit: str | None) -> Path | None:
+    if _discover_musescore is not None:
+        located = _discover_musescore(explicit)
+        if located:
+            return Path(located).resolve()
+        return None
     candidates = []
     if explicit:
         candidates.append(Path(explicit))
-    if os.environ.get("MUSESCORE_EXE"):
-        candidates.append(Path(os.environ["MUSESCORE_EXE"]))
     for name in ("MuseScore4.exe", "musescore4", "mscore4", "MuseScore4"):
         found = shutil.which(name)
         if found:
@@ -89,8 +101,6 @@ def _find_musescore(explicit: str | None) -> Path | None:
     candidates.extend(
         [
             Path(r"C:\Program Files\MuseScore 4\bin\MuseScore4.exe"),
-            Path(r"C:\Program Files\MuseScore 4\bin\MuseScore4"),
-            Path(r"C:\Program Files\MuseScore 4\bin\mscore4.exe"),
             Path("/Applications/MuseScore 4.app/Contents/MacOS/mscore"),
         ]
     )

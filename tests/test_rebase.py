@@ -145,6 +145,27 @@ class RebaseMeasuresTest(unittest.TestCase):
         self.assertEqual(note.findtext("duration"), "2520")
         self.assertIsNone(note.find("time-modification"))
 
+    def test_partial_source_backup_is_not_lengthened(self):
+        # Suzume m16: a block of 8 ticks closes with <backup 4> because the padding rest after it
+        # starts half a beat early. The overflow sweep must only shorten backups, never stretch
+        # them to the block length (that moved the rest to the barline).
+        rest = '<note><rest/><duration>4</duration><voice>1</voice></note>'
+        body = (
+            note("C", 16)
+            + "<backup><duration>16</duration></backup>"
+            + note("D", 8)
+            + "<backup><duration>4</duration></backup>"
+            + rest
+        )
+        doc = build(measure(1, body) + measure(2, note("G", 16)))
+        from scorepipe.passes import REBASE_MEASURES
+
+        REBASE_MEASURES.run(doc, Context())
+        backups = [int(backup.findtext("duration")) for backup in doc.measures()[0].findall("backup")]
+        self.assertEqual(backups, [16, 4])
+        rests = [event for event in doc.events(doc.measures()[0]) if event.rest]
+        self.assertEqual([event.onset for event in rests], [1.0])
+
 
 if __name__ == "__main__":
     unittest.main()

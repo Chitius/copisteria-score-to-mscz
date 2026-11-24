@@ -101,6 +101,10 @@ def _instructions(payload: dict) -> str:
 - 每个 credit/mark/correction 必须有 `page`、`evidence`，以及 PDF 坐标 `bbox` 或裁图 `crop`；
 - `confidence` 是 0–1 的小数；
 - `measure` 从 1 开始，`beat` 从 0 开始；
+- `rit.`/`rall.`/`accel.`/`string.`/`allarg.` 这类渐慢/渐快术语，除 `text` 外必须加
+  `"gradual": "ritardando" | "rallentando" | "accelerando" | "stringendo" | "allargando"`，
+  否则只会被注入成纯文字 `StaffText`，不会变成真正的 `GradualTempoChange` 连线；
+  跨度用 `length_measures`（默认 1）/ `length_fractions` 指定；
 - 不存在的标记不要编造；看不清就放 `unresolved`；
 - 音高疑点只能放 `corrections`，不要写进 `marks`；默认 `status="proposed"`，不要自行声称已批准；
 - 每一页都要在 `producer.pages` 中声明；`merge --pages N` 默认要求全部页覆盖。

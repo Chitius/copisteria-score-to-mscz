@@ -51,8 +51,9 @@ def _drop_repeated(doc: Document, tag: str, identity) -> PassResult:
     changed = 0
     for _number, measure in doc.iter_measures():
         for attributes in list(measure.findall("attributes")):
-            staff = attributes.findtext("staff") or "1"
             for element in list(attributes.findall(tag)):
+                # MusicXML puts the staff on the clef (<clef number="2">), not on <attributes>
+                staff = element.get("number") or attributes.findtext("staff") or "1"
                 signature = identity(element)
                 if signature == current.get(staff):
                     attributes.remove(element)

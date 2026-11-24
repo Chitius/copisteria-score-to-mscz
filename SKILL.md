@@ -102,6 +102,8 @@ pipeline 按 structural → inject → display 跑到不动点，再跑只读 ve
 
 文字层可以提供标题、作曲、速度文字、排练号和说明文字。添加 facts 前先读
 `references/facts.md`。facts 是数据：在注入 pass 应用前不会改谱，每个已应用 fact 必须可追溯。
+`rit.`/`rall.`/`accel.` 这类渐慢渐快术语必须同时给 `gradual`，否则只会变成纯文字，不会生成
+`GradualTempoChange` 连线。
 
 Agent/视觉 facts 的流程：
 
@@ -140,7 +142,8 @@ python -m scorepipe.cli pages/ -o out/score/score.musicxml --mscz-out out/score/
   --patches review/patches.json
 ```
 
-支持 `ottava`（8va/8vb）和受证据约束的 `tuplet`。ottava 编译成 MusicXML `<octave-shift>`；
+支持 `ottava`（8va/8vb）、受证据约束的 `tuplet` 和 `clef`（把 OMR 放错小节的谱号移到正确小节，
+可用 `from_measure` 撤掉原谱号）。ottava 编译成 MusicXML `<octave-shift>`；
 起止点必须落在真实 staff/measure/beat 上，end 必须晚于 start。像素 bbox 只作为证据，不决定范围。
 渲染后必须检查 8va 的实际覆盖范围；范围不确定就保持 unresolved，不要自动扩展。
 
@@ -158,7 +161,9 @@ python scripts/review.py "score.pdf" --pages path/to/omr-pages \
 
 缺页、unresolved、proposed correction 或 patch 校验失败时，默认在 pipeline 前停止并写
 `review-report.json`。`--allow-unresolved` / `--allow-corrections` 只用于临时试跑，报告仍会
-列出被覆盖的项。review 成功后检查 `rendered/` 和 `score.pdf`，再交付。
+列出被覆盖的项。mechanical 基线不干净不是阻断项（记入 `findings`），否则 forced-truncation
+永远轮不到执行；真正的验收门是 reviewed 那一轮的退出码和它自己的 display verifier。
+review 成功后检查 `rendered/` 和 `score.pdf`，再交付。
 
 `review.py` 默认同时生成 `mechanical/`：不包含 agent facts/patches 的机械基线；根目录的
 `score.*` 是经过 review 的版本。交付时必须两套都保留，不能用 reviewed 覆盖 mechanical。
@@ -205,9 +210,11 @@ docs/SANITY.md            pass 契约审计
 
 ## 当前状态（2026-11）
 
-- `unittest`：250 个测试；`pytest`：334 个测试。
+- `unittest`：278 个测试；`pytest`：363 个测试。
 - Gute Nacht：sounding notes 98.94% / 99.0%（vocal/piano），verifier clean。
 - `aus_meinen_traenen`：91.38% / 90.10%；`die_wetterfahne`：98.97% / 97.75%。
 - `der_lindenbaum` P2 仍是 OMR 质量异常项（约 51%）。
 - 已知交付阶段缺口：agent/视觉 facts 已有 prepare/validate/merge、页面覆盖检查、unresolved 和
   独立 correction review；真实交付还需要逐页复核并人工处理 unresolved/corrections。
+- Gurenge（红莲华）实测：grace 记谱与 8va 检出的 importer 陷阱已修，display verifier 从 18 降到
+  8；剩余 8 条在 m42/m75/m76/m80 的 OMR 连音/非法休止上，属于必须人工编辑的内容错误。

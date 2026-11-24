@@ -107,18 +107,21 @@ def _split_source_groups(run: list[dict]) -> list[list[dict]]:
 
     A lone begin/end (or a one-note begin/end pair) is an OMR fragment, not a reliable beam group;
     laputa m50's G3 source has such pairs and would otherwise be broken into single-note groups.
+
+    A level whose begin/continue/end sequence is not a clean alternation is OMR noise and cannot
+    contribute boundaries: Suzume m33 beat 4 carries ``begin, continue, end, end`` at level 1.
+    Trusting those pairs rebuilt only the middle two sixteenths and left the outer two unbeamed.
     """
     boundaries: set[int] = set()
-    open_starts: list[int] = []
-    for index, record in enumerate(run):
-        values = [(beam.text or "").strip() for beam in record["element"].findall("beam")]
-        if "begin" in values:
-            open_starts.append(index)
-        if "end" in values and open_starts:
-            start = open_starts.pop()
-            if index - start + 1 >= 2:
-                boundaries.add(start)
-                boundaries.add(index + 1)
+    pairs_by_level = _source_pairs(run)
+    # Only the outermost beam level defines group boundaries: deeper levels (16th beams) are a
+    # refinement inside one eighth-note group, and mixing them splits a run into 2-note chunks
+    # that the next round rebuilds, so the pass never reaches a fixed point.
+    primary = min(pairs_by_level) if pairs_by_level else None
+    for start, end in (pairs_by_level.get(primary) or []) if primary is not None else []:
+        if end - start + 1 >= 2:
+            boundaries.add(start)
+            boundaries.add(end + 1)
     if not boundaries:
         return [run]
     chunks: list[list[dict]] = []
@@ -136,6 +139,54 @@ def _split_source_groups(run: list[dict]) -> list[list[dict]]:
     return chunks
 
 
+def _source_pairs(run: list[dict]) -> dict[int, list[tuple[int, int]]]:
+    """begin/end pairs per beam level; a level with a broken sequence contributes nothing.
+
+    A level is "broken" when a begin opens while another group is open, or when continue/end
+    arrives without one.  That level cannot be trusted as a boundary, but a well-formed level
+    beside it (Suzume m31: level 1 groups the beats, level 2 has a stray end) still can.
+    """
+    levels: dict[int, dict[int, str]] = {}
+    for index, record in enumerate(run):
+        for beam in record["element"].findall("beam"):
+            try:
+                level = int(beam.get("number") or 1)
+            except ValueError:
+                level = 1
+            levels.setdefault(level, {})[index] = (beam.text or "").strip()
+    pairs: dict[int, list[tuple[int, int]]] = {}
+    for level, values in levels.items():
+        start: int | None = None
+        level_pairs: list[tuple[int, int]] = []
+        broken = False
+        for index in sorted(values):
+            value = values[index]
+            if value == "begin":
+                if start is not None:
+                    broken = True
+                    break
+                start = index
+            elif value in ("forward hook", "backward hook"):
+                continue  # a single-note hook is not a group boundary
+            elif value == "continue":
+                if start is None:
+                    broken = True
+                    break
+            elif value == "end":
+                if start is None:
+                    broken = True
+                    break
+                level_pairs.append((start, index))
+                start = None
+            else:
+                broken = True
+                break
+        if not broken and level_pairs:
+            pairs[level] = level_pairs
+    return pairs
+
+
+
 def _beat_length(meter: tuple[float, float]) -> float:
     beats, beat_type = meter
     unit = 4.0 / beat_type
@@ -149,10 +200,15 @@ def _beat_length(meter: tuple[float, float]) -> float:
 def _split_by_beat(run: list[dict], beat_length: float) -> list[list[dict]]:
     """Mixed note values may not share a beam across a beat boundary.
 
-    A run of one repeated value (laputa m50's eighths) keeps the old whole-run rebuild; once
-    sixteenths and eighths are mixed (Sincerely m3), grouping follows the beat grid.
+    A run of one repeated value of eighth or longer (laputa m50's eighths) keeps the old whole-run
+    rebuild; once sixteenths are involved (uniform sixteenth runs and Sincerely m3's mixed values),
+    grouping follows the beat grid, because a sixteen-beam is not carried across a beat.
     """
-    if not run or len({record["level"] for record in run}) < 2:
+    if not run:
+        return [run]
+    if len({record["level"] for record in run}) < 2 and max(
+        record["level"] for record in run
+    ) < 2:
         return [run]
     chunks: list[list[dict]] = []
     chunk: list[dict] = []

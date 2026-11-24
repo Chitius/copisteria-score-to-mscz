@@ -111,13 +111,27 @@ def _timing(report_path: Path) -> dict:
 
 
 def _timing_report(baseline: dict | None, reviewed: dict | None) -> dict:
-    before = baseline or {"count": 0, "violations": []}
-    after = reviewed or {"count": 0, "violations": []}
+    """Compare measure-length findings; report non-comparability instead of faking deltas."""
+    if baseline is None or reviewed is None:
+        return {
+            "available": False,
+            "reason": (
+                "timing deltas need both a mechanical baseline report and a reviewed report; "
+                "a skipped or failed run is not an empty finding list"
+            ),
+            "baseline": baseline,
+            "reviewed": reviewed,
+            "introduced": [],
+            "resolved": [],
+        }
+    before = baseline
+    after = reviewed
     before_counts = Counter((item["measure"], item["detail"]) for item in before["violations"])
     after_counts = Counter((item["measure"], item["detail"]) for item in after["violations"])
     introduced = sorted((after_counts - before_counts).elements(), key=lambda item: (item[0], item[1]))
     resolved = sorted((before_counts - after_counts).elements(), key=lambda item: (item[0], item[1]))
     return {
+        "available": True,
         "baseline": before,
         "reviewed": after,
         "introduced": [{"measure": measure, "detail": detail} for measure, detail in introduced],
@@ -229,6 +243,7 @@ def main(argv: list[str] | None = None) -> int:
     corrections = facts.get("corrections") or []
     blockers = []
     overrides = []
+    findings = []
     artifacts_missing = []
     if (facts.get("producer") or {}).get("pdf_sha256_mismatch"):
         blockers.append("facts were produced for a different source PDF (sha256 mismatch)")
@@ -322,12 +337,21 @@ def main(argv: list[str] | None = None) -> int:
                     mechanical["render_error"] = str(exc)
 
     if mechanical is not None and not mechanical.get("ready"):
-        blockers.append("mechanical baseline did not complete cleanly")
+        # The baseline is the *comparison* tree, not a delivery candidate.  A display defect in
+        # it (typically an overfull voice the forced copy exists to repair) must not stop the
+        # reviewed run: the reviewed verifier below is the real acceptance gate.
+        findings.append(
+            "mechanical baseline is not verifier-clean "
+            f"(pipeline exit {mechanical.get('pipeline_exit')}, "
+            f"{len((mechanical.get('timing') or {}).get('violations') or [])} measure-length finding(s)); "
+            "kept as the no-facts comparison only"
+        )
 
     report = {
         "ready": not blockers,
         "interim": bool(overrides or artifacts_missing),
         "overrides": overrides,
+        "findings": findings,
         "artifacts_missing": artifacts_missing,
         "source_pdf": {"path": str(pdf), "sha256": pdf_sha256},
         "page_count": page_count,
@@ -349,6 +373,8 @@ def main(argv: list[str] | None = None) -> int:
         _write(outdir / "review-report.json", report)
         for blocker in blockers:
             print(f"blocked: {blocker}")
+        for finding in findings:
+            print(f"finding: {finding}")
         return 2
 
     musicxml = outdir / "score.musicxml"
@@ -526,6 +552,7 @@ def main(argv: list[str] | None = None) -> int:
             "mechanical": mechanical,
             "forced_truncation": forced,
             "blockers": report.get("blockers") or [],
+            "findings": report.get("findings") or [],
         },
     )
     print(f"review ready: {report['ready']}")

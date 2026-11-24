@@ -150,6 +150,34 @@ class MuseScoreTicksTest(unittest.TestCase):
         self.assertEqual(measure_report(measure)[0]["delta"], -960)
         self.assertEqual(measure_report(measure)[0]["delta_fraction"], Fraction(-1, 2))
 
+    def test_grace_chord_takes_no_time(self):
+        # MuseScore writes <grace16/> and still emits <durationType>: the chord is
+        # engraved at the current tick and must not advance it.
+        body = chord("quarter") + "<Chord><grace16 /><durationType>16th</durationType></Chord>" + chord("quarter") * 3
+        timeline = voice_timeline(voice(body), Fraction(1))
+        self.assertEqual(timeline.end, Fraction(1))
+        self.assertFalse(timeline.overlaps)
+        self.assertFalse(timeline.gaps)
+        self.assertEqual(element_ticks(ElementTree.fromstring("<Chord><grace8 /><durationType>eighth</durationType></Chord>")), 0)
+
+    def test_grace_inside_tuplet_does_not_change_written_span(self):
+        body = (
+            "<Tuplet><normalNotes>2</normalNotes><actualNotes>3</actualNotes>"
+            "<baseNote>eighth</baseNote></Tuplet>"
+            + "<Chord><grace16 /><durationType>16th</durationType></Chord>"
+            + chord("eighth") * 3
+            + "<endTuplet/>"
+        )
+        timeline = voice_timeline(voice(body), Fraction(1))
+        self.assertEqual(timeline.spans[0].written, Fraction(3, 8))
+        self.assertFalse(timeline.invalid_tuplets)
+
+    def test_legacy_grace_element_is_zero(self):
+        self.assertEqual(
+            element_ticks(ElementTree.fromstring("<Chord><grace>8</grace><durationType>eighth</durationType></Chord>")),
+            0,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

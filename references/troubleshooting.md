@@ -18,6 +18,12 @@ A non-zero exit means the file is not importable, even if `xmllint` says it vali
 - **A tuplet rest whose duration is not representable as a plain rest**, e.g. a 1680-tick 16th
   rest with `<time-modification>3:2</time-modification>`. The `normalize_tuplet_rests` pass makes
   it a plain grid rest and removes the time-modification.
+- **A grace note MuseScore will not keep as a grace.** MuseScore 4.6 imports `<grace/>` +
+  `<type>eighth</type>` as a *real* eighth note, and a tie between two grace notes as a real note
+  too, so the bar grows by the grace's written value (Gurenge m111/m112, +0.5 beat each). Its own
+  export writes acciaccaturas as 16th graces; `normalize_grace_notes` rewrites the type and
+  `reconcile_tie_slurs` drops grace-to-grace ties. Symptoms: `mscx-measure-length` in bars that
+  the MusicXML verifier calls clean.
 - A missing `id` on `<part>` is invalid and can also terminate the import; check the skeleton when
   bisecting.
 

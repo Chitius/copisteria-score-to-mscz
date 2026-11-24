@@ -348,7 +348,7 @@ class UpgradeGradualTexts:
                     node
                     for voice in measure.findall("voice")
                     for node in voice
-                    if node.tag == "StaffText" and (node.findtext("text") or "").strip() == text
+                    if node.tag == "StaffText" and _node_text(node).strip() == text
                 ),
                 None,
             )
@@ -359,12 +359,12 @@ class UpgradeGradualTexts:
                     voice.remove(staff_text)
                     break
             beat = float(fact.get("beat") or 0)
-            start = _gradual_start(text, gradual)
+            span_measures = int(fact.get("length_measures") or 1)
+            span_fractions = str(fact.get("length_fractions") or "").strip()
+            start = _gradual_start(text, gradual, span_measures, span_fractions)
             start_voice.insert(_insert_index_at(start_voice, beat), start)
             changed += 1
 
-            span_measures = int(fact.get("length_measures") or 1)
-            span_fractions = str(fact.get("length_fractions") or "-1/8")
             end_index = number - 1 + span_measures
             if 0 <= end_index < len(measures):
                 end_measure = measures[end_index]
@@ -379,7 +379,9 @@ class UpgradeGradualTexts:
         return PassResult(changed=changed)
 
 
-def _gradual_start(text: str, gradual: str) -> ElementTree.Element:
+def _gradual_start(
+    text: str, gradual: str, span_measures: int, span_fractions: str
+) -> ElementTree.Element:
     spanner = ElementTree.Element("Spanner", {"type": "GradualTempoChange"})
     change = ElementTree.SubElement(spanner, "GradualTempoChange")
     ElementTree.SubElement(change, "tempoChangeType").text = gradual
@@ -391,8 +393,9 @@ def _gradual_start(text: str, gradual: str) -> ElementTree.Element:
     ElementTree.SubElement(change, "continueText").text = f"({text})"
     next_element = ElementTree.SubElement(spanner, "next")
     location = ElementTree.SubElement(next_element, "location")
-    ElementTree.SubElement(location, "measures").text = "1"
-    ElementTree.SubElement(location, "fractions").text = "-1/8"
+    ElementTree.SubElement(location, "measures").text = str(span_measures)
+    if span_fractions:
+        ElementTree.SubElement(location, "fractions").text = span_fractions
     return spanner
 
 

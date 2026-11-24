@@ -150,7 +150,12 @@ def _max_voice(measure, staff: str) -> int:
 
 
 def _shrink_backups(measure) -> None:
-    """After removing overflow notes, the block's closing backup must match what is left."""
+    """After removing overflow notes, the block's closing backup must match what is left.
+
+    Only shorten: a backup may legitimately be shorter than the block before it (the OMR writes
+    a partial rewind for an overlapping rest, e.g. Suzume m16 backup 4 after 28 ticks). Rewriting
+    such a backup to the block length moved that rest to the barline.
+    """
     children = list(measure)
     start = 0
     for index, child in enumerate(children):
@@ -166,7 +171,9 @@ def _shrink_backups(measure) -> None:
                     end += int(text)
         duration = child.find("duration")
         if duration is not None:
-            duration.text = str(end)
+            current = int(duration.text or 0)
+            if end < current:
+                duration.text = str(end)
         start = index + 1
 
 

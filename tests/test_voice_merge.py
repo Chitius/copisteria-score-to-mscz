@@ -259,6 +259,35 @@ class MergeStaffVoicesTest(unittest.TestCase):
         self.assertEqual([event.onset for event in rests], [1.5])
         self.assertEqual([event.duration for event in rests], [0.5])
 
+    def test_source_backup_inside_one_staff_is_kept(self):
+        # Suzume m16: staff 1 is one voice whose padding rest starts half a beat early, so the
+        # source splits that staff's stream with its own <backup 2>. Rebuilding staff 2 must not
+        # re-insert the two halves as independent blocks: that moved the rest to the barline.
+        staff_one = (
+            note("D", 5, 2)
+            + note("E", 5, 1)
+            + note("F", 5, 1)
+            + note("G", 5, 2)
+            + note("F", 5, 1)
+            + note("E", 5, 1)
+            + note("D", 5, 6)
+            + "<backup><duration>2</duration></backup>"
+            + '<note><rest/><duration>4</duration><voice>1</voice><staff>1</staff></note>'
+        )
+        staff_two = (
+            '<note><pitch><step>G</step><octave>3</octave></pitch><duration>16</duration>'
+            "<voice>1</voice><staff>2</staff></note>"
+            + "<backup><duration>16</duration></backup>"
+            + '<note><pitch><step>B</step><octave>3</octave></pitch><duration>16</duration>'
+            "<voice>2</voice><staff>2</staff></note>"
+        )
+        doc = Document(ElementTree.fromstring(PART.format(measures=measure(staff_one + staff_two) + LAST)))
+        MERGE_STAFF_VOICES.run(doc, Context())
+        rests = [event for event in doc.events(doc.measures()[0]) if event.rest]
+        self.assertEqual(len(rests), 1)
+        self.assertEqual(rests[0].onset, 3.0)
+        self.assertEqual(rests[0].duration, 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

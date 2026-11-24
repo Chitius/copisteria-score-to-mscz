@@ -98,6 +98,27 @@ class DisplayPassesTest(unittest.TestCase):
         self.assertTrue(text_voices[0].findall("Chord"))
         self.assertEqual(text_voices[0].findall("Rest"), [])
 
+    def test_lone_text_voice_keeps_its_measure_rest(self):
+        # Suzume m1: one voice holds Tempo + Dynamic + a whole-measure rest; there is no chord
+        # voice to carry the measure, so dropping the rest left a 0-length bar.
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                """
+                <museScore><Score><Staff id="1"><Measure>
+                  <voice>
+                    <Tempo><tempo>1.3</tempo><text>q = 78</text></Tempo>
+                    <Dynamic><subtype>mf</subtype></Dynamic>
+                    <Rest><durationType>measure</durationType><duration>1/1</duration></Rest>
+                  </voice>
+                </Measure></Staff></Score></museScore>
+                """
+            )
+        )
+        run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        rest = doc.staves()[0].findall("Measure")[0].find("voice/Rest")
+        self.assertIsNotNone(rest)
+        self.assertEqual(rest.findtext("durationType"), "measure")
+
     def test_real_rest_is_unhidden(self):
         doc = MsxcDocument(
             ElementTree.fromstring(

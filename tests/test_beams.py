@@ -86,6 +86,35 @@ class RestoreBeamsTest(unittest.TestCase):
         self.assertEqual(notes[0].find("beam").text, "begin")
         self.assertEqual(notes[-1].find("beam").text, "end")
 
+    def test_malformed_source_pairs_are_not_trusted(self):
+        # Suzume m33 beat 4: level 1 is begin,continue,end,end and level 2 is begin,begin,end,end.
+        # Trusting those pairs rebuilt only the middle two sixteenths and left the outer two with
+        # dangling begin/end beams; the whole beat must be one group.
+        def sixteenth(step, beams):
+            tags = "".join(f'<beam number="{number}">{kind}</beam>' for number, kind in beams)
+            return (
+                f"<note><pitch><step>{step}</step><octave>4</octave></pitch><duration>1</duration>"
+                f"<voice>1</voice><type>16th</type>{tags}</note>"
+            )
+
+        body = (
+            sixteenth("G", [("1", "begin"), ("2", "begin")])
+            + sixteenth("F", [("1", "continue"), ("2", "begin")])
+            + sixteenth("F", [("1", "end"), ("2", "end")])
+            + sixteenth("G", [("1", "end"), ("2", "end")])
+        )
+        doc = build(body)
+        RestoreBeams().run(doc, Context())
+        notes = list(doc.measures()[0].iter("note"))
+        for level in ("1", "2"):
+            values = [
+                next(beam.text for beam in note.findall("beam") if beam.get("number") == level)
+                if any(beam.get("number") == level for beam in note.findall("beam"))
+                else None
+                for note in notes
+            ]
+            self.assertEqual(values, ["begin", "continue", "continue", "end"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -32,8 +32,12 @@ def hidden_non_measure_rests(doc: MsxcDocument, ctx: Context) -> list[Violation]
 def text_voice_rests(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     out: list[Violation] = []
     for _staff, index, measure in doc.iter_measures():
-        for voice in doc.voices(measure):
+        voices = doc.voices(measure)
+        for voice in voices:
             if voice.findall("Chord") or not has_text(voice):
+                continue
+            if not any(other.findall("Chord") for other in voices if other is not voice):
+                # the text voice is the staff's only content; its rest is the measure itself
                 continue
             rests = [
                 rest
@@ -115,12 +119,33 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
                 pass
         meters[id(staff)] = meter
         expected = measure_expected_fraction(measure, meter)
+        # MuseScore writes ``len`` when it had to make a measure irregular on import.  The
+        # value is derived from the imported content, so the message has to say so: otherwise
+        # "expected 4.0625 beats" in a plain 4/4 score reads like a verifier bug.
+        import_len = measure.get("len")
+        len_note = (
+            f"; the importer set irregular length len={import_len} "
+            f"(metre {float(meter) * 4:g} beats)"
+            if import_len
+            else ""
+        )
         primary = _primary_voice(measure)
         primary_voice = primary[0] if primary else None
         for voice in measure.findall("voice"):
             timeline = voice_timeline(voice, expected)
             actual = timeline.end
             if actual <= 0:
+                if voice is primary_voice and expected > 0 and not voice.findall("Chord"):
+                    # A measure with no written time at all is an incomplete bar, not a short
+                    # secondary voice: MuseScore shows it as 0/1 (Suzume m1 before the fix).
+                    out.append(
+                        Violation(
+                            "mscx-measure-length",
+                            index,
+                            "measure has no written time "
+                            f"(expected {float(expected) * 4:g} beats)",
+                        )
+                    )
                 continue
             if timeline.overlaps:
                 out.append(
@@ -142,7 +167,7 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
                         f"voice {float(actual) * 4:g} beats "
                         f"({float(actual) * 1920:g} ticks), "
                         f"expected {float(expected) * 4:g} beats "
-                        f"({float(expected) * 1920:g} ticks)",
+                        f"({float(expected) * 1920:g} ticks)" + len_note,
                     )
                 )
     return out

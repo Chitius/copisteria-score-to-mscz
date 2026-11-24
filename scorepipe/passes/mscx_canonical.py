@@ -27,6 +27,7 @@ from ..core.musescore_ticks import (
     TupletSpan,
     duration_parts,
     element_written,
+    is_grace,
     legal_ticks_parts,
     measure_expected_fraction,
     voice_timeline,
@@ -522,8 +523,15 @@ def _trim_tail(
         return 0, excess
 
     edited = 0
-    # Trailing depth-0 rests after the last depth-0 chord.
-    chord_indices = [index for index in item_indices if children[index].tag == "Chord" and depths[index] == 0]
+    # Trailing depth-0 rests after the last depth-0 *sounding* chord.  A grace chord
+    # consumes no time, so it can neither absorb the excess nor block the walk.
+    chord_indices = [
+        index
+        for index in item_indices
+        if children[index].tag == "Chord"
+        and depths[index] == 0
+        and not is_grace(children[index])
+    ]
     last_chord = chord_indices[-1] if chord_indices else -1
     index = last
     while index > last_chord and excess > 0:
@@ -559,6 +567,10 @@ def _trim_tail(
         if child.tag == "Rest":
             break
         if child.tag != "Chord":
+            index -= 1
+            continue
+        if is_grace(child):
+            # Removing a grace note would not shorten the bar.
             index -= 1
             continue
         written = element_written(child) or Fraction(0)

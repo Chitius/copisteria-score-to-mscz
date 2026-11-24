@@ -8,7 +8,6 @@ voices, tempo text). The conversion is a boundary, not a pass, so it runs once b
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -18,30 +17,17 @@ from .core.mscz import MsczArchive
 from .core.mscx_invariants import MSCX_VERIFIERS
 from .core.pass_base import Context
 from .core.pipeline import PhaseReport, RunReport, TraceEntry, run_display
+from .discovery import find_musescore as _discover_musescore
 from .passes import DISPLAY_PASSES, TRUNCATE_OVERFULL_MSCX
 from .passes.mscx_display import compact_secondary_padding
 from .passes.mscx_truncate import normalize_explicit_durations
 
-COMMON_PATHS = (
-    r"S:\Program Files\MuseScore 4\bin\MuseScore4.exe",
-    r"C:\Program Files\MuseScore 4\bin\MuseScore4.exe",
-    r"C:\Program Files\MuseScore 4\bin\MuseScore4.exe",
-)
-
 
 def find_musescore(explicit: str | None = None) -> str:
-    if explicit:
-        return explicit
-    from_env = os.environ.get("MSCORE") or os.environ.get("MUSESCORE")
-    if from_env:
-        return from_env
-    found = shutil.which("MuseScore4") or shutil.which("mscore")
-    if found:
-        return found
-    for candidate in COMMON_PATHS:
-        if Path(candidate).is_file():
-            return candidate
-    raise RuntimeError("MuseScore not found: pass --musescore or set MSCORE")
+    located = _discover_musescore(explicit)
+    if located:
+        return located
+    raise RuntimeError("MuseScore not found: pass --musescore or set MUSESCORE_EXE/MSCORE")
 
 
 def convert(musicxml: str | Path, mscz: str | Path, musescore: str | None = None) -> None:

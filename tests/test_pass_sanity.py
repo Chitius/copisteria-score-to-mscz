@@ -227,6 +227,18 @@ def short_voice():
     )
 
 
+def grace_notes():
+    body = (
+        note("C", duration=16)
+        + "<note><grace/><pitch><step>D</step><octave>4</octave></pitch><voice>1</voice>"
+        "<type>eighth</type><dot/></note>"
+        + note("E", duration=16)
+        + note("F", duration=16)
+        + note("G", duration=16)
+    )
+    return build(measure(1, body))
+
+
 def page_context(name):
     model = load_pages(FIXTURES / name)
     return model.document, Context(pages=model)
@@ -286,6 +298,7 @@ FACTORIES = {
     "drop_overflow_rests": overflow_rest,
     "normalize_forward_durations": forward_crash,
     "normalize_tuplet_rests": tuplet_rest,
+    "normalize_grace_notes": grace_notes,
     "mark_pickup": pickup,
     "pad_empty_staves": empty_staff,
     "rebuild_voice_layers": fragmented,
@@ -324,6 +337,7 @@ CONTRACTS = {
     "drop_overflow_rests": PassContract("drop_overflow_rests", allows_remove_notes=True),
     "normalize_forward_durations": PassContract("normalize_forward_durations", allows_retime=True),
     "normalize_tuplet_rests": PassContract("normalize_tuplet_rests", allows_retime=True),
+    "normalize_grace_notes": PassContract("normalize_grace_notes"),
     "mark_pickup": PassContract("mark_pickup"),
     "pad_empty_staves": PassContract("pad_empty_staves", allows_add_notes=True, allows_voice_changes=True),
     "rebuild_voice_layers": PassContract(

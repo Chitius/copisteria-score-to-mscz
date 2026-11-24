@@ -14,6 +14,7 @@ from pathlib import Path
 
 CREDIT_TYPES = {"title", "subtitle", "composer", "arranger", "transcriber", "lyricist"}
 MARK_KEYS = ("text", "rehearsal", "tempo", "metronome")
+GRADUAL_TYPES = {"ritardando", "rallentando", "accelerando", "stringendo", "allargando"}
 _CREDIT_PREFIXES = {
     "composer": (r"original\s+artist\s*:\s*", r"composer\s*:\s*", r"music\s+by\s*:?\s*"),
     "arranger": (r"arranged\s+by\s*:?\s*", r"arranger\s*:\s*"),
@@ -91,6 +92,10 @@ def validate_agent_facts(
             problems.append(f"{prefix}: measure {mark['measure']} exceeds {measure_count}")
         if not any(mark.get(key) for key in MARK_KEYS):
             problems.append(f"{prefix}: empty mark (text/rehearsal/tempo/metronome)")
+        if mark.get("gradual") is not None and mark["gradual"] not in GRADUAL_TYPES:
+            problems.append(
+                f"{prefix}: gradual must be one of {sorted(GRADUAL_TYPES)}, got {mark['gradual']!r}"
+            )
         if mark.get("placement") not in (None, "above", "below"):
             problems.append(f"{prefix}: placement must be above/below")
         beat = mark.get("beat")

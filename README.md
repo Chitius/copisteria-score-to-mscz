@@ -47,7 +47,7 @@ python -m scorepipe.cli path/to/pages -o out/score/score.musicxml --mscz-out out
 | `convert.py` | `--no-mscz` / `--no-pdf` | stop before/without render (draft only) |
 | `scorepipe.cli` | `--truncate-overfull` | explicit forced-repair pass; requires `--mscz-out` |
 | `notation_patches.py` | `apply --dry-run` | validate and report changes without writing |
-| `notation_patches.py` | `accept --reviewer NAME` | promote selected ottava/tuplet patches |
+| `notation_patches.py` | `accept --reviewer NAME` | promote selected ottava/tuplet/clef patches |
 
 ## What the skill produces
 
@@ -146,9 +146,9 @@ original wording in evidence. See [`references/facts.md`](references/facts.md).
 
 ### Constrained notation patches
 
-Long-tail symbols are not forced into facts. The prototype supports `ottava` (`8va`/`8vb`) and
-constrained `tuplet` patches as musical-anchor operations; the compiler writes MusicXML
-`<octave-shift>` / tuplet notation and MuseScore builds the spanner/bracket:
+Long-tail symbols are not forced into facts. The prototype supports `ottava` (`8va`/`8vb`),
+constrained `tuplet`, and `clef` patches as musical-anchor operations; the compiler writes MusicXML
+`<octave-shift>` / tuplet notation / `<clef>` and MuseScore builds the spanner/bracket:
 
 ```bash
 python scripts/notation_patches.py map --input out/score/score.musicxml -o review/score-map.json
@@ -174,13 +174,13 @@ compares measure-length findings between the two. The default `forced-truncation
 overfull voices so MuseScore can edit them; it is marked `semantic_authority: false` and records
 every operation in `truncation-report.json`. See [`references/review.md`](references/review.md).
 
-## Current status (2026-11-21)
+## Current status (2026-11-23)
 
 Tests:
 
 ```text
-python -m unittest discover -s tests   # 256 tests
-python -m pytest tests -q              # 340 tests
+python -m unittest discover -s tests   # 278 tests
+python -m pytest tests -q              # 363 tests
 ```
 
 Corpus (sounding-note match; rests excluded from the primary score):
@@ -193,20 +193,28 @@ Corpus (sounding-note match; rests excluded from the primary score):
 | Der Lindenbaum | 99.51% | 51.44% | raw OMR is the limiting factor |
 | Sincerely | — | — | no ground truth; structural/display verifier clean |
 
-Recent Sincerely-specific fixes:
+Recent Gurenge-specific fixes (2026-11):
 
-- padded pickup is moved to the end of the first bar, and its display rest is hidden;
-- the initial courtesy 4/4 is deleted from the display score, not merely made invisible;
-- stray post-barline rests no longer cascade through m24/m25/m26 and delete their second halves;
-- mixed 8th/16th beam runs follow the beat grid, while complete source groups are hard boundaries.
+- grace chords are zero time in the mscx model (MuseScore writes `<grace16/>` and still emits a
+  `durationType`); this removed 8 false `mscx-measure-length`/`mscx-tuplet-length` findings and
+  stopped the forced copy from deleting real notes to compensate;
+- MuseScore materialises `<grace/>` + `<type>eighth</type>` as a real note, so `normalize_grace_notes`
+  rewrites grace type to the 16th value MuseScore itself exports;
+- a tie between two grace notes makes the importer lengthen the bar, so `reconcile_tie_slurs`
+  drops it;
+- `scripts/review.py` records a dirty mechanical baseline as a `finding` instead of blocking, so the
+  forced-truncation tree is still produced; `timing-report.json` reports `available: false` rather
+  than inventing deltas when a run is missing;
+- MuseScore discovery is shared by `preflight`, `convert` and `review` and searches the environment,
+  `PATH`, the Windows `App Paths` registry and every drive's `Program Files`, not one hard-coded path.
 
 ## Known limitations
 
 - Agent/vision fact extraction has page preparation, coverage checking, evidence validation, merge,
   and a separate corrections review; real delivery still needs per-page review and resolving
   `unresolved`/`corrections`.
-- The notation-patch compiler currently supports `ottava` and constrained `tuplet`; pedal/hairpin/
-  dynamic operations are future work.
+- The notation-patch compiler currently supports `ottava`, constrained `tuplet` and `clef`;
+  pedal/hairpin/dynamic operations are future work.
 - Same-value beam runs are still rebuilt as one group; a full compound-metre `BeamGrouper` is
   future work.
 - Voice merge skips tuplet measures rather than preserving nested ratios.

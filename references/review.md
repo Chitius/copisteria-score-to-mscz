@@ -33,6 +33,12 @@ The loop writes `review-report.json` and exits 2 without running the **reviewed*
 A mechanical baseline (no agent facts, no patches) is still produced first when it is enabled, so
 the delivery keeps a clean comparison even when the reviewed version is blocked.
 
+A **dirty mechanical baseline is not a blocker**. It is the comparison tree, and an overfull voice
+in it is exactly the condition the forced-truncation tree exists to repair; blocking on it would
+prevent that repair from ever running. The baseline's exit code and verifier count are recorded in
+`findings`, and `mechanical.ready` stays `false`. The acceptance gate is the *reviewed* run: its
+exit code and its own display verifier.
+
 Explicit overrides for an interim review:
 
 ```bash
@@ -75,8 +81,10 @@ review/score/
 `mechanical/` is the pipeline output without agent facts or patches. It is the comparison/baseline
 artifact, not an alternative final delivery. `review-report.json` records page coverage, missing
 pages, unresolved claims, corrections, patch count, the mechanical baseline exits and artifact
-paths. `timing-report.json` compares `measure-length` / `mscx-measure-length` findings between the
-mechanical baseline and the reviewed output, with `introduced` and `resolved` lists.
+paths, plus a `findings` list for non-blocking problems (a dirty baseline, for example).
+`timing-report.json` compares `measure-length` / `mscx-measure-length` findings between the
+mechanical baseline and the reviewed output, with `introduced` and `resolved` lists. It reports
+`available: false` instead of inventing deltas when one of the two runs did not produce a report.
 
 `forced-truncation/` is enabled by default. It is the reviewed score with overfull voices forced to
 the bar line so the measure can be opened and edited in MuseScore. It is **not** semantically

@@ -46,6 +46,35 @@ and `end` must be after `start`. `page` and `bbox`/`crop` are required evidence 
 For a wrong OMR 8va on the bass staff, use `remove` on staff 2 and `add` on staff 1. Do not let a
 single patch silently move a spanner between staves.
 
+## Clef placement
+
+A clef change that copisteria put on the wrong bar is one patch, not a hand edit. It writes a
+standard MusicXML `<clef>` at the anchor measure and, when `from_measure` is given, retires the
+clef the OMR placed there. There is no `beat`: a clef belongs to the barline.
+
+```json
+{
+  "patches": [
+    {
+      "op": "clef",
+      "measure": 56,
+      "staff": 2,
+      "clef": "F",
+      "line": 4,
+      "from_measure": 58,
+      "status": "accepted",
+      "page": 4,
+      "bbox": [178, 138, 193, 163],
+      "evidence": "bass clef is printed at the end of m55; copisteria read it at m58"
+    }
+  ]
+}
+```
+
+`clef` is `G`, `F` or `C`; `line` is 1–5. The patch runs before the structural fixpoint, so the
+redundant-clef pass can also drop a duplicate that follows. `status` must be `accepted` and
+`page` + `bbox`/`crop` are required, like the other operations.
+
 ## Tuplet rhythm corrections
 
 `tuplet` retimes an existing, complete run of pitched notes in one measure/staff/voice. It is for OMR

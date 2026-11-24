@@ -56,8 +56,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"patch index out of range: {index}")
                 return 1
             patch = patches[index]
-            if patch.get("op") not in ("tuplet", "ottava"):
-                print(f"patches[{index}] is not a tuplet/ottava patch")
+            if patch.get("op") not in ("tuplet", "ottava", "clef"):
+                print(f"patches[{index}] is not a tuplet/ottava/clef patch")
                 return 1
             patch["status"] = "accepted"
             patch["accepted_by"] = args.reviewer

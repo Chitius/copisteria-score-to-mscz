@@ -23,6 +23,8 @@ Sources (MuseScore Studio, GPL-3.0):
   written duration by *every* enclosing tuplet ratio
   (``ratio == actualNotes / normalNotes``); ``endTick()`` is
   ``tick() + actualTicks()``.
+* Grace chords (``<grace16/>`` and friends) are placed at the current tick and
+  never advance it; their ``durationType`` is glyph information only.
 * ``src/engraving/dom/tuplet.h`` - for a tuplet, ``baseLen * actualNotes`` is the
   total *written* duration of its elements and ``baseLen * normalNotes`` is the
   total *sounding* duration.  A well-formed tuplet has
@@ -57,6 +59,20 @@ BASE_WHOLE = {
     "128th": Fraction(1, 128),
     "256th": Fraction(1, 256),
 }
+
+# MuseScore marks a grace chord with one of these children instead of a duration.
+# ``grace4``/``grace8``/``grace16``/... carry the *appoggiatura* note value; a plain
+# ``<grace>`` is the legacy accent.  None of them advances the voice tick.
+GRACE_TAGS = (
+    "grace",
+    "grace4",
+    "grace8",
+    "grace16",
+    "grace32",
+    "grace64",
+    "grace128",
+    "grace256",
+)
 
 # Legal note values with zero, one or two dots, smallest first.
 LEGAL_VALUES: tuple[tuple[str, int, Fraction], ...] = tuple(
@@ -173,6 +189,18 @@ def element_ticks(element: ElementTree.Element) -> int:
     return fraction_ticks(written)
 
 
+def is_grace(element: ElementTree.Element) -> bool:
+    """True for a MuseScore grace ``Chord``/``Rest``.
+
+    MuseScore writes ``<grace16/>`` (or ``grace4``..``grace256``) as a child of the chord and
+    still emits a ``<durationType>``.  The chord is engraved at zero time: it is placed at the
+    current tick and never advances it.
+    """
+    if element.tag not in ("Chord", "Rest"):
+        return False
+    return any(element.find(tag) is not None for tag in GRACE_TAGS)
+
+
 def element_written(element: ElementTree.Element, measure: Fraction | None = None) -> Fraction | None:
     """Written duration of a Chord/Rest in whole notes.
 
@@ -182,7 +210,12 @@ def element_written(element: ElementTree.Element, measure: Fraction | None = Non
     writer therefore emits ``<dots>`` before ``<durationType>``.  Reading in
     order here is what makes a malformed ``durationType``/``dots`` pair visible
     instead of silently over-crediting the note.
+
+    A grace chord is always zero: its ``durationType`` describes the slash/appoggiatura
+    glyph, not time in the bar.
     """
+    if is_grace(element):
+        return Fraction(0)
     if element.tag not in ("Chord", "Rest"):
         return measure
     ticks: Fraction | None = None
@@ -333,6 +366,24 @@ def voice_timeline(voice: ElementTree.Element, measure: Fraction | None = None) 
         elif child.tag in ("Chord", "Rest"):
             written = element_written(child, measure)
             if written is None:
+                continue
+            if written == 0:
+                # Grace notes (and any zero-length chord the importer emits) sit on the
+                # current tick without consuming time, so they never create a gap or an
+                # overlap and never contribute written length to an enclosing tuplet.
+                items.append(
+                    TimelineItem(
+                        element=child,
+                        kind=child.tag.lower(),
+                        start=position,
+                        end=position,
+                        written=Fraction(0),
+                        actual=Fraction(0),
+                        tuplet_depth=len(stack),
+                    )
+                )
+                if stack:
+                    stack[-1].direct.append(child)
                 continue
             ratio = Fraction(1)
             for value in ratios:

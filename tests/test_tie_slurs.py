@@ -15,14 +15,16 @@ PART = """
 """
 
 
-def note(step, octave, duration, *, tie=None, slur=None, voice="1", chord=False):
+def note(step, octave, duration, *, tie=None, slur=None, voice="1", chord=False, grace=False):
     tie_tag = f'<tie type="{tie}"/>' if tie else ""
     slur_tag = f'<slur type="{slur}" number="1"/>' if slur else ""
     notations = f"<notations>{slur_tag}</notations>" if slur_tag else ""
+    grace_tag = "<grace/>" if grace else ""
+    duration_tag = "" if grace else f"<duration>{duration}</duration>"
     chord_tag = "<chord/>" if chord else ""
     return (
-        f"<note>{chord_tag}<pitch><step>{step}</step><octave>{octave}</octave></pitch>"
-        f"<duration>{duration}</duration>{tie_tag}<voice>{voice}</voice>{notations}</note>"
+        f"<note>{grace_tag}{chord_tag}<pitch><step>{step}</step><octave>{octave}</octave></pitch>"
+        f"{duration_tag}{tie_tag}<voice>{voice}</voice>{notations}</note>"
     )
 
 
@@ -85,6 +87,27 @@ class ReconcileTieSlursTest(unittest.TestCase):
         )
         self.assertEqual(ReconcileTieSlurs().run(doc, Context()).changed, 1)
         self.assertEqual(len(list(doc.root.iter("slur"))), 0)
+        self.assertEqual(len(list(doc.root.iter("tie"))), 2)
+
+    def test_tie_between_grace_notes_is_dropped(self):
+        # MuseScore materialises a tied second grace as a real note, lengthening the bar.
+        body = (
+            note("C", 4, 16)
+            + note("B", 3, 0, tie="start", grace=True)
+            + note("B", 3, 0, tie="stop", grace=True)
+            + note("E", 4, 48)
+        )
+        doc = build(body)
+        result = ReconcileTieSlurs().run(doc, Context())
+        self.assertEqual(result.changed, 2)
+        self.assertEqual(len(list(doc.root.iter("tie"))), 0)
+        self.assertEqual(len(list(doc.root.iter("tied"))), 0)
+        self.assertEqual(ReconcileTieSlurs().run(doc, Context()).changed, 0)
+
+    def test_tie_from_a_grace_to_a_real_note_is_kept(self):
+        body = note("C", 4, 16) + note("G", 4, 0, tie="start", grace=True) + note("G", 4, 48, tie="stop")
+        doc = build(body)
+        ReconcileTieSlurs().run(doc, Context())
         self.assertEqual(len(list(doc.root.iter("tie"))), 2)
 
     def test_between_uses_measure_and_onset(self):

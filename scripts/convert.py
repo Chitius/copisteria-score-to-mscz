@@ -18,6 +18,15 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
     sys.stderr.reconfigure(errors="replace")
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+try:
+    from scorepipe.discovery import find_musescore as _discover_musescore
+except Exception:  # pragma: no cover - the scorepipe import is probed separately
+    _discover_musescore = None
+
 
 def _run(command: list[str], cwd: Path, tolerate: bool = False) -> tuple[int, str]:
     print("+ " + " ".join(str(part) for part in command))
@@ -56,6 +65,9 @@ def _resolve_page_dir(work: Path) -> Path | None:
 
 
 def _find_musescore(explicit: str | None) -> Path | None:
+    if _discover_musescore is not None:
+        located = _discover_musescore(explicit)
+        return Path(located) if located else None
     candidates = [explicit, os.environ.get("MUSESCORE_EXE")]
     for name in ("MuseScore4.exe", "MuseScore4", "mscore4", "musescore4"):
         from shutil import which

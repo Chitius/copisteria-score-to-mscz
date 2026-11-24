@@ -117,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
         doc = Document.load(path)
     tuplets_payload = None
     ottava_payload = None
+    clefs_payload = None
     if args.patches:
         patches_payload = load_patches(args.patches)
         problems = validate_patches(patches_payload, doc, require_acceptance=True)
@@ -130,6 +131,13 @@ def main(argv: list[str] | None = None) -> int:
         ottava_payload = {
             "patches": [patch for patch in patches_payload.get("patches") or [] if patch.get("op") == "ottava"]
         }
+        clefs_payload = {
+            "patches": [patch for patch in patches_payload.get("patches") or [] if patch.get("op") == "clef"]
+        }
+    if clefs_payload and clefs_payload["patches"]:
+        # before the structural fixpoint: the placed clef must go through the redundant-clef pass
+        changed = apply_patches(doc, clefs_payload)
+        print(f"patches: {changed} clef change(s)")
     if tuplets_payload and tuplets_payload["patches"]:
         changed = apply_patches(doc, tuplets_payload)
         print(f"patches: {changed} tuplet change(s)")

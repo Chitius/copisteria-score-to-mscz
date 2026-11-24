@@ -240,26 +240,41 @@ def _replace_staff(
     doc: Document, measure, staff: str, sequence: list, extras: list[list] | None = None
 ) -> None:
     children = list(measure)
-    segments: list[list] = []
+    segments: list[tuple[list, ElementTree.Element | None]] = []
     current: list = []
     for child in children:
         if child.tag == "backup":
-            segments.append(current)
+            segments.append((current, child))
             current = []
         else:
             current.append(child)
-    segments.append(current)
+    segments.append((current, None))
 
     leading_tags = ("attributes", "print", "sound", "barline")
     leading = [child for child in children if child.tag in leading_tags]
     other_blocks: list[list] = []
-    for segment in segments:
+    for position, (segment, _following_backup) in enumerate(segments):
         staffs = {child.findtext("staff") or "1" for child in segment if child.tag == "note"}
         if not staffs or staffs == {staff}:
             continue
         # keep the whole block (forwards, gaps, directions), not only its notes, otherwise the
         # other staff's onsets move (laputa m31: bass D3 from beat 3 to beat 1)
-        other_blocks.append([child for child in segment if child.tag not in leading_tags])
+        block = [child for child in segment if child.tag not in leading_tags]
+        if not block:
+            continue
+        preceding_backup = segments[position - 1][1] if position else None
+        if (
+            other_blocks
+            and preceding_backup is not None
+            and _block_staffs(other_blocks[-1]) == staffs
+        ):
+            # The source split one staff's stream on a backup of its own (an overlapping rest).
+            # Re-inserting the halves as separate blocks moves that rest to the barline; keep the
+            # backup so the rest stays where the OMR put it (Suzume m16).
+            other_blocks[-1].append(ElementTree.fromstring(ElementTree.tostring(preceding_backup)))
+            other_blocks[-1].extend(block)
+            continue
+        other_blocks.append(block)
 
     for child in children:
         measure.remove(child)
@@ -279,9 +294,17 @@ def _replace_staff(
 
 
 def _block_ticks(block: list) -> int:
+    """Net advance of a block over the block's own stream.
+
+    A kept block may contain a source backup (a staff whose stream was split on an overlapping
+    rest), so backups subtract; constructed blocks never contain one.
+    """
     total = 0
     for child in block:
         if child.tag == "backup":
+            text = child.findtext("duration")
+            if text:
+                total -= int(text)
             continue
         if child.tag == "note" and child.find("chord") is not None:
             continue
@@ -290,6 +313,10 @@ def _block_ticks(block: list) -> int:
             if text:
                 total += int(text)
     return total
+
+
+def _block_staffs(block: list) -> set[str]:
+    return {child.findtext("staff") or "1" for child in block if child.tag == "note"}
 
 
 def _pitch(note_element) -> tuple[str, str, str] | None:

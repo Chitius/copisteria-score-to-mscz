@@ -165,6 +165,70 @@ class ReviewFailureTest(unittest.TestCase):
         self.assertIn("pdf", report["artifacts"])
 
 
+class ReviewBaselineFindingTest(unittest.TestCase):
+    def test_dirty_mechanical_baseline_does_not_block_the_reviewed_run(self):
+        work = WORK / "review_baseline"
+        pages = work / "pages"
+        pages.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(FIXTURE, pages / "page1.musicxml")
+        facts = work / "facts"
+        facts.mkdir(parents=True, exist_ok=True)
+        (facts / "agent-page1.json").write_text(
+            json.dumps({"producer": {"name": "agent-visual", "pages": [1]}}),
+            encoding="utf-8",
+        )
+        source = work / "source.pdf"
+        source.write_bytes(b"draft")
+        outdir = work / "out"
+        calls = []
+
+        def fake_run(command, cwd):
+            calls.append(command)
+            if "scorepipe.cli" in command:
+                musicxml = Path(command[command.index("-o") + 1])
+                musicxml.parent.mkdir(parents=True, exist_ok=True)
+                musicxml.write_text("musicxml", encoding="utf-8")
+                Path(command[command.index("--report") + 1]).write_text(
+                    json.dumps({"verifier": []}), encoding="utf-8"
+                )
+                if "--mscz-out" in command:
+                    Path(command[command.index("--mscz-out") + 1]).write_bytes(b"mscz")
+                # the mechanical baseline is the only run that fails
+                return 1 if "mechanical" in command[command.index("-o") + 1] else 0
+            Path(command[command.index("-o") + 1]).write_bytes(b"pdf")
+            return 0
+
+        with (
+            patch.object(review_script, "_pdf_pages", return_value=1),
+            patch.object(review_script, "_render_pages", return_value=1),
+            patch.object(review_script, "_run", side_effect=fake_run),
+        ):
+            code = review_script.main(
+                [
+                    str(source),
+                    "--pages",
+                    str(pages),
+                    "--facts-dir",
+                    str(facts),
+                    "--outdir",
+                    str(outdir),
+                    "--musescore",
+                    "musescore",
+                ]
+            )
+
+        report = json.loads((outdir / "review-report.json").read_text(encoding="utf-8"))
+        self.assertEqual(code, 0)
+        self.assertTrue(report["ready"], report["blockers"])
+        self.assertEqual(report["blockers"], [])
+        self.assertTrue(any("mechanical baseline" in text for text in report["findings"]))
+        self.assertTrue(
+            any("--truncate-overfull" in command for command in calls),
+            "the forced-truncation tree must still be built when the baseline is dirty",
+        )
+        self.assertTrue(any(Path(command[command.index("-o") + 1]).name == "score.musicxml" for command in calls if "scorepipe.cli" in command))
+
+
 class TimingReportTest(unittest.TestCase):
     def test_timing_delta_lists_introduced_and_resolved(self):
         work = WORK / "timing"

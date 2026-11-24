@@ -159,8 +159,26 @@ class MscxMeasureLengthTest(unittest.TestCase):
         self.assertEqual(len(hidden_non_measure_rests(doc, Context())), 1)
 
     def test_text_voice_rest_is_reported(self):
-        doc = _doc_with_voices("<voice><StaffText>text</StaffText><Rest><durationType>measure</durationType></Rest></voice>")
+        doc = _doc_with_voices(
+            "<voice><StaffText>text</StaffText><Rest><durationType>measure</durationType></Rest></voice>"
+            f"<voice>{chord('whole')}</voice>"
+        )
         self.assertEqual(len(text_voice_rests(doc, Context())), 1)
+
+    def test_lone_text_voice_keeps_its_measure_rest(self):
+        # Suzume m1: Tempo + Dynamic + a whole-measure rest is the staff's only content.
+        doc = _doc_with_voices(
+            "<voice><Tempo><tempo>1.3</tempo><text>q = 78</text></Tempo>"
+            "<Rest><durationType>measure</durationType><duration>1/1</duration></Rest></voice>"
+        )
+        self.assertEqual(text_voice_rests(doc, Context()), [])
+
+    def test_measure_without_written_time_is_reported(self):
+        doc = _doc_with_voices(
+            "<voice><Dynamic><subtype>mf</subtype></Dynamic><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig></voice>"
+        )
+        violations = measure_lengths(doc, Context())
+        self.assertEqual([violation.code for violation in violations], ["mscx-measure-length"])
 
     def test_padding_voice_is_reported(self):
         doc = _doc_with_voices(f"<voice>{chord('whole')}</voice><voice>{rest('whole')}</voice>")

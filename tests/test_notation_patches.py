@@ -128,6 +128,71 @@ class NotationPatchesTest(unittest.TestCase):
         self.assertEqual(list(doc.root.iter("octave-shift")), [])
         self.assertEqual(verify_patches(doc, patch(mode="remove")), [])
 
+    def test_clef_patch_places_and_retires_a_staff_clef(self):
+        # Suzume m56/m58: copisteria put the bass clef three bars late; the patch moves it.
+        root = ElementTree.fromstring(
+            """<score-partwise version="4.0">
+            <part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>
+            <part id="P1">
+              <measure number="1">
+                <attributes><divisions>4</divisions>
+                  <time><beats>4</beats><beat-type>4</beat-type></time>
+                  <clef number="1"><sign>G</sign><line>2</line></clef>
+                  <clef number="2"><sign>G</sign><line>2</line></clef>
+                </attributes>
+                """ + note_xml("C4", duration=16, staff=1) + """
+              </measure>
+              <measure number="2">
+                <attributes><clef number="2"><sign>F</sign><line>4</line></clef></attributes>
+                """ + note_xml("C3", duration=16, staff=2) + """
+              </measure>
+            </part></score-partwise>"""
+        )
+        doc = Document(root)
+        payload = {
+            "patches": [
+                {
+                    "op": "clef",
+                    "measure": 1,
+                    "staff": 2,
+                    "clef": "F",
+                    "line": 4,
+                    "from_measure": 2,
+                    "status": "accepted",
+                    "page": 4,
+                    "bbox": [70, 320, 90, 340],
+                    "evidence": "bass clef at the end of the previous bar",
+                }
+            ]
+        }
+        self.assertEqual(validate_patches(payload, doc, require_acceptance=True), [])
+        self.assertEqual(apply_patches(doc, payload), 2)
+        clefs = [
+            (measure.get("number"), clef.get("number"), clef.findtext("sign"))
+            for measure in doc.measures()
+            for clef in measure.iter("clef")
+        ]
+        self.assertIn(("1", "2", "F"), clefs)
+        self.assertEqual([entry for entry in clefs if entry[0] == "2"], [])
+        self.assertEqual(verify_patches(doc, payload), [])
+
+    def test_clef_patch_requires_acceptance_and_evidence(self):
+        proposed = {
+            "patches": [
+                {
+                    "op": "clef",
+                    "measure": 1,
+                    "staff": 2,
+                    "clef": "F",
+                    "line": 4,
+                    "status": "proposed",
+                }
+            ]
+        }
+        problems = validate_patches(proposed, Document.load(TINY))
+        self.assertTrue(any("status must be accepted" in problem for problem in problems))
+        self.assertTrue(any("evidence" in problem for problem in problems))
+
     def test_tuplet_patch_survives_post_pipeline_check(self):
         doc = make_doc(
             "".join(note_xml(pitch, duration=16) for pitch in ("C4", "D4", "E4", "F4", "G4"))

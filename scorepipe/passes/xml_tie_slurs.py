@@ -6,7 +6,9 @@ Rules:
 2. a tie that has another pitch between its endpoints in the same voice cannot be a tie
    (a tie is contiguous on one pitch), so it becomes a slur;
 3. a slur whose endpoints are the same pitch and contiguous, with no note between them in the
-   same voice, is a tie.
+   same voice, is a tie;
+4. a tie between two grace notes is dropped: MuseScore cannot engrave it and materialises the
+   second grace as a real note, which lengthens the bar.
 """
 
 from __future__ import annotations
@@ -25,18 +27,51 @@ class ReconcileTieSlurs:
         phase=Phase.STRUCTURAL,
         kind=Kind.MECHANICAL,
         owns=("tie-slur-reconciliation",),
-        description="remove a slur duplicated by a tie; turn non-contiguous ties into slurs and "
-        "contiguous same-pitch slurs into ties",
-        measure="slurs duplicated by ties, ties that span other pitches, tie-shaped slurs",
+        description="remove a slur duplicated by a tie; drop ties between grace notes; turn "
+        "non-contiguous ties into slurs and contiguous same-pitch slurs into ties",
+        measure="slurs duplicated by ties, ties between grace notes, ties that span other "
+        "pitches, tie-shaped slurs",
     )
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
         changed = 0
+        changed += _drop_ties_between_graces(doc)
         changed += _drop_slurs_under_ties(doc)
         changed += _ties_with_other_pitches_to_slurs(doc, ctx)
         changed += _tie_shaped_slurs_to_ties(doc)
         changed += _drop_orphan_slurs(doc)
         return PassResult(changed=changed)
+
+
+def _drop_ties_between_graces(doc: Document) -> int:
+    """Remove a tie whose two ends are grace notes.
+
+    MuseScore cannot engrave a tied grace pair: on import it turns the second grace into a real
+    note, which silently lengthens the bar (Gurenge m111/m112).  A tie between graces carries no
+    rhythmic meaning, so it is removed at the source instead.
+
+    ``Document.events`` skips notes without ``<duration>``, so graces are scanned directly.
+    """
+    removed = 0
+    for _number, measure in doc.iter_measures():
+        open_ties: dict[tuple, ElementTree.Element] = {}
+        for note in measure.iter("note"):
+            key = (
+                note.findtext("staff") or "1",
+                note.findtext("voice") or "1",
+                _pitch(note),
+            )
+            for tie in note.findall("tie"):
+                kind = tie.get("type")
+                if kind == "start":
+                    open_ties[key] = note
+                elif kind == "stop" and key in open_ties:
+                    start = open_ties.pop(key)
+                    if start.find("grace") is not None and note.find("grace") is not None:
+                        _remove_tie(start, "start")
+                        _remove_tie(note, "stop")
+                        removed += 2
+    return removed
 
 
 def _drop_orphan_slurs(doc: Document) -> int:

@@ -28,6 +28,14 @@ edits to the score; an inject pass applies them mechanically.
       "placement": "above",
       "rehearsal": "A",
       "text": "Allegro"
+    },
+    {
+      "measure": 75,
+      "beat": 0,
+      "placement": "above",
+      "text": "rit.",
+      "gradual": "ritardando",
+      "length_measures": 2
     }
   ]
 }
@@ -36,6 +44,14 @@ edits to the score; an inject pass applies them mechanically.
 `measure` is 1-based; `beat` is 0-based in quarter-note beats within the measure. `placement` is
 `above` or `below`. Tempo-notation text such as `q = 72` is injected once with a `<sound tempo>`,
 not duplicated as a metronome glyph.
+
+`gradual` marks a printed `rit.`/`rall.`/`accel.`/`string.`/`allarg.` word. Without it the word is
+injected as plain staff text; with it the display pass `upgrade_gradual_texts` replaces the text
+with a real paired `GradualTempoChange` spanner (`beginText` keeps the printed word). Values:
+`ritardando`, `rallentando`, `accelerando`, `stringendo`, `allargando`. The spanner ends
+`length_measures` measures after the fact measure (default 1); `length_fractions` (e.g. `-1/8`)
+moves the end backwards from that measure start. Quote the printed word exactly — the text match
+is literal, including italics.
 
 The JSON Schema is [`schemas/facts.schema.json`](../schemas/facts.schema.json).
 
