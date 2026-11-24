@@ -29,7 +29,16 @@ from scorepipe.mscz_export import find_musescore  # noqa: E402
 
 
 def _stems(directory: Path) -> list[str]:
-    return sorted(path.name[: -len(".musicxml")] for path in directory.glob("*.musicxml"))
+    """Page stems: a MusicXML only counts as a page when it has a reading beside it.
+
+    A merged ``score.musicxml`` may sit in the same directory (it is the title source); it is not
+    a page and must not become one just because it is a MusicXML.
+    """
+    return sorted(
+        path.name[: -len(".musicxml")]
+        for path in directory.glob("*.musicxml")
+        if (directory / f"{path.stem}.reading.json").is_file()
+    )
 
 
 def build_pages(directory: Path, scan_dir: Path | None) -> list[proof_sheet.SheetPage]:
@@ -67,6 +76,11 @@ def main() -> int:
     parser.add_argument("--work-dir", type=Path, help="the OMR work dir (uses <work>/copisteria and <work>/pages)")
     parser.add_argument("--scan-dir", type=Path, help="where the page images are, if not beside the MusicXML")
     parser.add_argument("--report", type=Path, help="scorepipe report.json; marks measure-length mismatches with =")
+    parser.add_argument(
+        "--title-from",
+        type=Path,
+        help="merged score.musicxml; its title/credit block is put on the first page before rendering",
+    )
     parser.add_argument("--out", type=Path, help="output directory (default: <pages>/sheet)")
     parser.add_argument("--musescore", help="MuseScore executable (default: discover)")
     parser.add_argument("--red", type=float, default=proof_sheet.RED_MIN, help="score at or above which a bar is red (default 3.0)")
@@ -99,6 +113,13 @@ def main() -> int:
     if not pages:
         parser.error(f"no page MusicXML in {directory}")
 
+    title_source = args.title_from
+    if title_source is None:
+        for candidate in (directory.parent / "score.musicxml", directory / "score.musicxml"):
+            if candidate.is_file():
+                title_source = candidate
+                break
+
     musescore = find_musescore(args.musescore)
     out_dir = args.out or (directory / "sheet")
     summary = proof_sheet.review_sheets(
@@ -109,6 +130,7 @@ def main() -> int:
         red_min=args.red,
         yellow_min=args.yellow,
         width=args.width,
+        title_source=title_source,
     )
     for page in summary["outputs"]["pages"]:
         report = json.loads(Path(page["json"]).read_text(encoding="utf-8"))

@@ -151,7 +151,13 @@ How the two sides are aligned:
   over 30 inches, so blank bands taller than 5% of the page are collapsed before drawing (the count
   is recorded as `render_collapsed_bands`), while the scan keeps its real spacing;
 - the legend (red/yellow rows, the `≠` row when there are length errors, and a footnote) sits in
-  the caption band under both columns, never over the music.
+  the caption band under both columns, never over the music;
+- the first page's render gets the title/credit block of the merged score (`--title-from`, default
+  `<pages>/../score.musicxml` or `<pages>/score.musicxml`), because a page file carries notes but no
+  title; the credits are positioned like the previous skill's `write_credits` (title centred near
+  the top, composer right-aligned), since MuseScore otherwise stacks them at the bottom of the page.
+  Both columns then show the same title block, which is what makes the first page readable at a
+  glance. The copy is written next to the render, never over the OMR page file.
 
 Outputs, named after the previous skill: `<page>.compare.png`, `<page>.compare.json`,
 `review_sheet.md` (the score-wide priority list: objective length errors first, then by score) and

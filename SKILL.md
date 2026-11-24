@@ -123,6 +123,9 @@ python scripts/review_sheet.py --pages out/song/work/copisteria --report out/son
 OMR 自己的 `barLine_*` 检测（`<stem>.dets_*.json`）；渲染侧检出的小节数必须等于该页 MusicXML
 声明的小节数，扫描侧也必须一致，否则该侧**不上色**并记 `render_layout_mismatch` /
 `scan_layout_mismatch`——标错小节比不标更糟。图例在两侧下方：红＝最低档、黄＝中档、`≠`＝时值不符。
+第一页的渲染列会从合并谱（`--title-from`，默认找 `<pages>/../score.musicxml`）拷入标题/作曲
+credit，因为页文件本身只有音符、没有标题；credit 按老 `write_credits` 的坐标定位（标题居中靠上、
+作曲右对齐），否则 MuseScore 会把它们堆到页底。拷贝只写到渲染副本里，不改 OMR 页文件。
 产物：`<page>.compare.png`、`<page>.compare.json`、`review_sheet.md`、`review_sheet_summary.json`。
 
 文字层可以提供标题、作曲、速度文字、排练号和说明文字。添加 facts 前先读

@@ -393,3 +393,89 @@ def test_a_length_issue_is_listed_as_an_objective_error():
     assert "Objective errors" in markdown
     assert "measure 1" in markdown
     assert summary["issues"]["length"] == 1, summary["issues"]
+
+
+# ---------------------------------------------------------------------------
+# the first page's title block
+# ---------------------------------------------------------------------------
+
+
+def _merged_score(path: Path) -> Path:
+    """A merged score carrying the header a facts pass would write."""
+    path.write_text(
+        '<score-partwise>'
+        "<work><work-title>5. Der Lindenbaum</work-title></work>"
+        '<identification><creator type="composer">Franz Schubert</creator></identification>'
+        '<credit page="1"><credit-type>title</credit-type>'
+        "<credit-words>5. Der Lindenbaum</credit-words></credit>"
+        '<credit page="1"><credit-type>composer</credit-type>'
+        "<credit-words>Franz Schubert</credit-words></credit>"
+        '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+        '<part id="P1"><measure number="1"><note/></measure></part>'
+        "</score-partwise>",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_the_header_is_copied_in_valid_musicxml_order():
+    from xml.etree import ElementTree
+
+    root = workspace("header")
+    page = root / "p1.musicxml"
+    page.write_text(
+        '<score-partwise>'
+        '<identification><encoding><software>x</software></encoding></identification>'
+        '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+        '<part id="P1"><measure number="1"><note/></measure></part>'
+        "</score-partwise>",
+        encoding="utf-8",
+    )
+    target = root / "with-title.musicxml"
+    injected = proof_sheet.copy_header(_merged_score(root / "score.musicxml"), page, target)
+
+    assert [kind for kind, _ in injected] == ["title", "composer"], injected
+    parsed = ElementTree.parse(target).getroot()
+    tags = [child.tag for child in list(parsed)]
+    assert tags[:3] == ["work", "identification", "credit"], tags
+    assert tags.index("credit") < tags.index("part-list"), tags
+    assert len(parsed.findall("identification")) == 1, "the page's own identification is replaced, not doubled"
+
+
+def test_a_copied_credit_is_positioned_so_it_draws_at_the_top():
+    from xml.etree import ElementTree
+
+    root = workspace("header_position")
+    page = root / "p1.musicxml"
+    page.write_text(
+        '<score-partwise><part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+        '<part id="P1"><measure number="1"><note/></measure></part></score-partwise>',
+        encoding="utf-8",
+    )
+    target = root / "with-title.musicxml"
+    proof_sheet.copy_header(_merged_score(root / "score.musicxml"), page, target)
+
+    credits = ElementTree.parse(target).getroot().findall("credit")
+    title = credits[0].find("credit-words")
+    composer = credits[1].find("credit-words")
+    assert title.get("default-y") and int(title.get("default-y")) > 2000, title.attrib
+    assert title.get("justify") == "center", title.attrib
+    assert composer.get("justify") == "right", composer.attrib
+
+
+def test_a_score_without_credits_leaves_the_page_alone():
+    from xml.etree import ElementTree
+
+    root = workspace("header_none")
+    source = root / "score.musicxml"
+    source.write_text(
+        '<score-partwise><part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+        '<part id="P1"><measure number="1"><note/></measure></part></score-partwise>',
+        encoding="utf-8",
+    )
+    page = root / "p1.musicxml"
+    page.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    target = root / "with-title.musicxml"
+
+    assert proof_sheet.copy_header(source, page, target) == []
+    assert ElementTree.parse(target).getroot().findall("credit") == []

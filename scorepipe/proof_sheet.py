@@ -472,6 +472,130 @@ def length_measures(report_path: Path | None, offset: int, page_measures: int) -
 # ---------------------------------------------------------------------------
 
 
+def fit_cells_to_count(
+    rows: Sequence[Sequence[tuple[int, int, int, int]]],
+    expected: int,
+    fraction: float = 0.70,
+) -> tuple[list[list[tuple[int, int, int, int]]], int]:
+    """Fold the narrowest interior cells until the count reaches ``expected``.
+
+    Used only when the detector found *more* cells than the page declares: the extra ones are
+    stems read as barlines, and the narrowest cells are the suspects.  It never invents a cell, so
+    a page that genuinely has fewer bars than its MusicXML still fails the count check.  Every fold
+    is counted and reported, and a fold needs the cell to be under ``fraction`` of its system's
+    median width -- if nothing qualifies, the mismatch stands.
+    """
+    merged = [list(row) for row in rows]
+    folded = 0
+    while sum(len(row) for row in merged) > expected:
+        best: tuple[float, int, int] | None = None
+        for row_index, row in enumerate(merged):
+            if len(row) < 3:
+                continue
+            widths = sorted(cell[2] - cell[0] for cell in row)
+            median = widths[len(widths) // 2] or 1
+            for cell_index in range(1, len(row) - 1):
+                width = row[cell_index][2] - row[cell_index][0]
+                if width < median * fraction and (best is None or width < best[0]):
+                    best = (float(width), row_index, cell_index)
+        if best is None:
+            break
+        _, row_index, cell_index = best
+        row = merged[row_index]
+        row[cell_index - 1] = (
+            row[cell_index - 1][0],
+            row[cell_index - 1][1],
+            row[cell_index][2],
+            row[cell_index - 1][3],
+        )
+        del row[cell_index]
+        folded += 1
+    return merged, folded
+
+
+A4_WIDTH = 2100
+A4_HEIGHT = 2970
+
+
+def _position_credit(credit) -> None:
+    """Give a credit-words element the page-1 position MuseScore needs to draw it at the top.
+
+    MuseScore stacks a credit without ``default-y`` at the bottom of the page (measured: a garbled
+    strip under the last system), so the copied credits are placed like the previous skill's
+    ``write_credits``: title centred near the top, composer right-aligned under it.
+    """
+    words = credit.find("credit-words")
+    if words is None or words.get("default-y"):
+        return
+    kind = (credit.findtext("credit-type") or "title").strip()
+    if kind == "title":
+        x, y, justify, size = A4_WIDTH // 2, A4_HEIGHT - 170, "center", "28"
+    elif kind == "subtitle":
+        x, y, justify, size = A4_WIDTH // 2, A4_HEIGHT - 260, "center", "16"
+    elif kind == "lyricist":
+        x, y, justify, size = A4_WIDTH - 150, A4_HEIGHT - 250, "right", "12"
+    elif kind == "arranger":
+        x, y, justify, size = A4_WIDTH - 150, A4_HEIGHT - 330, "right", "12"
+    else:
+        x, y, justify, size = A4_WIDTH - 150, A4_HEIGHT - 250, "right", "12"
+    words.set("default-x", str(x))
+    words.set("default-y", str(y))
+    words.set("justify", justify)
+    words.set("valign", "top")
+    words.set("font-size", size)
+
+
+def copy_header(source: Path, page: Path, target: Path) -> list[tuple[str, str]]:
+    """Copy ``work``/``identification``/``credit`` from the merged score into a page copy.
+
+    A page MusicXML is what the reader wrote for that page; the title block lives in the merged
+    score (``apply_credits_facts``) or was copied into the first page by the conversion step.  The
+    sheet renders each page on its own, so without this the first page's render has no title while
+    the scan does.  Only header elements are copied -- notes are never touched.
+
+    Returns the ``(credit-type, credit-words)`` pairs that were added.
+    """
+    import copy as copy_module
+    from xml.etree import ElementTree
+
+    source_root = ElementTree.parse(str(source)).getroot()
+    page_root = ElementTree.parse(str(page)).getroot()
+    added: list[tuple[str, str]] = []
+
+    for index, tag in enumerate(("work", "identification")):
+        element = source_root.find(tag)
+        if element is None:
+            continue
+        existing = page_root.find(tag)
+        if existing is not None:
+            page_root.remove(existing)
+        # MusicXML order: work, movement-number, movement-title, identification, ..., credit,
+        # part-list.  Insert by position so `identification` never lands before `work`.
+        page_root.insert(index, copy_module.deepcopy(element))
+
+    credits = source_root.findall("credit")
+    if credits:
+        for credit in page_root.findall("credit"):
+            page_root.remove(credit)
+        part_list = page_root.find("part-list")
+        index = list(page_root).index(part_list) if part_list is not None else len(page_root)
+        for credit in credits:
+            element = copy_module.deepcopy(credit)
+            element.set("page", element.get("page") or "1")
+            _position_credit(element)
+            page_root.insert(index, element)
+            index += 1
+            added.append(
+                (
+                    (element.findtext("credit-type") or "").strip(),
+                    (element.findtext("credit-words") or "").strip(),
+                )
+            )
+
+    ElementTree.ElementTree(page_root).write(target, encoding="utf-8", xml_declaration=True)
+    return added
+
+
 def render_page_musicxml(musicxml: Path, musescore: str, out_dir: Path) -> list[Path]:
     """Render one page's MusicXML; retry on a tall page when MuseScore splits it in two."""
     pages = _render(musicxml, musescore, out_dir, tall=False)
@@ -863,6 +987,7 @@ def build_sheet(
     red_min: float = RED_MIN,
     yellow_min: float = YELLOW_MIN,
     width: int = COLUMN_WIDTH,
+    title_source: Path | None = None,
 ) -> dict:
     """Render the page, align both sides by measured bar count and write ``<stem>.sheet.png``."""
     from PIL import Image
@@ -904,17 +1029,34 @@ def build_sheet(
             if render_dir.exists():
                 shutil.rmtree(render_dir, ignore_errors=True)
             render_dir.mkdir(parents=True, exist_ok=True)
+            source_xml = page.musicxml
+            if page.offset == 0 and title_source is not None and Path(title_source).is_file():
+                titled = render_dir / "with-title.musicxml"
+                injected = copy_header(Path(title_source), page.musicxml, titled)
+                if injected:
+                    source_xml = titled
+                    report["title_injected"] = injected
+                    warnings.append(
+                        "first page: title/credit block copied from "
+                        f"{Path(title_source).name} before rendering ({len(injected)} credit(s))"
+                    )
             panels = []
-            cells_by_panel = []
+            plain_by_panel = []
             collapsed: list[tuple[int, int]] = []
-            for path in render_page_musicxml(page.musicxml, musescore, render_dir):
+            for path in render_page_musicxml(source_xml, musescore, render_dir):
                 panel = crop_to_ink(Image.open(path).convert("RGB"))
                 panel, removed = collapse_blank_bands(panel)
                 collapsed.extend(removed)
-                cells, _, _ = detect_measures(panel, narrow_filter=True)
+                plain, _, _ = detect_measures(panel)
                 panels.append(panel)
-                cells_by_panel.append(cells)
+                plain_by_panel.append(plain)
             report["render_collapsed_bands"] = len(collapsed)
+            # Only ever fold *extra* cells down to the declared count; never invent one.
+            plain_total = sum(len(cells) for cells in plain_by_panel)
+            cells_by_panel, folded = fit_cells_to_count(plain_by_panel, expected)
+            if folded:
+                report["slivers_merged"] = folded
+            report["render_measures_detected"] = plain_total
             stacked, panel_offsets = stack(panels)
             flat: list[tuple[int, int, int, int]] = []
             for cells, offset_y in zip(cells_by_panel, panel_offsets):
@@ -1067,6 +1209,7 @@ def review_sheets(
     red_min: float = RED_MIN,
     yellow_min: float = YELLOW_MIN,
     width: int = COLUMN_WIDTH,
+    title_source: Path | None = None,
 ) -> dict:
     """Analyze every page first, then build the sheets; the ranking is score-wide."""
     out_dir = Path(out_dir)
@@ -1093,6 +1236,7 @@ def review_sheets(
                 red_min=red_min,
                 yellow_min=yellow_min,
                 width=width,
+                title_source=title_source,
             )
         except Exception as error:  # noqa: BLE001 - same rule
             failures.append({"page": page.stem, "code": "page_build_failed", "message": str(error)})
