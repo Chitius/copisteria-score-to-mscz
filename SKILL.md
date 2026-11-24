@@ -100,6 +100,17 @@ pipeline 按 structural → inject → display 跑到不动点，再跑只读 ve
 
 ### 4. Facts 与视觉复核
 
+先看置信度热图，再决定看哪几页、哪几小节：
+
+```bash
+# OMR 每页的 reading.json → 逐页上色图 + review.md（按可疑度排序）
+python scripts/review_confidence.py --work-dir out/song/work
+```
+
+红色＝上下文改写了检测器的判断，橙色＝符号是否存在不确定，琥珀＝某属性概率偏低；图上编号是
+“先看谁”的顺序，不是判定。JSON 保留所有正分符号（含没有 bbox 的）。`review.py` 会自动跑这一步
+（`--no-confidence` 关闭）；它只是审查辅助，失败只记录在报告里，不会阻断交付。
+
 文字层可以提供标题、作曲、速度文字、排练号和说明文字。添加 facts 前先读
 `references/facts.md`。facts 是数据：在注入 pass 应用前不会改谱，每个已应用 fact 必须可追溯。
 `rit.`/`rall.`/`accel.` 这类渐慢渐快术语必须同时给 `gradual`，否则只会变成纯文字，不会生成

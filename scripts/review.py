@@ -158,6 +158,40 @@ def _verifier_count(report_path: Path) -> int:
     return len(data.get("verifier") or [])
 
 
+def _confidence_map(page_dir: Path, outdir: Path) -> dict:
+    """Paint where the OMR reader was unsure.
+
+    This is a reading aid for the human, never a delivery gate: a failure here is recorded in the
+    report and does not change ``ready``.  ``page_dir`` is the directory the OMR wrote (``--pages``),
+    which is where copisteria puts ``<page>.reading.json``; the page images are looked up next to
+    it and in the usual ``<work>/pages`` layout.
+    """
+    try:
+        from scorepipe import confidence
+    except Exception as exc:  # noqa: BLE001 - report, never raise, a missing aid is not a failure
+        return {"status": "failed", "reason": str(exc)}
+    jobs = confidence.plan(
+        readings_dir=page_dir,
+        page_dirs=[page_dir, page_dir.parent / "pages"],
+        work_dir=page_dir.parent,
+    )
+    if not jobs:
+        return {
+            "status": "skipped",
+            "reason": f"no <page>.reading.json in {page_dir}",
+        }
+    target = outdir / "review" / "confidence"
+    try:
+        summary = confidence.review(jobs, target)
+    except Exception as exc:  # noqa: BLE001 - same rule as above
+        return {"status": "failed", "reason": str(exc)}
+    print(
+        f"confidence map: {summary['status']}, "
+        f"{summary['issues']['total']} symbol(s) worth checking first"
+    )
+    return {**summary, "dir": str(target)}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the page-wise delivery review loop")
     parser.add_argument("pdf")
@@ -175,6 +209,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-mscz", action="store_true")
     parser.add_argument("--no-pdf", action="store_true")
     parser.add_argument("--no-mechanical", action="store_true", help="skip the no-agent-proposal baseline")
+    parser.add_argument(
+        "--no-confidence",
+        action="store_true",
+        help="skip the OMR confidence heat map (it is only an aid, never a delivery gate)",
+    )
     parser.add_argument("--mechanical-dir", help="baseline directory (default: <outdir>/mechanical)")
     parser.add_argument("--no-forced-truncation", action="store_true", help="skip the forced editable copy")
     parser.add_argument("--forced-dir", help="forced editable directory (default: <outdir>/forced-truncation)")
@@ -432,6 +471,10 @@ def main(argv: list[str] | None = None) -> int:
             except RuntimeError as exc:
                 report["render_error"] = str(exc)
                 report["ready"] = False
+
+    if not args.no_confidence:
+        report["confidence"] = _confidence_map(page_dir, outdir)
+        report["artifacts"]["confidence"] = report["confidence"].get("dir")
 
     forced = None
     if not args.no_forced_truncation:

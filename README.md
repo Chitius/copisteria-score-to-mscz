@@ -61,6 +61,7 @@ python -m scorepipe.cli path/to/pages -o out/score/score.musicxml --mscz-out out
 | `mechanical/` | no-agent-facts/no-patches comparison tree |
 | `forced-truncation/` | editable overfull-voice repair; `semantic_authority:false` |
 | `work/copisteria/` | per-page OMR MusicXML, reading JSON and HTML |
+| `review/confidence/` | per-page scan painted by OMR doubt, `review.md` in review order |
 
 Keep the page directory. It is the audit trail for page-level ties/slurs and for OMR defects.
 
@@ -77,8 +78,11 @@ Keep the page directory. It is the audit trail for page-level ties/slurs and for
 4. **Facts** — apply explicit title/composer/marks facts. The text layer is a producer, not
    ground truth. The agent/vision producer has a prepared page packet and evidence-checking workflow;
    see [`references/facts.md`](references/facts.md).
-5. **Review** — render the `.mscz` to PDF, rasterize pages, and check the first/last systems,
-   page joins, pickup, dense piano pages, ledger-line octaves, and text placement.
+5. **Review** — start from `review/confidence/review.md`: it paints each scan by how much the OMR
+   reader doubted each symbol (`scripts/review_confidence.py`, run by `review.py`), so the pages
+   worth checking come first. Then render the `.mscz` to PDF, rasterize pages, and check the
+   first/last systems, page joins, pickup, dense piano pages, ledger-line octaves, and text
+   placement.
 6. **Deliver** — follow [`references/delivery.md`](references/delivery.md). Report known OMR
    defects by measure; do not silently transpose or invent notes.
 

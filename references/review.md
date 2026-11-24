@@ -101,8 +101,29 @@ If the reviewed pipeline fails after producing an MSCZ, review still renders and
 draft when possible, then writes the report with `ready: false`; the failed run remains
 non-deliverable.
 
+## Confidence heat map (review aid, never a gate)
+
+`scripts/review_confidence.py` reads copisteria's `<page>.reading.json` and paints each scan by
+how much the reader doubted each symbol: red where the context rewrote the detector's choice,
+orange where the symbol's existence was uncertain, amber where an attribute probability is low.
+The page is numbered in review order; the JSON keeps every symbol that scored above zero,
+including the ones without a box.
+
+```bash
+python scripts/review_confidence.py --work-dir out/song/work        # per-page images + review.md
+python scripts/review_confidence.py --pages out/song/work/copisteria \
+  --rendered-dir out/song/rendered                                  # put the render beside the scan
+```
+
+`review.py` runs it automatically when the page directory has readings (skip with
+`--no-confidence`). A missing reading, a page without an image or a broken JSON is reported as
+`skipped`/`failed`/`incomplete` and never blocks delivery — the map orders attention, it does not
+decide anything. Rendered pages are paired by stem; `--pair-rendered-order` pairs them
+positionally and is only correct when the render is paginated like the scan.
+
 ## Required human checks
 
+- Start from `review/confidence/review.md`: it ranks what to verify first, per page.
 - Compare the source and rendered page around every patch, especially 8va extent.
 - Resolve or explicitly accept every unresolved/correction.
 - Confirm credits and tempo placement in the rendered first page.
