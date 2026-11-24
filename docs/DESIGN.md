@@ -121,6 +121,27 @@ Facts producers are outside this lifecycle: they read the outside world and retu
 producing step may be an OCR pass, a PDF text layer, or the agent; none of them can mutate the
 score, so none of them can cause an oscillation.
 
+## Global invariants
+
+`scorepipe.sanity.run_contract` holds every mechanical pass to invariants that no per-pass contract
+can switch off, so the pass sanity suite applies them uniformly:
+
+- **No sounding note may disappear.** Per measure, the set of `(staff, pitch)` of pitched notes is
+  compared before and after. Removing one of two occurrences that sound at the same time and pitch
+  (a duplicate) is not a loss; retiming, re-voicing, re-beaming or re-spelling a surviving note is
+  allowed. A pass that legitimately moves a note into another measure (`rebase_measures`,
+  `drop_overflow_duplicates`) declares `allows_relocate_notes` and is held to the weaker
+  whole-piece check instead; a pass that deletes a measure skips that measure only, because the
+  measure removal is its declared contract dimension.
+- No new measure-length violation, no new verifier violation, valid chord/cursor structure, and
+  idempotence (a second run changes neither the counter nor the state hash).
+
+`truncate_overfull_mscx` (the forced-truncation stage) is deliberately outside this gate: there the
+measure's tick length is the primary invariant, and an untrimmable tail can legitimately require
+dropping notes. Its obligation is honesty instead — every removed or shortened element is reported
+with its pitches and spanner risk in the `notes` of its `PassResult`, a protected tail is deferred
+to canonicalization (`DEFERRED`) rather than cut, and anything it cannot repair is `UNRESOLVED`.
+
 ## Producers
 
 `scorepipe.producers` defines the `Producer` protocol and three implementations: `JsonProducer`

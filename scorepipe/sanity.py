@@ -478,7 +478,14 @@ def _diff_voice_counts(
 
 @dataclass(frozen=True)
 class PassContract:
-    """What a pass is allowed to change.  ``violations`` reports everything else."""
+    """What a pass is allowed to change.  ``violations`` reports everything else.
+
+    ``allows_remove_notes`` covers rests and duplicate occurrences only.  Losing a unique
+    sounding pitch is never a contract dimension: :func:`run_contract` checks it for every
+    pass, whatever the contract says.  The single exception is a pass that legitimately moves
+    a note into another measure (``rebase``, overflow dedupe), declared by
+    ``allows_relocate_notes``; those passes are then held to the weaker whole-piece check.
+    """
 
     name: str
     allows_add_notes: bool = False
@@ -488,6 +495,7 @@ class PassContract:
     allows_change_pitch: bool = False
     allows_add_or_remove_measures: bool = False
     allows_voice_changes: bool = False
+    allows_relocate_notes: bool = False
 
     def violations(self, before: Snapshot | Document, after: Snapshot | Document) -> list[str]:
         before_snapshot = _as_snapshot(before)
@@ -650,6 +658,121 @@ def check_pitch_set_preserved(before: Snapshot | Document, after: Snapshot | Doc
     ]
 
 
+def check_sounding_notes_preserved(
+    before: Snapshot | Document,
+    after: Snapshot | Document,
+    *,
+    allow_measure_removal: bool = False,
+) -> list[str]:
+    """Every pitched note that sounds in a measure must still sound in that measure.
+
+    This is the global invariant of the sanity flow: no pass may make music disappear.  The
+    comparison is a *set* per ``(measure, staff, pitch)`` so that removing one of two identical
+    occurrences (a duplicate that sounds at the same time and pitch) is not a loss, and retiming
+    or re-voicing a surviving note is still allowed.
+
+    ``allow_measure_removal`` skips measures that the pass deleted outright; a measure removal is
+    a declared contract dimension, and its notes go with it.  A pass that moves a note *into
+    another measure* must declare ``allows_relocate_notes`` and is checked by
+    :func:`check_piece_pitch_set_preserved` instead.
+    """
+    before_snapshot = _as_snapshot(before)
+    after_snapshot = _as_snapshot(after)
+    after_numbers = {measure.number for measure in after_snapshot.measures}
+    messages: list[str] = []
+
+    for measure in before_snapshot.measures:
+        if allow_measure_removal and measure.number not in after_numbers:
+            continue
+        before_index = _sounding_index(measure)
+        after_measure = next(
+            (candidate for candidate in after_snapshot.measures if candidate.number == measure.number),
+            None,
+        )
+        after_index = {} if after_measure is None else _sounding_index(after_measure)
+        for (staff, pitch), (onset, duration) in sorted(before_index.items()):
+            if (staff, pitch) in after_index:
+                continue
+            messages.append(
+                f"m{measure.number} staff {staff} {pitch} at {_fmt(onset)} "
+                f"(duration {_fmt(duration)}): sounding note lost"
+            )
+    return messages
+
+
+def check_piece_pitch_set_preserved(
+    before: Snapshot | Document, after: Snapshot | Document
+) -> list[str]:
+    """Whole-piece version of :func:`check_sounding_notes_preserved` for relocating passes.
+
+    A pass that may move a note between measures (``rebase_measures``, overflow dedupe) cannot
+    be held to the per-measure set, but a pitch that disappears from the entire piece is still
+    a loss.
+    """
+    before_snapshot = _as_snapshot(before)
+    after_snapshot = _as_snapshot(after)
+    before_pitches = {
+        (note.staff, note.pitch)
+        for measure in before_snapshot.measures
+        for note in measure.notes
+        if note.pitched and note.pitch is not None
+    }
+    after_pitches = {
+        (note.staff, note.pitch)
+        for measure in after_snapshot.measures
+        for note in measure.notes
+        if note.pitched and note.pitch is not None
+    }
+    return [
+        f"staff {staff} {pitch}: sounding note lost from the whole piece"
+        for staff, pitch in sorted(before_pitches - after_pitches)
+    ]
+
+
+def check_mscx_pitched_notes_preserved(before, after) -> list[str]:
+    """The display-phase twin: no ``<Chord><Note><pitch>`` may disappear from a measure.
+
+    Display passes drop rests, text objects and empty voices; they may never take a chord with
+    them.  Rests are not counted, so "remove a padding rest" stays legal.
+    """
+    before_keys = _mscx_pitch_keys(before)
+    after_keys = _mscx_pitch_keys(after)
+    return [
+        f"staff {staff} m{number} pitch {pitch}: chord note lost"
+        for staff, number, pitch in sorted(before_keys - after_keys)
+    ]
+
+
+def _mscx_pitch_keys(doc) -> set[tuple[str, int, str]]:
+    keys: set[tuple[str, int, str]] = set()
+    for staff, number, measure in doc.iter_measures():
+        staff_id = staff.get("id") or "?"
+        for note in measure.iter("Note"):
+            pitch = note.findtext("pitch")
+            if pitch:
+                keys.add((staff_id, number, pitch.strip()))
+    return keys
+
+
+def _sounding_index(measure: MeasureSnapshot) -> dict[tuple[str, str], tuple[float, float]]:
+    """``(staff, pitch) -> (onset, duration)`` for the pitched notes of one measure.
+
+    The identity is the pitch on the staff, so a note that keeps sounding but moves within the
+    measure is not a loss; onset/duration are recorded only to name the note in a message (the
+    earliest onset wins when a pitch sounds more than once).
+    """
+    index: dict[tuple[str, str], tuple[float, float]] = {}
+    for note in measure.notes:
+        if not note.pitched or note.pitch is None:
+            continue
+        identity = (note.staff, note.pitch)
+        geometry = (round(note.onset, 6), round(note.duration, 6))
+        current = index.get(identity)
+        if current is None or geometry[0] < current[0]:
+            index[identity] = geometry
+    return index
+
+
 def check_idempotent(pass_obj, doc: Document, ctx: Context) -> list[str]:
     """Run a pass twice; the second run must change neither the counter nor the state hash."""
     name = _pass_name(pass_obj)
@@ -720,9 +843,19 @@ def run_contract(
     checker_violations.extend(
         check_no_new_verifier_violations(before_doc, after_doc, context)
     )
-    if not contract.allows_remove_notes and not contract.allows_add_or_remove_measures:
+    # Global invariant: no pass may make a sounding note disappear, whatever its contract
+    # allows for rests or duplicates.  A relocating pass is held to the whole-piece version.
+    if contract.allows_relocate_notes:
         checker_violations.extend(
-            check_pitch_set_preserved(before_snapshot, after_snapshot)
+            check_piece_pitch_set_preserved(before_snapshot, after_snapshot)
+        )
+    else:
+        checker_violations.extend(
+            check_sounding_notes_preserved(
+                before_snapshot,
+                after_snapshot,
+                allow_measure_removal=contract.allows_add_or_remove_measures,
+            )
         )
 
     idempotence_doc = doc_factory()
@@ -852,6 +985,10 @@ __all__ = [
     "check_no_new_verifier_violations",
     "check_note_inventory_preserved",
     "check_onsets_preserved",
+    "check_pitch_set_preserved",
+    "check_sounding_notes_preserved",
+    "check_piece_pitch_set_preserved",
+    "check_mscx_pitched_notes_preserved",
     "check_idempotent",
     "run_contract",
 ]

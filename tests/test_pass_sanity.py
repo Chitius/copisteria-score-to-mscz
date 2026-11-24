@@ -333,7 +333,9 @@ CONTRACTS = {
     "drop_redundant_key_signatures": PassContract("drop_redundant_key_signatures"),
     "drop_duplicate_notes": PassContract("drop_duplicate_notes", allows_remove_notes=True),
     "drop_trailing_duplicate_measure": PassContract("drop_trailing_duplicate_measure", allows_add_or_remove_measures=True),
-    "drop_overflow_duplicates": PassContract("drop_overflow_duplicates", allows_remove_notes=True),
+    "drop_overflow_duplicates": PassContract(
+        "drop_overflow_duplicates", allows_remove_notes=True, allows_relocate_notes=True
+    ),
     "drop_overflow_rests": PassContract("drop_overflow_rests", allows_remove_notes=True),
     "normalize_forward_durations": PassContract("normalize_forward_durations", allows_retime=True),
     "normalize_tuplet_rests": PassContract("normalize_tuplet_rests", allows_retime=True),
@@ -366,6 +368,7 @@ CONTRACTS = {
         allows_move_onsets=True,
         allows_retime=True,
         allows_voice_changes=True,
+        allows_relocate_notes=True,
     ),
     "merge_aligned_voices": PassContract("merge_aligned_voices", allows_remove_notes=True, allows_voice_changes=True),
     "normalize_voice_numbers": PassContract("normalize_voice_numbers", allows_voice_changes=True),

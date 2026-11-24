@@ -41,6 +41,26 @@ def build() -> MsxcDocument:
 
 
 class DisplayPassesTest(unittest.TestCase):
+    def test_display_phase_never_drops_a_chord_pitch(self):
+        from scorepipe.sanity import check_mscx_pitched_notes_preserved
+
+        reference = build()
+        worked = build()
+        run_phase(worked, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        self.assertEqual(check_mscx_pitched_notes_preserved(reference, worked), [])
+
+    def test_mscx_pitch_checker_flags_a_lost_chord_note(self):
+        from scorepipe.sanity import check_mscx_pitched_notes_preserved
+
+        reference = build()
+        worked = build()
+        staff = worked.staves()[0]
+        staff.findall("Measure")[1].find("voice/Chord").remove(
+            staff.findall("Measure")[1].find("voice/Chord/Note")
+        )
+        messages = check_mscx_pitched_notes_preserved(reference, worked)
+        self.assertEqual(len(messages), 1, messages)
+        self.assertIn("chord note lost", messages[0])
     DISPLAY_MECHANICAL = {
         "drop_text_voice_rests",
         "unhide_real_rests",

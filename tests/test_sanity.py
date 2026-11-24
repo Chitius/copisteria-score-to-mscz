@@ -22,6 +22,8 @@ from scorepipe.sanity import (
     check_no_new_verifier_violations,
     check_note_inventory_preserved,
     check_onsets_preserved,
+    check_piece_pitch_set_preserved,
+    check_sounding_notes_preserved,
     check_structure,
     diff_snapshots,
     run_contract,
@@ -716,3 +718,140 @@ def test_pitch_set_preserved_flags_a_lost_chord_member():
     after = document(measure(1, note("C")))
     messages = check_pitch_set_preserved(before, after)
     assert messages and "E" in messages[0]
+
+
+# ---------------------------------------------------------------------------
+# the global sounding-note invariant
+# ---------------------------------------------------------------------------
+
+
+MOTIF = "".join(measure(number, note(step)) for number, step in ((1, "C"), (2, "D")))
+
+
+class DropChordToneOncePass:
+    """Drops a sounding note and reports it honestly: the contract may allow it, the gate may not."""
+
+    spec = PassSpec(name="drop_chord_tone_once", phase=Phase.STRUCTURAL, kind=Kind.MECHANICAL)
+
+    def run(self, doc: Document, ctx: Context) -> PassResult:
+        for element in list(doc.measures()[0].findall("note")):
+            if element.findtext("pitch/step") == "D":
+                doc.measures()[0].remove(element)
+                return PassResult(changed=1)
+        return PassResult(changed=0)
+
+
+class RelocateNoteOncePass:
+    """Moves a note from measure 1 to measure 2, leaving a rest behind: a cross-measure relocation."""
+
+    spec = PassSpec(name="relocate_note_once", phase=Phase.STRUCTURAL, kind=Kind.MECHANICAL)
+
+    def run(self, doc: Document, ctx: Context) -> PassResult:
+        first, second = doc.measures()[0], doc.measures()[1]
+        for element in list(first.findall("note")):
+            if element.findtext("pitch/step") != "C":
+                continue
+            duration = element.findtext("duration")
+            rest = Element("note")
+            SubElement(rest, "rest")
+            SubElement(rest, "duration").text = duration
+            SubElement(rest, "voice").text = "1"
+            first.remove(element)
+            first.append(rest)
+            second.append(element)
+            return PassResult(changed=1)
+        return PassResult(changed=0)
+
+
+def test_sounding_notes_preserved_flags_a_lost_pitch():
+    before = document(measure(1, note("C") + note("E", chord=True)))
+    after = document(measure(1, note("C")))
+    messages = check_sounding_notes_preserved(before, after)
+    assert len(messages) == 1, f"expected one lost note: {messages}"
+    assert "m1" in messages[0] and "E4" in messages[0], f"message lacks measure/pitch: {messages[0]}"
+    assert "lost" in messages[0]
+
+
+def test_sounding_notes_preserved_tolerates_removing_a_duplicate():
+    before = document(measure(1, note("C", voice="1") + note("C", voice="2")))
+    after = document(measure(1, note("C", voice="1")))
+    messages = check_sounding_notes_preserved(before, after)
+    assert messages == [], f"a duplicate that sounds twice may be folded, got {messages}"
+
+
+def test_sounding_notes_preserved_tolerates_a_pitch_moving_within_the_measure():
+    before = document(measure(1, note("C", 4) + note("C", 4)))
+    after = document(measure(1, note(rest=True, duration=4) + note("C", 4)))
+    messages = check_sounding_notes_preserved(before, after)
+    assert messages == [], f"the pitch still sounds in the measure, got {messages}"
+
+
+def test_sounding_notes_preserved_ignores_rests():
+    before = document(measure(1, note("C") + note(rest=True, duration=4, voice="2")))
+    after = document(measure(1, note("C")))
+    messages = check_sounding_notes_preserved(before, after)
+    assert messages == [], f"rests are not sounding notes, got {messages}"
+
+
+def test_sounding_notes_preserved_flags_a_removed_measure_by_default():
+    before = document(measure(1, note("C")) + measure(2, note("D")))
+    after = document(measure(1, note("C")))
+    messages = check_sounding_notes_preserved(before, after)
+    assert any("D4" in message for message in messages), (
+        f"deleting a measure silently dropped its notes: {messages}"
+    )
+
+
+def test_sounding_notes_preserved_can_skip_a_declared_measure_removal():
+    before = document(measure(1, note("C")) + measure(2, note("D")))
+    after = document(measure(1, note("C")))
+    messages = check_sounding_notes_preserved(before, after, allow_measure_removal=True)
+    assert messages == [], f"a declared measure removal is not a lost note, got {messages}"
+
+
+def test_piece_pitch_set_preserved_allows_a_cross_measure_move():
+    before = document(measure(1, note("C")) + measure(2, note("D")))
+    after = document(measure(1, "") + measure(2, note("C") + note("D")))
+    assert check_piece_pitch_set_preserved(before, after) == [], "a relocation must not read as loss"
+
+
+def test_piece_pitch_set_preserved_flags_a_pitch_gone_from_the_piece():
+    before = document(measure(1, note("C") + note("E", chord=True)) + measure(2, note("D")))
+    after = document(measure(1, note("C")) + measure(2, note("D")))
+    messages = check_piece_pitch_set_preserved(before, after)
+    assert len(messages) == 1, f"expected one piece-wide loss: {messages}"
+    assert "E4" in messages[0]
+
+
+def test_run_contract_flags_a_lost_sounding_note_even_when_removal_is_allowed():
+    report = run_contract(
+        DropChordToneOncePass(),
+        fresh(measure(1, note("C") + note("D", chord=True)) + measure(2, note("E"))),
+        PassContract("may-remove", allows_remove_notes=True),
+    )
+    assert report.contract_violations == [], (
+        f"the contract allows removing notes: {report.contract_violations}"
+    )
+    assert any("D4" in message and "lost" in message for message in report.checker_violations), (
+        f"a vanished sounding note was not gated: {report.checker_violations}"
+    )
+    assert not report.ok, "losing a sounding note must make the report not ok"
+
+
+def test_run_contract_relocating_contract_accepts_a_cross_measure_move():
+    report = run_contract(
+        RelocateNoteOncePass(),
+        fresh(measure(1, note("C", 16)) + measure(2, "")),
+        PassContract(
+            "relocating",
+            allows_add_notes=True,
+            allows_remove_notes=True,
+            allows_voice_changes=True,
+            allows_relocate_notes=True,
+        ),
+    )
+    assert report.checker_violations == [], (
+        f"a declared relocation should pass the piece-wide gate: {report.checker_violations}"
+    )
+    assert report.ok
+
