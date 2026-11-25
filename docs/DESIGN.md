@@ -94,12 +94,6 @@ violation as:
 - repairable and a pass owns it → schedule another outer round (bounded);
 - unrepairable → hand to the agent with the trace.
 
-## Migration plan
-
-The old-to-new migration is complete and archived in
-[`archive/MIGRATION_PLAN.md`](archive/MIGRATION_PLAN.md). Current audit/status is in
-[`AUDIT.md`](AUDIT.md) and the README/SKILL; this document only describes the architecture.
-
 ## Pass lifecycle and failure policy
 
 Before a run the registry is validated: duplicate names, a pass registered under the wrong phase,

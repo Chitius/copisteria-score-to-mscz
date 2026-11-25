@@ -103,6 +103,16 @@ class NotationPatchesTest(unittest.TestCase):
         self.assertEqual(shifts[0].get("size"), "8")
         self.assertEqual(shifts[0].get("number"), "1")
 
+    def test_8vb_is_placed_below_the_staff(self):
+        doc = Document.load(TINY)
+        apply_patches(doc, patch(subtype="8vb"))
+        placements = [
+            direction.get("placement")
+            for direction in doc.root.iter("direction")
+            if direction.find(".//octave-shift") is not None
+        ]
+        self.assertEqual(placements, ["below", "below"])
+
     def test_end_must_be_after_start(self):
         bad = patch(start={"measure": 2, "beat": 0}, end={"measure": 2, "beat": 0})
         self.assertTrue(any("end must be after start" in problem for problem in validate_patches(bad)))

@@ -4,13 +4,22 @@
 
 ```text
 out/score/
-  score.musicxml          semantic master
-  score.mscz              MuseScore review copy
-  score.pdf               rendered check
+  score.musicxml          semantic master (untruncated)
+  score.mscz              delivered editable copy (truncated when needed)
+  score.pdf               render of score.mscz
+  truncation-report.json  when the editable copy trimmed an overfull voice
+  review-sheets.pdf       all page comparisons in one A4-landscape PDF at 300 dpi (cover/TOC, footer)
+  review/sheets/          per-page measure-level proof sheets
+  review/confidence/      per-page symbol heat map
   report.json             phases + trace + verifier
   review-report.json      page coverage + blockers + artifact paths
-  timing-report.json      baseline vs reviewed measure-length findings
+  timing-report.json      baseline vs delivered measure-length findings
   work/copisteria/        page OMR output, reading JSON, HTML
+  semantic/               only when truncated: untruncated reviewed tree
+    score.musicxml
+    score.mscz
+    score.pdf
+    report.json
   mechanical/             pipeline output without agent facts/patches
     score.musicxml
     score.mscz
@@ -24,11 +33,18 @@ out/score/
 ```
 
 The reviewed artifacts are the root files; `mechanical/` is the no-agent-proposal baseline kept for
-comparison and audit. `forced-truncation/` is the default overfull-voice repair: it is kept so the
-measure can be edited, but it is not a semantic master. Do not deliver only one of these trees.
+comparison and audit. `forced-truncation/` is the default overfull-voice repair: when it had to trim
+something it *is* the delivery (root `score.mscz`/`score.pdf`), the untruncated reviewed tree is kept
+in `semantic/`, and root `score.musicxml` stays the untruncated semantic master because the trim is
+an mscx display repair. Do not deliver only one of these trees.
 
 If MuseScore is unavailable, deliver MusicXML + report and state that the `.mscz`/PDF were not
 produced. Do not fabricate a render.
+
+A run with `--skip-facts` is a **mechanical-only** delivery: no credits or tempo marks were
+injected, `review-report.json` has `facts_skipped: true` and a matching finding, and the reviewed
+tree equals the baseline. It is a legitimate first pass for someone exploring the pipeline, but it
+must be described as "mechanical, facts not applied", never as a reviewed edition.
 
 ## Acceptance
 
@@ -38,6 +54,10 @@ Before saying "done":
 - [ ] `report.json` has no verifier violations;
 - [ ] both `mechanical/` and the reviewed tree exist, and the mechanical tree contains no agent
       facts/patches;
+- [ ] `review-sheets.pdf` exists and has been opened once; every page in it is `aligned: true`
+      (or the mismatch is explained in `review-report.json`);
+- [ ] when the forced copy trimmed something, `semantic/` is present and `truncation-report.json`
+      lists every operation;
 - [ ] the first measure / pickup and the final bar have been inspected;
 - [ ] at least one dense page and one page seam have been inspected;
 - [ ] the output has been compared with a ground truth when one exists;
@@ -73,10 +93,9 @@ Use a short table:
 Do not "fix" a pitch by guessing. If a correction is approved, record the correction and re-run
 the verifier.
 
-## Current limitations (2026-11)
+## Known limitations
 
-- The agent/vision facts workflow exists (`prepare` → agent JSON → `validate`/`merge`), but real
-  delivery still requires per-page review and resolving `unresolved` claims.
-- `der_lindenbaum` piano remains a low-quality OMR case; do not use it as a delivery showcase.
-- Same-value beam runs are still rebuilt as one run (laputa m50 behavior).
-- OMR octave/ledger errors are preserved; the pipeline does not transpose.
+- The agent/vision facts workflow (`prepare` → agent JSON → `validate`/`merge`) still requires
+  per-page review and resolution of `unresolved` claims.
+- Same-value beam runs are rebuilt as one run rather than by a full compound-metre grouper.
+- OMR octave/ledger errors are preserved; the pipeline does not transpose or silently correct pitch.

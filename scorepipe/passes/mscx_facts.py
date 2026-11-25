@@ -218,21 +218,27 @@ class ApplyCreditsDisplay:
             position += 1
             added += 1
         # MuseScore imports MusicXML credits as a VBox at the *end* of the first staff; only a
-        # frame before the measures is drawn as a title
+        # frame before the measures is drawn as a title.  The credit order must not decide where
+        # the frame goes: a facts file may list the arranger first (convert.py --arranger) or a
+        # user facts file may already carry the title, and the old rank lookup then inserted the
+        # frame after measure 1.  Every imported credit frame belongs before the first Measure.
+        measure_index = next(
+            (index for index, child in enumerate(list(target)) if child.tag == "Measure"),
+            len(target),
+        )
         for vbox in list(doc.root.iter("VBox")):
             if id(vbox) in created:
                 continue
             texts = [(node.findtext("text") or "").strip() for node in vbox.iter("Text")]
-            ranks = [credit_texts.index(text) for text in texts if text in credit_texts]
-            if not ranks:
+            if not any(text in credit_texts for text in texts):
                 continue
-            rank = min(ranks)
             parent = _parent_of(doc.root, vbox)
-            if parent is target and list(target).index(vbox) == rank:
+            if parent is target and list(target).index(vbox) < measure_index:
                 continue
             if parent is not None:
                 parent.remove(vbox)
-            target.insert(min(rank, len(target)), vbox)
+            target.insert(measure_index, vbox)
+            measure_index += 1
             added += 1
         return PassResult(changed=added)
 

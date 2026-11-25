@@ -395,19 +395,14 @@ DISPLAY_PASSES = [
 ]
 
 def compact_secondary_padding(doc) -> int:
-    """Replace trailing hidden padding rests with one exact <location> offset.
+    """Replace secondary padding rests with equal location deltas, in place.
 
-    The existing DropSecondaryVoiceRests pass turns rests *before a later chord*
-    into location gaps, but deletes trailing rests.  This function handles the
-    generated trailing padding instead: it removes the padding and shifts the
-    whole secondary voice so its tick end remains exactly at the bar line.
+    A padding rest already occupies the correct time between its neighbours. Replacing
+    it at the same position preserves every chord onset, including existing location
+    gaps and tuplet-scaled padding. Realigning the whole voice from its final tick
+    would instead move every note in that voice.
     """
-    from ..core.musescore_ticks import (
-        TICKS_PER_WHOLE,
-        location_ticks,
-        measure_expected_ticks,
-        voice_ticks,
-    )
+    from ..core.musescore_ticks import voice_timeline
 
     changed = 0
     meters = {}
@@ -419,7 +414,6 @@ def compact_secondary_padding(doc) -> int:
             except (ValueError, ZeroDivisionError):
                 pass
         meters[id(staff)] = meter
-        expected = measure_expected_ticks(measure, round(meter * TICKS_PER_WHOLE))
         voices = measure.findall("voice")
         primary = next((voice for voice in voices if voice.findall("Chord")), None)
         if primary is not None:
@@ -436,32 +430,19 @@ def compact_secondary_padding(doc) -> int:
             pads = [rest for rest in voice.findall("Rest") if rest.find("padding") is not None]
             if not pads:
                 continue
-            snapshot = ElementTree.fromstring(ElementTree.tostring(voice))
+            timeline = voice_timeline(voice, meter)
+            sounding = {id(item.element): item.actual for item in timeline.items}
             for pad in pads:
-                voice.remove(pad)
-            notes = voice_ticks(voice)
-            if notes > expected:
-                _restore_voice(voice, snapshot)
-                continue
-            for location in list(voice.findall("location")):
-                voice.remove(location)
-            start = expected - notes
-            if start:
-                value = Fraction(start, TICKS_PER_WHOLE)
+                duration = sounding.get(id(pad))
+                if duration is None or duration <= 0:
+                    continue
                 location = ElementTree.Element("location")
                 ElementTree.SubElement(location, "fractions").text = (
-                    f"{value.numerator}/{value.denominator}"
+                    f"{duration.numerator}/{duration.denominator}"
                 )
-                voice.insert(0, location)
-            if location_ticks(voice) + voice_ticks(voice) != expected:
-                _restore_voice(voice, snapshot)
-                continue
-            changed += len(pads)
+                position = list(voice).index(pad)
+                voice.remove(pad)
+                voice.insert(position, location)
+                changed += 1
     return changed
-
-
-def _restore_voice(voice, snapshot) -> None:
-    voice.clear()
-    for child in snapshot:
-        voice.append(child)
 

@@ -180,6 +180,33 @@ class MscxMeasureLengthTest(unittest.TestCase):
         violations = measure_lengths(doc, Context())
         self.assertEqual([violation.code for violation in violations], ["mscx-measure-length"])
 
+    def test_irregular_len_longer_than_the_metre_is_reported(self):
+        # First Step m82: MuseScore imported a 3.25-beat bar and wrote len=13/16 in 3/4.  The
+        # len came from the content, so comparing against it hid the overfull voice.
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score><Staff id='1'><Measure len='13/16'>"
+                "<TimeSig><sigN>3</sigN><sigD>4</sigD></TimeSig><voice>"
+                + chord("16th") * 12
+                + rest("16th")
+                + "</voice></Measure></Staff></Score></museScore>"
+            )
+        )
+        violations = measure_lengths(doc, Context())
+        self.assertEqual([violation.code for violation in violations], ["mscx-measure-length"])
+
+    def test_irregular_len_shorter_than_the_metre_is_allowed(self):
+        # A genuine irregular/pickup bar may be shorter than the metre.
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score><Staff id='1'><Measure len='1/2'>"
+                "<TimeSig><sigN>3</sigN><sigD>4</sigD></TimeSig><voice>"
+                + chord("half")
+                + "</voice></Measure></Staff></Score></museScore>"
+            )
+        )
+        self.assertEqual(measure_lengths(doc, Context()), [])
+
     def test_padding_voice_is_reported(self):
         doc = _doc_with_voices(f"<voice>{chord('whole')}</voice><voice>{rest('whole')}</voice>")
         self.assertEqual(len(padding_voices(doc, Context())), 1)

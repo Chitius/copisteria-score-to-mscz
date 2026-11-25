@@ -1,4 +1,4 @@
-"""Read-only environment probe for the copisteria-to-mscz skill.
+"""Read-only environment probe for the copisteria-score-to-mscz skill.
 
 It reports what is present, records resolved paths, and never installs or downloads anything.
 """
@@ -110,21 +110,54 @@ def _find_musescore(explicit: str | None) -> Path | None:
     return None
 
 
-def probe(args: argparse.Namespace) -> list[Check]:
+def load_env(path: str | Path | None) -> dict:
+    """Read the file ``--save`` writes; missing or unreadable means "no defaults".
+
+    The quick path in SKILL.md saves ``env.local.json`` once and expects later runs to use it.
+    Reading it back here is what makes that promise true; an explicit flag or environment
+    variable still wins, so a stale file can always be overridden.
+    """
+    if not path:
+        return {}
+    source = Path(path)
+    if not source.is_file():
+        return {}
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _default_env_file() -> Path | None:
+    """``env.local.json`` beside the caller, else beside the repository."""
+    for candidate in (Path.cwd() / "env.local.json", ROOT / "env.local.json"):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _pick(explicit: str | None, variable: str, config: dict, key: str) -> str | None:
+    """Explicit flag > environment variable > env file > nothing (the probe may autodetect)."""
+    return explicit or os.environ.get(variable) or (config.get(key) or None)
+
+
+def probe(args: argparse.Namespace, config: dict | None = None) -> list[Check]:
     checks: list[Check] = []
-    py = args.python or os.environ.get("SCOREPIPE_PYTHON") or sys.executable
+    config = config or {}
+    py = _pick(args.python, "SCOREPIPE_PYTHON", config, "python") or sys.executable
     ok, detail = _run(py, "import sys; print(sys.version.split()[0])")
     checks.append(Check("pipeline python", ok, True, detail, py))
     ok, detail = _run(py, "import scorepipe; print(scorepipe.__file__)")
     checks.append(Check("scorepipe import", ok, True, detail, py))
 
-    omr_python = args.omr_python or os.environ.get("COPISTERIA_PYTHON") or py
+    omr_python = _pick(args.omr_python, "COPISTERIA_PYTHON", config, "omr_python") or py
     ok, detail = _run(omr_python, "import sys; print(sys.version.split()[0])")
     checks.append(Check("OMR python", ok, True, detail, omr_python))
     ok, detail = _run(omr_python, "import copisteria, music21; print('copisteria + music21')")
     checks.append(Check("copisteria + music21", ok, True, detail, omr_python))
 
-    repo = _find_repo(args.repo)
+    repo = _find_repo(_pick(args.repo, "COPISTERIA_REPO", config, "copisteria_repo"))
     checks.append(
         Check("copisteria source", repo is not None, True, str(repo or "not found"), str(repo or ""))
     )
@@ -139,7 +172,7 @@ def probe(args: argparse.Namespace) -> list[Check]:
                 str(repo / "models"),
             )
         )
-    converter = _find_converter(args.converter)
+    converter = _find_converter(_pick(args.converter, "COPISTERIA_CONVERTER", config, "converter"))
     checks.append(
         Check(
             "copisteria converter",
@@ -149,7 +182,7 @@ def probe(args: argparse.Namespace) -> list[Check]:
             str(converter or ""),
         )
     )
-    musescore = _find_musescore(args.musescore)
+    musescore = _find_musescore(_pick(args.musescore, "MUSESCORE_EXE", config, "musescore"))
     checks.append(
         Check(
             "MuseScore 4",
@@ -166,17 +199,27 @@ def probe(args: argparse.Namespace) -> list[Check]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Probe the copisteria-to-mscz environment without changing it")
+    parser = argparse.ArgumentParser(description="Probe the copisteria-score-to-mscz environment without changing it")
     parser.add_argument("--repo", help="copisteria source checkout")
     parser.add_argument("--converter", help="copisteria-to-musicxml/scripts/convert.py")
     parser.add_argument("--python", help="interpreter that imports scorepipe")
     parser.add_argument("--omr-python", help="interpreter that imports copisteria")
     parser.add_argument("--musescore", help="MuseScore executable")
+    parser.add_argument(
+        "--env",
+        help="env.local.json written by --save; explicit flags and COPISTERIA_*/MUSESCORE_EXE "
+        "environment variables still win. Defaults to ./env.local.json or <repo>/env.local.json",
+    )
     parser.add_argument("--save", help="write resolved paths to this JSON file")
     parser.add_argument("--json", action="store_true", help="print JSON instead of a table")
     args = parser.parse_args(argv)
 
-    checks = probe(args)
+    env_path = args.env or _default_env_file()
+    config = load_env(env_path)
+    if env_path and not Path(env_path).is_file():
+        print(f"warning: env file not found: {env_path}", file=sys.stderr)
+
+    checks = probe(args, config)
     if args.json:
         print(json.dumps([asdict(check) for check in checks], ensure_ascii=False, indent=2))
     else:

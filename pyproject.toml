@@ -1,8 +1,19 @@
 [project]
-name = "copisteria-to-mscz"
+name = "copisteria-score-to-mscz"
 version = "0.2.1"
-description = "Skill and pass-based pipeline for PDF-to-MusicXML/MuseScore delivery"
+description = "Turn printed score PDFs into reviewed MusicXML/MuseScore editions"
+readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.10"
+dependencies = [
+    "pillow>=9",
+    "numpy>=1.24",
+]
+
+[project.urls]
+Homepage = "https://github.com/Chitius/copisteria-score-to-mscz"
+Repository = "https://github.com/Chitius/copisteria-score-to-mscz"
+Issues = "https://github.com/Chitius/copisteria-score-to-mscz/issues"
 
 [build-system]
 requires = ["setuptools>=68"]

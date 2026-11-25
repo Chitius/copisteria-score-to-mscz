@@ -54,6 +54,32 @@ class CreditsDisplayTest(unittest.TestCase):
         self.assertIn("Joe Hisaishi", composer_text)
         self.assertIn("Arranger Name", composer_text)
 
+    def test_imported_credit_frame_goes_before_the_first_measure(self):
+        # MuseScore imports MusicXML credits as a VBox after the measures.  The credit order must
+        # not matter: convert.py --arranger used to list the arranger first, which put the title
+        # frame after measure 1 on First Step.
+        imported = """
+        <museScore><Score><Staff id="1">
+          <Measure><voice><Chord><durationType>whole</durationType>
+            <Note><pitch>60</pitch></Note></Chord></voice></Measure>
+          <VBox><Text><style>title</style><text>Innocent</text></Text>
+            <Text><style>composer</style><text>Joe Hisaishi</text></Text></VBox>
+        </Staff></Score></museScore>
+        """
+        facts = {
+            "credits": [
+                {"type": "arranger", "text": "Arranger Name"},
+                {"type": "title", "text": "Innocent"},
+                {"type": "composer", "text": "Joe Hisaishi"},
+            ]
+        }
+        doc = MsxcDocument(ElementTree.fromstring(imported))
+        run_phase(doc, DISPLAY_PASSES, Context(facts=facts), Phase.DISPLAY)
+        staff = doc.root.find("Score/Staff")
+        tags = [child.tag for child in staff]
+        self.assertEqual(tags.index("VBox"), 0, tags)
+        self.assertLess(tags.index("VBox"), tags.index("Measure"), tags)
+
 
 if __name__ == "__main__":
     unittest.main()

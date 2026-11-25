@@ -8,22 +8,12 @@ become rests. Ties and slurs are restored afterwards by the page passes.
 
 from __future__ import annotations
 
+from fractions import Fraction
 from xml.etree import ElementTree
 
 from ..core.document import Document
+from ..core.musescore_ticks import TICKS_PER_WHOLE, duration_parts, legal_ticks_parts
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
-
-_TYPES = [
-    (4.0, "whole", 0),
-    (3.0, "half", 1),
-    (2.0, "half", 0),
-    (1.5, "quarter", 1),
-    (1.0, "quarter", 0),
-    (0.75, "eighth", 1),
-    (0.5, "eighth", 0),
-    (0.375, "16th", 1),
-    (0.25, "16th", 0),
-]
 
 
 class MergeStaffVoices:
@@ -88,7 +78,7 @@ def _merge(doc: Document, measure, allow_sustained: bool = True) -> bool:
         cursor = 0.0
         for onset in active_onsets:
             if onset > cursor + 1e-6:
-                sequence.append(_rest(onset - cursor, divisions, staff))
+                sequence.extend(_rests(onset - cursor, divisions, staff))
             boundary = next((value for value in all_onsets if value > onset + 1e-6), bar)
             duration = boundary - onset
             pitches = []
@@ -105,7 +95,7 @@ def _merge(doc: Document, measure, allow_sustained: bool = True) -> bool:
                 )
             cursor = onset + duration
         if cursor < bar - 1e-6:
-            sequence.append(_rest(bar - cursor, divisions, staff))
+            sequence.extend(_rests(bar - cursor, divisions, staff))
         extras = _protected_blocks(
             [event for event in notes if id(event.element) in protected], bar, divisions, staff
         )
@@ -231,7 +221,7 @@ def _protected_blocks(events: list, bar: float, divisions: float, staff: str) ->
                 length = max(length, event.duration)
             cursor = onset + length
         if cursor < bar - 1e-6:
-            block.append(_rest(bar - cursor, divisions, staff, voice=str(position)))
+            block.extend(_rests(bar - cursor, divisions, staff, voice=str(position)))
         blocks.append(block)
     return blocks
 
@@ -377,6 +367,23 @@ def _note(
     return element
 
 
+def _rests(
+    duration: float, divisions: float, staff: str, *, voice: str = "1"
+) -> list[ElementTree.Element]:
+    """Split a gap into exact legal rest values instead of mislabelling its type."""
+    whole = Fraction(duration).limit_denominator(256) / 4
+    ticks = whole * TICKS_PER_WHOLE
+    if ticks.denominator != 1:
+        raise ValueError(f"cannot represent generated MusicXML rest exactly: {duration}")
+    parts = legal_ticks_parts(int(ticks))
+    if sum(part[2] for part in parts) != ticks:
+        raise ValueError(f"cannot represent generated MusicXML rest exactly: {duration}")
+    return [
+        _rest(float(Fraction(part_ticks, TICKS_PER_WHOLE) * 4), divisions, staff, voice=voice)
+        for _name, _dots, part_ticks in parts
+    ]
+
+
 def _rest(duration: float, divisions: float, staff: str, *, voice: str = "1") -> ElementTree.Element:
     element = ElementTree.Element("note")
     ElementTree.SubElement(element, "rest")
@@ -391,10 +398,12 @@ def _rest(duration: float, divisions: float, staff: str, *, voice: str = "1") ->
 
 
 def _type_for(duration: float) -> tuple[str, int]:
-    for value, name, dots in _TYPES:
-        if abs(value - duration) < 1e-6:
-            return name, dots
-    return "quarter", 0
+    values = duration_parts(Fraction(duration).limit_denominator(256) / 4)
+    if values is None:
+        # MuseScore's MusicXML reader follows <type> when it disagrees with
+        # <duration>; never emit a plausible-looking but rhythmically wrong note.
+        raise ValueError(f"cannot represent generated MusicXML duration exactly: {duration}")
+    return values
 
 
 MERGE_STAFF_VOICES = MergeStaffVoices()

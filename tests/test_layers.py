@@ -56,6 +56,30 @@ class VoiceLayersTest(unittest.TestCase):
         self.assertEqual(len([e for e in events if not e.rest and e.voice == "1"]), 2)
         self.assertEqual(measure_lengths(doc, Context()), [])
 
+    def test_rest_overlapping_later_notes_is_rebuilt(self):
+        body = (
+            note("C", 4, 4)
+            + note("D", 4, 4)
+            + note("E", 4, 4)
+            + "<note><rest/><duration>2</duration><voice>1</voice><type>eighth</type></note>"
+            + "<backup><duration>1</duration></backup>"
+            + note("F", 4, 1)
+            + note("G", 4, 1)
+            + note("A", 4, 1)
+        )
+        doc = build(measure(1, body) + measure(2, note("G", 4, 16)))
+        run_pipeline(doc, Context(), structural=STRUCTURAL_PASSES, verifiers=[])
+
+        events = doc.events(doc.measures()[0])
+        end = 0.0
+        for event in events:
+            if event.chord:
+                continue
+            self.assertGreaterEqual(event.onset + 1e-6, end)
+            end = max(end, event.end)
+        self.assertEqual(end, 4.0)
+        self.assertEqual(measure_lengths(doc, Context()), [])
+
     def test_clean_measure_is_untouched(self):
         doc = build(measure(1, note("C", 4, 16)) + measure(2, note("G", 4, 16)))
         run_pipeline(doc, Context(), structural=STRUCTURAL_PASSES, verifiers=[])

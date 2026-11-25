@@ -287,6 +287,12 @@ class MergeStaffVoicesTest(unittest.TestCase):
         self.assertEqual(len(rests), 1)
         self.assertEqual(rests[0].onset, 3.0)
         self.assertEqual(rests[0].duration, 1.0)
+    def test_generated_durations_never_silently_fall_back_to_quarter(self):
+        from scorepipe.passes.xml_voice_merge import _type_for
+
+        self.assertEqual(_type_for(0.125), ("32nd", 0))
+        with self.assertRaises(ValueError):
+            _type_for(1.0 / 3.0)
 
 
 if __name__ == "__main__":

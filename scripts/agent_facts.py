@@ -8,6 +8,7 @@ evidence, so no visual claim can reach the score without a page/evidence trail.
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import shutil
 import subprocess
@@ -165,12 +166,52 @@ def validate(args: argparse.Namespace) -> int:
     return 0 if not problems else 1
 
 
+def expand_parts(values: list[str]) -> tuple[list[Path], list[str]]:
+    """Expand a directory or a shell-style pattern; PowerShell does not expand globs itself.
+
+    The documented call is ``merge --parts review/facts/agent-page*.json``.  On Windows the
+    literal pattern reaches argparse, so a plain ``Path`` would fail with "file not found".
+    A directory is accepted too because that is what the review workflow already has.
+    """
+    expanded: list[Path] = []
+    unmatched: list[str] = []
+    for value in values:
+        path = Path(value)
+        if path.is_dir():
+            found = sorted(path.glob("agent-page*.json")) or sorted(path.glob("*.json"))
+            if found:
+                expanded.extend(found)
+            else:
+                unmatched.append(value)
+        elif any(token in value for token in "*?["):
+            matches = sorted(Path(match) for match in glob.glob(value))
+            if matches:
+                expanded.extend(matches)
+            else:
+                unmatched.append(value)
+        else:
+            expanded.append(path)
+    unique: list[Path] = []
+    for path in expanded:
+        if path not in unique:
+            unique.append(path)
+    return unique, unmatched
+
+
 def merge(args: argparse.Namespace) -> int:
     if args.pages is None and not args.allow_missing_pages:
         print("merge requires --pages N unless --allow-missing-pages is explicit")
         return 1
+    paths, unmatched = expand_parts(args.parts)
+    if unmatched:
+        for value in unmatched:
+            print(f"no file matched: {value}")
+        return 1
+    if not paths:
+        print("no agent page files to merge")
+        return 1
     parts = []
-    for path in args.parts:
+    for path in paths:
         payload = normalize_agent_facts(load_agent_facts(path))
         problems = validate_agent_facts(payload, page_count=args.pages, measure_count=args.measures)
         if problems:

@@ -163,6 +163,13 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
                 pass
         meters[id(staff)] = meter
         expected = measure_expected_fraction(measure, meter)
+        if expected > meter:
+            # MuseScore writes ``len`` from the imported content, so a ``len`` longer than the
+            # metre is the import of an overfull bar, not an independent expectation.  The
+            # truncation pass already treats it as stale (mscx_truncate.py); comparing the
+            # content against that len made this check circular -- First Step m82 shipped a
+            # 3.25-beat bar as ``len=13/16`` and the verifier stayed clean.
+            expected = meter
         # MuseScore writes ``len`` when it had to make a measure irregular on import.  The
         # value is derived from the imported content, so the message has to say so: otherwise
         # "expected 4.0625 beats" in a plain 4/4 score reads like a verifier bug.

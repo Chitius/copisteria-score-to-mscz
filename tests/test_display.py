@@ -245,6 +245,30 @@ class PaddingVoiceContentTest(unittest.TestCase):
         )
         self.assertEqual(secondary.find('location/fractions').text, '3/8')
 
+    def test_padding_compaction_preserves_secondary_note_onsets(self):
+        from scorepipe.core.musescore_ticks import voice_timeline
+        from scorepipe.passes.mscx_display import compact_secondary_padding
+
+        doc = MsxcDocument(ElementTree.fromstring('''
+          <museScore><Score><Staff id="1"><Measure>
+            <voice><Chord><durationType>whole</durationType><Note><pitch>60</pitch></Note></Chord></voice>
+            <voice>
+              <location><fractions>1/2</fractions></location>
+              <Chord><durationType>quarter</durationType><Note><pitch>67</pitch></Note></Chord>
+              <Rest><padding>1</padding><durationType>quarter</durationType><visible>0</visible></Rest>
+            </voice>
+          </Measure></Staff></Score></museScore>'''))
+        secondary = doc.root.findall('Score/Staff/Measure/voice')[1]
+        self.assertEqual(voice_timeline(secondary).items[0].start, 0.5)
+
+        self.assertEqual(compact_secondary_padding(doc), 1)
+
+        timeline = voice_timeline(secondary)
+        self.assertEqual(timeline.items[0].start, 0.5)
+        self.assertEqual(timeline.final, 1.0)
+        self.assertEqual(timeline.locations, [0.5, 0.25])
+        self.assertEqual(secondary.findall('Rest'), [])
+
     def test_range_spanner_carrier_voice_is_removed(self):
         doc = MsxcDocument(ElementTree.fromstring('''
           <museScore><Score><Staff id="1"><Measure>

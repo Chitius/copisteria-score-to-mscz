@@ -9,8 +9,10 @@ the scan in a sibling ``pages/`` directory).  Each page is rendered on its own, 
 is the same music as the right one; both sides are cut into measures by measured barlines and a
 bar that can be lined up gets the same colour and the same global measure number on both.
 
-A page whose bar counts do not agree is left untinted and reported as a failure: an overlay on the
-wrong bar is worse than none.  Exit 0 = every page aligned, 1 = some page did not, 2 = bad arguments.
+Every page image is also bound into ``review-sheets.pdf`` (A4 landscape, page order), because one
+file is what a human opens.  A page whose bar counts cannot be reconciled is left untinted and
+reported as a failure: an overlay on the wrong bar is worse than none.  Exit 0 = every page
+aligned, 1 = some page did not, 2 = bad arguments.
 """
 
 from __future__ import annotations
@@ -81,6 +83,14 @@ def main() -> int:
         type=Path,
         help="merged score.musicxml; its title/credit block is put on the first page before rendering",
     )
+    parser.add_argument(
+        "--title",
+        help="score title for the combined PDF cover (default: the title credit of --title-from)",
+    )
+    parser.add_argument(
+        "--source-name",
+        help="source file name, shown on the cover and in each page's footer",
+    )
     parser.add_argument("--out", type=Path, help="output directory (default: <pages>/sheet)")
     parser.add_argument("--musescore", help="MuseScore executable (default: discover)")
     parser.add_argument("--red", type=float, default=proof_sheet.RED_MIN, help="score at or above which a bar is red (default 3.0)")
@@ -131,6 +141,8 @@ def main() -> int:
         yellow_min=args.yellow,
         width=args.width,
         title_source=title_source,
+        title=args.title,
+        source_name=args.source_name,
     )
     for page in summary["outputs"]["pages"]:
         report = json.loads(Path(page["json"]).read_text(encoding="utf-8"))
@@ -143,6 +155,8 @@ def main() -> int:
         print(f"{failure.get('page')}: {failure['code']}: {failure['message']}", file=sys.stderr)
     print(f"status: {summary['status']} ({summary['pages']}/{summary['requested_pages']} pages)")
     print(f"priority list: {summary['outputs']['markdown']}")
+    if summary["outputs"].get("pdf"):
+        print(f"combined PDF:  {summary['outputs']['pdf']}")
     return 1 if summary["status"] == "incomplete" else 0
 
 

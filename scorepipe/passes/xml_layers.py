@@ -48,7 +48,9 @@ def _needs_rebuild(doc: Document, measure) -> bool:
         seen.add(key)
     by_voice: dict[tuple, list] = {}
     for event in events:
-        if event.rest or event.chord:
+        # Rests occupy voice time too. A backup that rewinds into a rest creates
+        # the same MuseScore-hostile overlap as two overlapping notes.
+        if event.chord:
             continue
         by_voice.setdefault((event.staff, event.voice), []).append(event)
     for voice_events in by_voice.values():
@@ -129,6 +131,13 @@ def _rebuild(doc: Document, measure) -> bool:
                 ElementTree.SubElement(rest, "duration").text = str(
                     int(round((bar - voice["end"]) * divisions))
                 )
+                # The rest belongs to this staff/voice block; MusicXML would inherit both from
+                # the preceding note, but scorepipe's own readers default a missing <staff> to
+                # "1", so an explicit staff/voice keeps the file self-describing (First Step
+                # m82: the unattributed rest was read as staff 1 and later trimmed into a
+                # stray <forward>, giving MuseScore a 3.25-beat bar).
+                ElementTree.SubElement(rest, "voice").text = str(index + 1)
+                ElementTree.SubElement(rest, "staff").text = staff
                 voice["elements"].append(rest)
             blocks.append(voice["elements"])
 

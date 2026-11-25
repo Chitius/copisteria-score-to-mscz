@@ -103,21 +103,17 @@ def _restore_measure(measure, divisions: float, meter: tuple[float, float]) -> i
 
 
 def _split_source_groups(run: list[dict]) -> list[list[dict]]:
-    """Treat complete explicit source begin/end groups as hard boundaries.
+    """Treat complete source begin/end groups as boundaries for uniform eighth runs.
 
-    A lone begin/end (or a one-note begin/end pair) is an OMR fragment, not a reliable beam group;
-    laputa m50's G3 source has such pairs and would otherwise be broken into single-note groups.
-
-    A level whose begin/continue/end sequence is not a clean alternation is OMR noise and cannot
-    contribute boundaries: Suzume m33 beat 4 carries ``begin, continue, end, end`` at level 1.
-    Trusting those pairs rebuilt only the middle two sixteenths and left the outer two unbeamed.
+    Runs containing sixteenths instead follow the beat grid as a whole. Their source
+    pairs often cover only two or three notes, and treating those fragments as hard
+    boundaries leaves an isolated note inside an otherwise ordinary beat.
     """
+    if any(record["level"] > 1 for record in run):
+        return [run]
     boundaries: set[int] = set()
     pairs_by_level = _source_pairs(run)
-    # Only the outermost beam level defines group boundaries: deeper levels (16th beams) are a
-    # refinement inside one eighth-note group, and mixing them splits a run into 2-note chunks
-    # that the next round rebuilds, so the pass never reaches a fixed point.
-    primary = min(pairs_by_level) if pairs_by_level else None
+    primary = 1 if pairs_by_level else None
     for start, end in (pairs_by_level.get(primary) or []) if primary is not None else []:
         if end - start + 1 >= 2:
             boundaries.add(start)
@@ -198,17 +194,12 @@ def _beat_length(meter: tuple[float, float]) -> float:
 
 
 def _split_by_beat(run: list[dict], beat_length: float) -> list[list[dict]]:
-    """Mixed note values may not share a beam across a beat boundary.
+    """Split every beam run at the active metre's notated beat boundaries.
 
-    A run of one repeated value of eighth or longer (laputa m50's eighths) keeps the old whole-run
-    rebuild; once sixteenths are involved (uniform sixteenth runs and Sincerely m3's mixed values),
-    grouping follows the beat grid, because a sixteen-beam is not carried across a beat.
+    Uniform eighth runs need the same visible beat structure as mixed and sixteenth
+    runs; keeping them whole merely hides the metre over a full measure.
     """
     if not run:
-        return [run]
-    if len({record["level"] for record in run}) < 2 and max(
-        record["level"] for record in run
-    ) < 2:
         return [run]
     chunks: list[list[dict]] = []
     chunk: list[dict] = []

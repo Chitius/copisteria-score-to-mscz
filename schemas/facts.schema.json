@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/copisteria-to-mscz/facts.schema.json",
-  "title": "copisteria-to-mscz facts",
+  "$id": "https://example.invalid/copisteria-score-to-mscz/facts.schema.json",
+  "title": "copisteria-score-to-mscz facts",
   "type": "object",
   "additionalProperties": true,
   "properties": {

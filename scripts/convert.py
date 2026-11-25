@@ -106,12 +106,27 @@ def _pdf_pages(pdf: Path) -> int | None:
     return None
 
 
+def _default_env_file() -> Path | None:
+    """``env.local.json`` beside the caller, else beside the repository.
+
+    ``preflight.py --save`` writes it once; reading it back here is what makes the documented
+    two-step quick start work without repeating every path on every command.
+    """
+    for candidate in (Path.cwd() / "env.local.json", ROOT / "env.local.json"):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="PDF -> OMR -> scorepipe -> MuseScore delivery")
     parser.add_argument("pdf", help="input score PDF")
     parser.add_argument("--outdir", help="delivery directory (default: <pdf>_deliver)")
     parser.add_argument("--work-dir", help="OMR work directory (default: <outdir>/work)")
-    parser.add_argument("--env", help="env.local.json written by preflight.py")
+    parser.add_argument(
+        "--env",
+        help="env.local.json written by preflight.py (default: ./env.local.json or <repo>/env.local.json)",
+    )
     parser.add_argument("--python", help="interpreter that imports scorepipe")
     parser.add_argument("--omr-python", help="interpreter that imports copisteria/music21")
     parser.add_argument("--repo", help="copisteria source checkout")
@@ -129,7 +144,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--force", action="store_true", help="replace existing delivery artifacts")
     args = parser.parse_args(argv)
 
-    config = _load_config(args.env)
+    env_path = args.env or _default_env_file()
+    config = _load_config(str(env_path) if env_path else None)
     pdf = Path(args.pdf).expanduser().resolve()
     if not pdf.is_file():
         parser.error(f"PDF not found: {pdf}")
@@ -203,30 +219,31 @@ def main(argv: list[str] | None = None) -> int:
         "--max-rounds",
         str(args.max_rounds),
     ]
-    if args.facts:
-        score_command.extend(["--facts", str(Path(args.facts).resolve())])
     if args.patches:
         score_command.extend(["--patches", str(Path(args.patches).resolve())])
-    if args.title:
-        score_command.extend(["--title", args.title])
-    if args.composer:
-        score_command.extend(["--composer", args.composer])
-    if args.arranger:
-        facts_payload = {}
-        if args.facts:
-            facts_payload = json.loads(Path(args.facts).read_text(encoding="utf-8-sig"))
-        facts_payload.setdefault("credits", []).append(
-            {"type": "arranger", "text": args.arranger}
-        )
-        arranger_facts = outdir / "facts.json"
-        arranger_facts.write_text(
+    # Collect every credit into one facts file, in the order the title frame reads top to bottom.
+    # Passing --title/--composer on the command line *and* --arranger through a facts file used to
+    # interleave the two channels (arranger first), which moved the MuseScore title frame after
+    # measure 1.  One file also makes delivery.json's audit trail show all four credits.
+    facts_payload = {}
+    if args.facts:
+        facts_payload = json.loads(Path(args.facts).read_text(encoding="utf-8-sig"))
+    credits = facts_payload.setdefault("credits", [])
+    for credit_type, text in (
+        ("title", args.title),
+        ("composer", args.composer),
+        ("arranger", args.arranger),
+    ):
+        if text:
+            credits.append({"type": credit_type, "text": text})
+    if credits:
+        order = {"title": 0, "subtitle": 1, "composer": 2, "arranger": 3, "transcriber": 3, "lyricist": 4}
+        credits.sort(key=lambda credit: order.get((credit.get("type") or "title").strip(), 5))
+        facts_path = outdir / "facts.json"
+        facts_path.write_text(
             json.dumps(facts_payload, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        if "--facts" in score_command:
-            index = score_command.index("--facts")
-            score_command[index + 1] = str(arranger_facts)
-        else:
-            score_command.extend(["--facts", str(arranger_facts)])
+        score_command.extend(["--facts", str(facts_path)])
 
     mscz = None if args.no_mscz else outdir / "score.mscz"
     if mscz is not None:
@@ -246,7 +263,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     manifest = {
-        "skill": "copisteria-to-mscz",
+        "skill": "copisteria-score-to-mscz",
         "reviewed": False,
         "delivery": "pipeline draft; run scripts/review.py before delivery",
         "ready": pipeline_exit == 0 and (render_exit is None or render_exit == 0),

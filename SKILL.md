@@ -1,5 +1,5 @@
 ---
-name: copisteria-to-mscz
+name: copisteria-score-to-mscz
 description: >
   将印刷乐谱 PDF 转为经过核查的 MusicXML/MuseScore（.mscz）交付物。当用户要求
   “PDF 转 MusicXML”“PDF 转 MIDI”“OMR”“识谱”，或要求用 copisteria/copista
@@ -11,238 +11,170 @@ metadata:
 
 # Copisteria to MSCZ
 
-本 skill 是 **操作层**，真正的机械修复由 `scorepipe` 子模块完成。skill 负责环境配置、OMR
-调用、证据收集、视觉复核和交付。
+本文是执行任务的 agent/运维操作契约；机械修复由 `scorepipe` 完成。用户指南见
+[`README.md`](README.md)，架构说明见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)。
 
 ## 硬性规则
 
-- 不要因为命令退出码为 0 就宣布交付。必须有干净的 verifier；有视觉交付时还必须重新渲染检查。
-- OMR 只是草稿。保留源 PDF 和逐页输出，永不覆盖。
-- OMR 的音高/节奏错误不能由 pipeline 静默“修正”。facts 和人工修正必须可追溯。
-- PDF 文字层不是 ground truth。没有文字层或文字层乱码时，走 agent/视觉 facts 路径
-  （见 `references/facts.md`）。
-- 不要在用户未决定时下载模型权重、安装系统包或申请管理员权限。`scripts/preflight.py`
-  只报告缺项和选项。
+- **没有干净 verifier，不宣布交付**；有视觉交付时还必须重新渲染并打开检查。退出码为 0 不够。
+- OMR 只是草稿。保留源 PDF 和逐页输出，永不覆盖，也不要把 converter 最终合并的 XML 当作流水线输入。
+- 不猜测音高、节奏或记号。结构修复必须可追溯；内容修正必须经过明确 reviewer 接受。
+- facts、correction、patch 是证据驱动的数据，不是让 agent 直接改 MusicXML/mscz/mscx 的许可。
+- 看不清的内容放入 `unresolved`。缺页、未决项或 proposed correction 不得被描述为完整复核。
+- 未经用户同意，不下载模型、安装系统包或申请管理员权限。`preflight.py` 只探测环境。
+- `env.local.json` 等本机路径配置不得提交或放入交付包。
 
 ## 快速路径
 
 ```bash
-# 1. 每台机器做一次环境检查；只报告缺项，不安装。
+# 1. 环境检查：只报告和记录路径，不安装依赖。
 python scripts/preflight.py --save env.local.json
 
-# 2. OMR + 修复 + MuseScore + PDF 生成 pipeline draft（还不是最终交付）。
+# 2. PDF -> 逐页 OMR -> 修复 -> mscz/PDF；此时仍是初稿。
 python scripts/convert.py "score.pdf" --env env.local.json --outdir "out/score" \
   --title "标题" --composer "作曲"
 
-# 3. 逐页 review、facts/proposals、mechanical/reviewed/forced 三树；通过后才交付。
+# 3. 有逐页 facts 时：复核、三棵交付树、对照图和验收报告。
 python scripts/review.py "score.pdf" --pages out/score/work/copisteria \
   --facts-dir review/facts --outdir "review/score"
 ```
 
-如果用户已有别的 OMR 前端，不用 `scripts/convert.py`，直接把逐页目录交给 pipeline：
+首次跑通、尚无 facts 时，第 3 步改用 `--skip-facts`，并按需重传 `--title` / `--composer`：
 
 ```bash
-python -m scorepipe.cli path/to/pages -o out/score/score.musicxml --mscz-out out/score/score.mscz \
-  --report out/report.json
+python scripts/review.py "score.pdf" --pages out/score/work/copisteria \
+  --skip-facts --title "标题" --composer "作曲" --outdir "review/score"
 ```
 
-## 产物
+这只是机械基线：报告会记录 `facts_skipped`，不能称为完整 reviewed edition。
+
+已有符合页契约的其他 OMR 输出时，可直接进入流水线：
+
+```bash
+python -m scorepipe.cli path/to/pages -o out/score/score.musicxml \
+  --mscz-out out/score/score.mscz --report out/report.json
+```
+
+## 交付物
 
 | 产物 | 含义 |
 |---|---|
-| `score.musicxml` | 修复、合并后的 MusicXML，语义主文件 |
-| `score.mscz` | display fixpoint 之后的 MuseScore 容器 |
-| `score.pdf` | 用于复核的渲染版 |
-| `report.json` | 阶段轮数、pass trace、analysis、verifier |
-| `delivery.json` | `scripts/convert.py` 记录的命令、路径和产物清单 |
-| `work/copisteria/` | 逐页 OMR MusicXML、reading JSON、HTML；保留用于审计 |
-| `facts.json` | 显式文字/视觉事实（使用 facts producer 时） |
+| `score.musicxml` | 未截断的语义主文件 |
+| `score.mscz` | 可编辑交付件；发生 forced 截断时是截断副本 |
+| `score.pdf` | 与实际交付 `.mscz` 对应的渲染 |
+| `review-sheets.pdf` | 全部逐页小节对照图，人工核对入口 |
+| `report.json` / `review-report.json` | 修复轨迹、verifier、页覆盖、findings 和阻断项 |
+| `review/confidence/` | 符号级 OMR 可疑度热图 |
+| `mechanical/` | 不含 agent facts/patches 的机械基线，必须保留 |
+| `forced-truncation/` | overfull voice 的可编辑收尾副本，不是语义权威 |
+| `semantic/` | 实际截断时保存未截断 reviewed 树 |
+| `work/copisteria/` | 逐页 OMR XML、reading JSON 和 HTML，审计证据 |
 
-不要只交付 `.mscz`。MusicXML 才是修复 pipeline 拥有的主文件。
+不要只交付 `.mscz`。给人看的入口依次是 `review-sheets.pdf` 和 `score.pdf`；完整目录约定见
+[`references/delivery.md`](references/delivery.md)。
 
 ## 工作流
 
-### 0. 配置环境
+### 1. 检查输入与环境
 
-先读 `references/environment.md`，再运行 `preflight.py`。必需项：
+先读 [`references/environment.md`](references/environment.md)，确认：
 
-- Python 3.10+，能 import 本仓库的 `scorepipe`；
-- 单独的 OMR Python 环境，含 copisteria 和 music21；
-- copisteria 源码和模型权重；
-- MuseScore 4，用于 `.mscz`/PDF（只做 MusicXML 时可无）；
-- poppler（`pdfinfo`、`pdftoppm`），用于页数和视觉复核。
+- Python 3.10+ 能导入本仓库 `scorepipe`；
+- 独立的 copisteria/music21 环境、源码和模型权重可用；
+- MuseScore 4 可用于 `.mscz`/PDF；只做 MusicXML 时可以不渲染；
+- poppler 的 `pdfinfo`、`pdftoppm` 可用于页数统计和视觉复核。
 
-`preflight.py --save env.local.json` 会记录路径；不要提交这个文件。
+确认 PDF 版本、页数、标题/作曲/编曲，以及弱起、反复、移调乐器等已知信息。原始 PDF 只读。
 
-### 1. 确认输入
+### 2. 逐页 OMR 与机械修复
 
-- 确认 PDF 是目标版本，记录页数。
-- 记录标题、作曲、编曲，以及已知弱起、反复、移调乐器。
-- 先复制到交付工作目录，再运行 OMR。
+`convert.py` 调用 copisteria，并把**逐页目录**交给 scorepipe。页契约见
+[`references/omr.md`](references/omr.md)。流水线按 structural → inject → display 运行到不动点，
+然后执行只读 verifier。
 
-### 2. 运行 OMR
+检查 `report.json`：所有阶段必须 `stable=true`，交付件的 `verifier` 必须为空；无法解释的
+`measure-length`、hidden-rest 或导入差异都要追查。存在 ground truth 时再运行对应 comparator。
 
-`scripts/convert.py` 调用外部 copisteria，然后把 **逐页目录** 交给 scorepipe。不要用旧
-converter 最终合并的 MusicXML 作为 pipeline 输入：逐页上下文是页级 tie/slur/pedal 恢复
-所必需的。
+### 3. 收集 facts 与受限 patch
 
-页契约和排查见 `references/omr.md`。
-
-### 3. 修复与验证
-
-pipeline 按 structural → inject → display 跑到不动点，再跑只读 verifier。检查
-`report.json`：
-
-- 每个阶段 `stable=true`；
-- `verifier` 为空；
-- 没有无法解释的 `measure-length` 或 hidden-rest；
-- 有 ground truth 时做对比（`--compare-golden` 或 Lieder comparator）。
-
-### 4. Facts 与视觉复核
-
-先看置信度热图，再决定看哪几页、哪几小节：
+文字层只是 producer，不是 ground truth。添加 facts 前读
+[`references/facts.md`](references/facts.md)。每条 credit/mark 必须有 `page`、`evidence` 和
+`bbox`/`crop`；`rit.`、`rall.`、`accel.` 等渐进速度术语还必须提供 `gradual`。
 
 ```bash
-# OMR 每页的 reading.json → 逐页上色图 + review.md（按可疑度排序）
-python scripts/review_confidence.py --work-dir out/song/work
-```
-
-红色＝上下文改写了检测器的判断，橙色＝符号是否存在不确定，琥珀＝某属性概率偏低；图上编号是
-“先看谁”的顺序，不是判定。JSON 保留所有正分符号（含没有 bbox 的）。`review.py` 会自动跑这一步
-（`--no-confidence` 关闭）；它只是审查辅助，失败只记录在报告里，不会阻断交付。
-
-符号级之后是**小节级页面对照图**：每一页用它自己的 MusicXML 单独渲染，和该页扫描并排，两侧同一
-小节同色同号（全局小节号；`≠` 表示时值不符）：
-
-```bash
-python scripts/review_sheet.py --pages out/song/work/copisteria --report out/song/report.json
-```
-
-先分析全谱、再统一分档：红 ≥ 3.0、黄 ≥ 1.5，权重全谱一致，所以分数跨页可比；`review_sheet.md`
-是按分数跨全谱排的待看清单（时值不符的小节单列在最前）。两侧都按实测小节线切小节，扫描优先用
-OMR 自己的 `barLine_*` 检测（`<stem>.dets_*.json`）；渲染侧检出的小节数必须等于该页 MusicXML
-声明的小节数，扫描侧也必须一致，否则该侧**不上色**并记 `render_layout_mismatch` /
-`scan_layout_mismatch`——标错小节比不标更糟。图例在两侧下方：红＝最低档、黄＝中档、`≠`＝时值不符。
-第一页的渲染列会从合并谱（`--title-from`，默认找 `<pages>/../score.musicxml`）拷入标题/作曲
-credit，因为页文件本身只有音符、没有标题；credit 按老 `write_credits` 的坐标定位（标题居中靠上、
-作曲右对齐），否则 MuseScore 会把它们堆到页底。拷贝只写到渲染副本里，不改 OMR 页文件。
-产物：`<page>.compare.png`、`<page>.compare.json`、`review_sheet.md`、`review_sheet_summary.json`。
-
-文字层可以提供标题、作曲、速度文字、排练号和说明文字。添加 facts 前先读
-`references/facts.md`。facts 是数据：在注入 pass 应用前不会改谱，每个已应用 fact 必须可追溯。
-`rit.`/`rall.`/`accel.` 这类渐慢渐快术语必须同时给 `gradual`，否则只会变成纯文字，不会生成
-`GradualTempoChange` 连线。
-
-Agent/视觉 facts 的流程：
-
-```bash
-# 渲染源 PDF，生成逐页图片和 agent 指令
 python scripts/agent_facts.py prepare --pdf "score.pdf" --outdir review/facts
-
-# agent 逐页看图，写出带 page/evidence/bbox 的 JSON
 python scripts/agent_facts.py validate --facts review/facts/agent-page01.json --pages 2
-python scripts/agent_facts.py merge --parts review/facts/agent-page*.json --pages 2 -o review/facts/facts.json
-
-# 注入并重新渲染
-python scripts/convert.py "score.pdf" --pages path/to/omr-pages \
-  --facts review/facts/facts.json --outdir "out/score"
+python scripts/agent_facts.py merge --parts review/facts/agent-page*.json --pages 2 \
+  -o review/facts/facts.json
 ```
 
-`merge --pages N` 会检查所有页是否都已复核；缺页默认拒绝。`merge` 同时写出
-`facts-corrections.json`（音高/时值疑点，不会自动注入）和 `facts-report.json`。
-看不清的内容放进 `unresolved`，不要猜。视觉复核至少渲染 `.mscz` 为 PDF 并栅格化，检查：
+`merge --pages N` 检查页覆盖，并另外写出 `facts-corrections.json` 和 `facts-report.json`。
+音高/时值 correction 不会自动应用；接受后须通过专门编辑流程修改并重新渲染。
 
-- 首尾系统、页缝；
-- 弱起和小节编号；
-- 密集钢琴系统和加线八度；
-- 跨页 slur/tie；
-- 文字/credit 位置。
-
-没有新渲染，不要说视觉问题已修复。
-
-### 4b. 受约束的谱面符号 patch
-
-facts 不适合承载 8va、pedal、hairpin 这类谱面对象。原型用“音符锚点 + 操作”而不是直接改 mscz：
+8va/8vb、受限 tuplet 和 clef 使用音符锚点 patch，不用像素范围直接改谱：
 
 ```bash
 python scripts/notation_patches.py map --input out/score/score.musicxml -o review/score-map.json
-python -m scorepipe.cli pages/ -o out/score/score.musicxml --mscz-out out/score/score.mscz \
-  --patches review/patches.json
+python -m scorepipe.cli path/to/pages -o out/score/score.musicxml \
+  --mscz-out out/score/score.mscz --patches review/patches.accepted.json
 ```
 
-支持 `ottava`（8va/8vb）、受证据约束的 `tuplet` 和 `clef`（把 OMR 放错小节的谱号移到正确小节，
-可用 `from_measure` 撤掉原谱号）。ottava 编译成 MusicXML `<octave-shift>`；
-起止点必须落在真实 staff/measure/beat 上，end 必须晚于 start。像素 bbox 只作为证据，不决定范围。
-渲染后必须检查 8va 的实际覆盖范围；范围不确定就保持 unresolved，不要自动扩展。
+起止点必须落在真实 staff/measure/beat 上，patch 必须先被接受。渲染后检查实际覆盖范围；不确定就保留
+`unresolved`。完整约束见 [`references/notation-patches.md`](references/notation-patches.md)。
 
-tuplet 只重定时已有的完整同声部音符段，必须提供独立的比例、`note_count`、`span_beats`、
-源谱证据和 `status: accepted`。缺音、rest、跨声部、backup、嵌套或锚点不符时拒绝；禁止按小节
-长度反推比例。它在 structural fixpoint 前应用，并必须重新渲染核查。详见
-`references/notation-patches.md`。
-
-### 4c. 交付 review 闭环
+### 4. 运行 review 与视觉复核
 
 ```bash
 python scripts/review.py "score.pdf" --pages path/to/omr-pages \
   --facts-dir review/facts --patches review/patches.accepted.json --outdir review/score
 ```
 
-缺页、unresolved、proposed correction 或 patch 校验失败时，默认在 pipeline 前停止并写
-`review-report.json`。`--allow-unresolved` / `--allow-corrections` 只用于临时试跑，报告仍会
-列出被覆盖的项。mechanical 基线不干净不是阻断项（记入 `findings`），否则 forced-truncation
-永远轮不到执行；真正的验收门是 reviewed 那一轮的退出码和它自己的 display verifier。
-review 成功后检查 `rendered/` 和 `score.pdf`，再交付。
+缺页、`unresolved`、proposed correction 或 patch 校验失败会默认阻断 reviewed pipeline。
+`--allow-unresolved` / `--allow-corrections` 只用于临时试跑，覆盖项仍留在报告中。
 
-`review.py` 默认同时生成 `mechanical/`：不包含 agent facts/patches 的机械基线；根目录的
-`score.*` 是经过 review 的版本。交付时必须两套都保留，不能用 reviewed 覆盖 mechanical。
-`timing-report.json` 对比两套的 measure-length findings，并列出 introduced/resolved。
+review 自动生成两类辅助图：
 
-同时默认生成 `forced-truncation/`：对 overfull voice 做强制收尾，让 MuseScore 可以打开和编辑。
-它必须标记 `semantic_authority: false`，`truncation-report.json` 列出每个被删/被缩短的 rest 或
-note。CLI 会打印操作摘要，agent 必须转告用户；不要把它说成语义修复。
+- `review/confidence/`：符号级热图。红色表示上下文改写，橙色表示存在性不确定，琥珀表示属性概率偏低；
+  编号只是建议查看顺序。
+- `review/sheets/` + 根目录 `review-sheets.pdf`：逐页 MusicXML 渲染与扫描并排，同一小节同色同号，
+  `≠` 表示时值不符；`review_sheet.md` 给出跨页核对顺序。
 
-### 4d. Agent 检查与提案契约
+两者都是审查辅助，失败记录为 finding，不代替 verifier，也不证明未标色内容正确。对齐与分档细节见
+[`references/review.md`](references/review.md)。
 
-Agent 是 producer，不是改谱者。完整协议见 `references/agent-review.md`，最低要求：
+至少重新渲染并检查：首尾系统、页缝、弱起和小节号、密集钢琴系统、跨页 tie/slur、patch 覆盖范围、
+文字/credit 位置。没有新渲染，不得声称视觉问题已经修复。
 
-1. 用 source PDF 的逐页 `page-*.png` 和 `score-map.json` 检查，不以修复后的 mscz 代替原页；
-2. 每一页都要产出 `agent-pageNN.json`，`producer.pages` 必须声明实际看过的页；
-3. credit/mark 必须带 `page`、`evidence`、`bbox`/`crop`；
-4. 看不清的内容放 `unresolved`，不要猜；
-5. 音高/节奏疑点放 `corrections`，8va/tuplet 放 `patches`，都保持 `status: proposed`；
-6. 不在 agent 阶段直接编辑 MusicXML/mscz/mscx，也不自行把 proposal 改成 `accepted`；
-7. 用 `validate`/`merge` 检查覆盖与证据，经人工/明确 reviewer 接受后才 apply 并重新渲染。
-   corrections 没有自动 applier：接受后必须在 MuseScore/专门编辑流程里改音高，再重渲染。
+### 5. 理解三棵交付树
 
-### 5. 交付
+- `mechanical/` 是无 agent facts/patches 的对照基线。基线不干净会记入 findings，但不阻止后续
+  forced 修复；真正验收门是实际交付件。
+- 根目录 `score.*` 是 reviewed 交付。根 `score.musicxml` 始终保持未截断的语义主文件。
+- `forced-truncation/` 对 overfull voice 强制收尾以便 MuseScore 编辑，必须标记
+  `semantic_authority: false`。`truncation-report.json` 列出每个删除或缩短操作，agent 必须转告用户。
+- 实际发生截断时，根 `score.mscz` / `score.pdf` 来自 forced 副本，`rendered/` 也从它重新生成；
+  未截断 reviewed 树移入 `semantic/`。不要把截断称为语义修复。
 
-按 `references/delivery.md` 执行。交付 MusicXML + `.mscz` + PDF + report，说明 verifier
-结果和已知 OMR 缺陷，并保留 work 目录。
+### 6. Agent 提案边界
 
-## 仓库结构
+Agent 是 producer，不是最终改谱者：
 
-```text
-SKILL.md                 本操作契约
-scripts/preflight.py     只读环境探测，不安装
-scripts/convert.py       PDF -> OMR pages -> scorepipe -> mscz/pdf
-scripts/agent_facts.py   prepare/validate/merge agent 视觉 facts
-scripts/notation_patches.py  音符锚点 map / 受限谱面 patch
-scripts/review.py       逐页 review → pipeline → 渲染报告
-schemas/                 facts 与 notation-patch JSON schema
-scorepipe/               Python pipeline（子模块，含 agent_facts/notation_patches）
-tests/                   回归测试和 Lieder corpus
-docs/                    架构、验收证据、归档计划
-references/              skill 操作参考
-docs/SANITY.md            pass 契约审计
-```
+1. 对照源 PDF 页图和 `score-map.json`，不以修复后的乐谱代替原页。
+2. 每个实际查看的页面都产出 `agent-pageNN.json`，并准确声明 `producer.pages`。
+3. 音高/节奏疑点放入 `corrections`，8va/tuplet 等放入 `patches`，初始均为 `status: proposed`。
+4. 不在提案阶段直接编辑乐谱，也不自行接受提案；validate/merge、reviewer 接受、apply、重新渲染，
+   这个顺序不可省略。
 
-## 当前状态（2026-11）
+完整协议见 [`references/agent-review.md`](references/agent-review.md)。
 
-- `unittest`：278 个测试；`pytest`：363 个测试。
-- Gute Nacht：sounding notes 98.94% / 99.0%（vocal/piano），verifier clean。
-- `aus_meinen_traenen`：91.38% / 90.10%；`die_wetterfahne`：98.97% / 97.75%。
-- `der_lindenbaum` P2 仍是 OMR 质量异常项（约 51%）。
-- 已知交付阶段缺口：agent/视觉 facts 已有 prepare/validate/merge、页面覆盖检查、unresolved 和
-  独立 correction review；真实交付还需要逐页复核并人工处理 unresolved/corrections。
-- Gurenge（红莲华）实测：grace 记谱与 8va 检出的 importer 陷阱已修，display verifier 从 18 降到
-  8；剩余 8 条在 m42/m75/m76/m80 的 OMR 连音/非法休止上，属于必须人工编辑的内容错误。
+## 交付前验收
+
+- [ ] 所有阶段 `stable=true`，实际交付件 verifier 为空。
+- [ ] 页覆盖完整；`unresolved`、correction、override 和已知 OMR 缺陷均已说明。
+- [ ] `mechanical/` 与 reviewed 树均保留；发生截断时 `semantic/` 和截断报告齐全。
+- [ ] `score.musicxml`、`.mscz`、`score.pdf`、`review-sheets.pdf` 与报告均存在。
+- [ ] 对照图已打开检查，首尾、至少一个密集页和一个页缝已人工复核。
+- [ ] 已知缺陷按小节列出；保留源 PDF、`work/copisteria/` 和审查证据，不附带本机配置。
+
+按 [`references/delivery.md`](references/delivery.md) 完成交付。若 MuseScore 不可用，只交付
+MusicXML 与报告，并明确说明未生成 `.mscz`/PDF；不要伪造渲染或视觉验收结论。

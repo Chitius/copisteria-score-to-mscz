@@ -759,7 +759,10 @@ def verify_patches(doc: Document, payload: dict) -> list[str]:
 
 
 def _insert_octave(measure, beat: float, staff: str, kind: str, direction: str, number: str, divisions: float) -> None:
-    direction_element = ElementTree.Element("direction", {"placement": "above"})
+    # 8vb is printed under the staff it lowers; keeping it "above" drew the bracket between the
+    # staves (measured on the First Step delivery).
+    placement = "below" if direction == "down" else "above"
+    direction_element = ElementTree.Element("direction", {"placement": placement})
     direction_type = ElementTree.SubElement(direction_element, "direction-type")
     attributes = {"type": direction if kind == "start" else "stop", "number": number}
     if kind == "start":

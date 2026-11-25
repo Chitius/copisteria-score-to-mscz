@@ -124,6 +124,8 @@ class ReviewFailureTest(unittest.TestCase):
 
         def fake_run(command, cwd):
             calls.append(command)
+            if any("review_sheet.py" in part for part in command):
+                return 0
             if "scorepipe.cli" in command:
                 Path(command[command.index("-o") + 1]).write_text("musicxml", encoding="utf-8")
                 Path(command[command.index("--report") + 1]).write_text("{}", encoding="utf-8")
@@ -155,7 +157,7 @@ class ReviewFailureTest(unittest.TestCase):
             )
 
         self.assertEqual(code, 1)
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 3)  # reviewed pipeline + render + page proof sheets
         self.assertEqual(render_pages.call_count, 2)
         report = json.loads((outdir / "review-report.json").read_text(encoding="utf-8"))
         self.assertFalse(report["ready"])
@@ -184,6 +186,8 @@ class ReviewBaselineFindingTest(unittest.TestCase):
 
         def fake_run(command, cwd):
             calls.append(command)
+            if any("review_sheet.py" in part for part in command):
+                return 0
             if "scorepipe.cli" in command:
                 musicxml = Path(command[command.index("-o") + 1])
                 musicxml.parent.mkdir(parents=True, exist_ok=True)

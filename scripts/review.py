@@ -1,8 +1,15 @@
-"""One review loop: page images -> agent facts/patches -> pipeline -> render -> report.
+"""One review loop: page images -> agent facts/patches -> pipeline -> forced repair -> report.
 
-This is the operator entry point for the delivery stage. It deliberately stops when page coverage is
-incomplete or when unresolved/corrections need a human decision; `--allow-unresolved` and
+This is the operator entry point for the delivery stage.  It deliberately stops when page coverage
+is incomplete or when unresolved/corrections need a human decision; `--allow-unresolved` and
 `--allow-corrections` are explicit overrides for an interim review.
+
+The run order is mechanical baseline -> reviewed pipeline -> forced-truncation pipeline, and the
+forced copy is what ships when it had to trim an overfull voice: the root `score.mscz`/`score.pdf`
+become the truncated editable copy, `rendered/` is rasterised from it, and the untruncated reviewed
+tree is kept in `semantic/`.  Root `score.musicxml` stays the untruncated semantic master.  The
+measure-level proof sheets run last, on the delivered tree, and are also bound into
+`review-sheets.pdf`.
 """
 
 from __future__ import annotations
@@ -151,6 +158,35 @@ def _truncation_notes(report_path: Path) -> list[str]:
     ]
 
 
+def _truncation_performed(operations: list[str]) -> bool:
+    """True when a voice was really trimmed, not only normalized.
+
+    The truncation pass reports ``m82 staff 1: 3.25->3 beats; remove 0.25`` for a real edit and
+    ``DEFERRED``/``UNRESOLVED`` for the cases it refuses; the duration normalization that runs
+    with it reports ``normalized ...``/``converted ...``.  Only the first form changes what the
+    user sees, so only that form makes the editable copy the delivery.
+    """
+    for operation in operations:
+        if operation.startswith("m") and " staff " in operation:
+            return True
+    return False
+
+
+def _only_overfull_violations(report_path: Path) -> bool:
+    """True when every verifier finding is a measure-length complaint.
+
+    The reviewed (untruncated) tree is allowed to report an overfull voice: that is exactly the
+    condition the editable copy repairs.  Any other verifier finding still blocks.
+    """
+    if not report_path.is_file():
+        return False
+    data = json.loads(report_path.read_text(encoding="utf-8"))
+    violations = data.get("verifier") or []
+    return bool(violations) and all(
+        violation.get("code") in ("measure-length", "mscx-measure-length") for violation in violations
+    )
+
+
 def _verifier_count(report_path: Path) -> int:
     if not report_path.is_file():
         return 0
@@ -214,6 +250,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="skip the OMR confidence heat map (it is only an aid, never a delivery gate)",
     )
+    parser.add_argument(
+        "--no-sheets",
+        action="store_true",
+        help="skip the measure-level page proof sheets (review/sheets)",
+    )
     parser.add_argument("--mechanical-dir", help="baseline directory (default: <outdir>/mechanical)")
     parser.add_argument("--no-forced-truncation", action="store_true", help="skip the forced editable copy")
     parser.add_argument("--forced-dir", help="forced editable directory (default: <outdir>/forced-truncation)")
@@ -221,6 +262,12 @@ def main(argv: list[str] | None = None) -> int:
         "--allow-combined-pages",
         action="store_true",
         help="allow one facts file to claim multiple pages instead of one file per page",
+    )
+    parser.add_argument(
+        "--skip-facts",
+        action="store_true",
+        help="no per-page facts yet: skip the page-coverage gate and deliver the mechanical "
+        "tree; the report records that no credits/tempo were injected",
     )
     parser.add_argument(
         "--allow-incomplete-delivery",
@@ -286,13 +333,19 @@ def main(argv: list[str] | None = None) -> int:
     artifacts_missing = []
     if (facts.get("producer") or {}).get("pdf_sha256_mismatch"):
         blockers.append("facts were produced for a different source PDF (sha256 mismatch)")
-    if page_count and len(parts) < page_count and not args.allow_combined_pages:
-        blockers.append(
-            f"facts coverage uses {len(parts)} file(s) for {page_count} pages; "
-            "use one agent-page file per page or pass --allow-combined-pages"
+    if args.skip_facts:
+        findings.append(
+            "no per-page facts were supplied (--skip-facts): this is the mechanical tree, "
+            "no credits or tempo marks were injected"
         )
-    if missing_pages:
-        blockers.append(f"missing pages: {missing_pages}")
+    else:
+        if page_count and len(parts) < page_count and not args.allow_combined_pages:
+            blockers.append(
+                f"facts coverage uses {len(parts)} file(s) for {page_count} pages; "
+                "use one agent-page file per page or pass --allow-combined-pages"
+            )
+        if missing_pages:
+            blockers.append(f"missing pages: {missing_pages}")
     if unresolved:
         if args.allow_unresolved:
             overrides.append(f"{len(unresolved)} unresolved claim(s)")
@@ -389,6 +442,7 @@ def main(argv: list[str] | None = None) -> int:
     report = {
         "ready": not blockers,
         "interim": bool(overrides or artifacts_missing),
+        "semantic_authority": True,
         "overrides": overrides,
         "findings": findings,
         "artifacts_missing": artifacts_missing,
@@ -398,6 +452,7 @@ def main(argv: list[str] | None = None) -> int:
         "covered_pages": covered,
         "missing_pages": missing_pages,
         "facts": {"credits": len(facts.get("credits") or []), "marks": len(facts.get("marks") or [])},
+        "facts_skipped": bool(args.skip_facts),
         "unresolved": unresolved,
         "corrections": corrections,
         "patch_count": len((patch_payload or {}).get("patches") or []),
@@ -443,6 +498,8 @@ def main(argv: list[str] | None = None) -> int:
             command.extend(["--musescore", str(musescore)])
     code = _run(command, ROOT)
     pipeline_exit = code
+    reviewed_exit = code
+    reviewed_only_overfull = _only_overfull_violations(report_json)
     report["pipeline_exit"] = code
     report["artifacts"].update({"musicxml": str(musicxml), "report": str(report_json)})
     if mscz:
@@ -450,9 +507,10 @@ def main(argv: list[str] | None = None) -> int:
     timing = _timing_report((mechanical or {}).get("timing"), _timing(report_json))
     report["timing"] = timing
     _write(outdir / "timing-report.json", timing)
+    # A reviewed failure is decided after the forced copy: an overfull voice that the editable
+    # copy trims is exactly why that copy exists, but any other violation still blocks.
     if code != 0:
         report["ready"] = False
-        report["blockers"].append(f"pipeline exited {code}")
 
     if mscz and mscz.is_file() and not args.no_pdf and musescore:
         pdf_out = outdir / "score.pdf"
@@ -579,6 +637,109 @@ def main(argv: list[str] | None = None) -> int:
             if not forced["ready"]:
                 report["ready"] = False
                 report["blockers"].append("forced-truncation copy is not clean/complete")
+            elif _truncation_performed(operations):
+                # The editable copy is what the user opens, so it becomes the delivery root and the
+                # page comparison is rasterized from it.  The untruncated reviewed tree moves to
+                # semantic/ because the trim is not a semantic repair (semantic_authority=false).
+                semantic_dir = outdir / "semantic"
+                semantic_dir.mkdir(parents=True, exist_ok=True)
+                for name in ("score.musicxml", "score.mscz", "score.pdf", "report.json"):
+                    current = outdir / name
+                    if current.is_file():
+                        shutil.move(str(current), str(semantic_dir / name))
+                for name in ("score.musicxml", "score.mscz", "score.pdf", "report.json"):
+                    produced = forced_dir / name
+                    if produced.is_file():
+                        shutil.copy2(produced, outdir / name)
+                shutil.copy2(forced_dir / "truncation-report.json", outdir / "truncation-report.json")
+                report["semantic_authority"] = False
+                report["semantic_dir"] = str(semantic_dir)
+                report["delivery_note"] = (
+                    "root score.mscz/score.pdf are the truncated editable copy; root "
+                    "score.musicxml is the untruncated semantic master (truncation is an mscx "
+                    "display repair and is not reflected in MusicXML)"
+                )
+                report["pipeline_exit"] = forced_exit
+                report["render_exit"] = forced_render_exit
+                if not args.no_pdf and (outdir / "score.pdf").is_file():
+                    try:
+                        report["rendered_after"] = _render_pages(outdir / "score.pdf", outdir / "rendered")
+                    except RuntimeError as exc:
+                        report["render_error"] = str(exc)
+                        report["ready"] = False
+                report["timing"] = _timing_report(
+                    (mechanical or {}).get("timing"), _timing(outdir / "report.json")
+                )
+                _write(outdir / "timing-report.json", report["timing"])
+                report["artifacts"].update(
+                    {
+                        "musicxml": str(outdir / "score.musicxml"),
+                        "mscz": str(outdir / "score.mscz"),
+                        "pdf": str(outdir / "score.pdf"),
+                        "report": str(outdir / "report.json"),
+                        "truncation_report": str(outdir / "truncation-report.json"),
+                        "semantic": str(semantic_dir),
+                    }
+                )
+                print("delivery: forced-editable copy is the root artifact (semantic_authority=false)")
+                print(f"semantic: untruncated reviewed tree kept in {semantic_dir}")
+
+    if reviewed_exit != 0:
+        tolerated = (
+            forced is not None
+            and forced.get("ready")
+            and _truncation_performed(forced.get("operations") or [])
+            and reviewed_only_overfull
+        )
+        if tolerated:
+            report["findings"].append(
+                "reviewed (untruncated) tree reported overfull voices only; "
+                "the editable delivery trims them"
+            )
+            report["ready"] = not report["blockers"]
+        else:
+            report["ready"] = False
+            report["blockers"].append(f"pipeline exited {reviewed_exit}")
+
+    if not args.no_sheets:
+        # Measure-level proof sheets of the delivered tree: same pages, same measure numbers, the
+        # same bars tinted on the scan and on the render.  A reading aid, so a failure is a finding.
+        sheets_dir = outdir / "review" / "sheets"
+        sheet_command = [
+            python,
+            str(SCRIPTS / "review_sheet.py"),
+            "--pages",
+            str(page_dir),
+            "--out",
+            str(sheets_dir),
+            "--report",
+            str(outdir / "report.json"),
+            "--title-from",
+            str(outdir / "score.musicxml"),
+            "--source-name",
+            pdf.name,
+        ]
+        scan_dir = page_dir.parent / "pages"
+        if scan_dir.is_dir():
+            sheet_command.extend(["--scan-dir", str(scan_dir)])
+        if musescore:
+            sheet_command.extend(["--musescore", str(musescore)])
+        print("+ page proof sheets (measure-level; reading aid)")
+        sheet_exit = _run(sheet_command, ROOT)
+        report["sheets"] = {"dir": str(sheets_dir), "exit": sheet_exit}
+        sheets_pdf = sheets_dir / "review-sheets.pdf"
+        if sheets_pdf.is_file():
+            # One obvious file at the delivery root as well: a human opening the folder should not
+            # have to know that the pages live three levels down.
+            delivery_pdf = outdir / "review-sheets.pdf"
+            shutil.copy2(sheets_pdf, delivery_pdf)
+            report["sheets"]["pdf"] = str(delivery_pdf)
+            report["artifacts"]["sheets_pdf"] = str(delivery_pdf)
+            print(f"sheets:        {delivery_pdf}")
+        if sheet_exit != 0:
+            report["findings"].append(
+                "page proof sheets reported an incomplete alignment; see review/sheets"
+            )
 
     _write(outdir / "review-report.json", report)
     _write(
@@ -592,6 +753,9 @@ def main(argv: list[str] | None = None) -> int:
             "pipeline_exit": report.get("pipeline_exit"),
             "render_exit": report.get("render_exit"),
             "artifacts": report.get("artifacts"),
+            "semantic_authority": report.get("semantic_authority", True),
+            "semantic_dir": report.get("semantic_dir"),
+            "sheets": report.get("sheets"),
             "mechanical": mechanical,
             "forced_truncation": forced,
             "blockers": report.get("blockers") or [],
@@ -599,8 +763,24 @@ def main(argv: list[str] | None = None) -> int:
         },
     )
     print(f"review ready: {report['ready']}")
+    if report["ready"]:
+        print("delivery (open these):")
+        for label, key in (
+            ("musicxml", "musicxml"),
+            ("mscz", "mscz"),
+            ("score pdf", "pdf"),
+            ("sheet pdf", "sheets_pdf"),
+        ):
+            value = report["artifacts"].get(key)
+            if value:
+                print(f"  {label:10s} {value}")
+    else:
+        for blocker in report.get("blockers") or []:
+            print(f"blocked: {blocker}")
     print(f"report: {outdir / 'review-report.json'}")
-    return pipeline_exit or code or (0 if report["ready"] else 2)
+    if report["ready"]:
+        return 0
+    return report.get("pipeline_exit") or report.get("render_exit") or 2
 
 
 if __name__ == "__main__":

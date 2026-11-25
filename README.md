@@ -1,263 +1,159 @@
-# copisteria-to-mscz
+<div align="right">
 
-`copisteria-to-mscz` is a skill for turning a printed score PDF into a reviewed MusicXML/MuseScore
-delivery.
+**中文** · [English](README_EN.md)
 
-The mechanical work lives in the `scorepipe` Python package: it merges per-page OMR output,
-repairs structure to a fixed point, applies explicit facts, produces a `.mscz`, and verifies both
-the MusicXML and the display score. The skill wrapper owns the part around it: environment
-preflight, OMR invocation, evidence collection, visual review, and delivery.
+</div>
 
-Start with [`SKILL.md`](SKILL.md). The operational references are in
-[`references/`](references/); historical plans are in [`docs/archive/`](docs/archive/).
+# copisteria-score-to-mscz
 
-## Quick start
+**把印刷五线谱 PDF 转成可编辑的 MusicXML 和 MuseScore 乐谱，并生成逐小节核对材料。**
 
-```bash
-# Environment probe: reports what is missing; never installs or downloads.
-python scripts/preflight.py --save env.local.json
+识别、修复和渲染都在本地完成。项目的目标是交付一份**可靠、可追溯、能继续编辑的初稿**，而不是承诺“一键完美识谱”。
 
-# End-to-end pipeline draft: PDF -> copisteria page output -> scorepipe -> mscz + review PDF.
-python scripts/convert.py "score.pdf" --env env.local.json --outdir "out/score" \
-  --title "Title" --composer "Composer"
+## 识别核心：[copisteria](https://github.com/kobimusic/copisteria)
 
-# Final delivery: page review + facts/patches + mechanical/reviewed/forced trees.
-python scripts/review.py "score.pdf" --pages out/score/work/copisteria \
-  --facts-dir review/facts --outdir "review/score"
+本项目从 **[copisteria](https://github.com/kobimusic/copisteria)**（KobiMusic，Apache-2.0）的逐页识别结果开始。copisteria 面向真实扫描谱，将页面图像转成 MusicXML：符号检测器识别 270 类记号，evidence transformer 再结合整页上下文判断音高、声部、onset、节奏、调号和拍号。除 MusicXML 外，它还输出每个符号的阅读证据和可检查的 HTML 页面。
 
-# Pipeline only: use an existing page directory.
-python -m scorepipe.cli path/to/pages -o out/score/score.musicxml --mscz-out out/score/score.mscz \
-  --report out/report.json
-```
+上游的 [OMR-NED benchmark](https://github.com/kobimusic/copisteria#benchmark) 报告了以下真实扫描集结果；数字是**错误率，越低越好**：
 
-`scripts/convert.py` is a pipeline draft; its `delivery.json` has `reviewed: false`. Use
-`scripts/review.py` for the final delivery tree and acceptance checks.
+| 系统 | 弦乐四重奏（252 页） | 艺术歌曲（55 页） | 钢琴谱（112 页） |
+|---|---:|---:|---:|
+| **copista-28m** | **8.6%** | **16.9%** | **31.5%** |
+| copista-2m | 11.1% | 17.0% | 34.3% |
+| Audiveris 5.11 | 66.9% | 51.8% | 62.6% |
 
-### Operational flags
+上游还报告 copista-28m 在五个数据集合计 735 页上的错误率为 11.3%。这些数字描述的是 **copisteria 本身及上游评测口径**，不是本项目修复后的准确率。
 
-| Script | Flag | Meaning |
-|---|---|---|
-| `review.py` | `--no-mechanical` | omit the no-agent baseline (blocked unless `--allow-incomplete-delivery`) |
-| `review.py` | `--no-forced-truncation` | omit the forced editable tree (same gate) |
-| `review.py` | `--allow-incomplete-delivery` | explicit interim override; still records `artifacts_missing` |
-| `review.py` | `--title` / `--composer` | inject manual credits before review |
-| `review.py` | `--compare-golden` | compare the reviewed MusicXML with a golden file |
-| `review.py` | `--allow-unresolved` / `--allow-corrections` | interim override; recorded as `overrides` |
-| `convert.py` | `--force` | replace existing draft artifacts |
-| `convert.py` | `--no-mscz` / `--no-pdf` | stop before/without render (draft only) |
-| `scorepipe.cli` | `--truncate-overfull` | explicit forced-repair pass; requires `--mscz-out` |
-| `notation_patches.py` | `apply --dry-run` | validate and report changes without writing |
-| `notation_patches.py` | `accept --reviewer NAME` | promote selected ottava/tuplet/clef patches |
+本项目的职责是承接这些逐页草稿：合并整谱、修复结构、生成 `.mscz`，并提供逐小节核对材料。如果只需要原始 OMR 或要研究识别模型，可以直接使用 copisteria。
 
-## What the skill produces
+## 先看效果：OMR 草稿之后发生了什么
 
-| Artifact | Meaning |
+下面是《Sincerely》m16–18，依次放入原谱、OMR 原始 MusicXML 和修复后 MusicXML。两份 XML 都由 MuseScore 直接渲染；原谱在此处跨页，因此第一组包含两条谱表。
+
+![原谱、OMR 原始 MusicXML 与修复后 MusicXML 的单行对照](docs/images/demo-omr-xml.png)
+
+这个片段主要展示**连梁分组和局部排版的整理**，例如 m16 低音从贯穿整小节的连梁改为按拍分组。它不是识别准确率的证明；原谱与结果之间的音高、声部等差异仍需人工核对。小节时值、连线和 MuseScore 导入后的结构由报告与 review 工具另行检查。
+
+它**不会凭猜测改音高**。标题、速度和谱面补充信息通过带证据的 facts 或受限 patch 注入。
+
+## 对照原谱，而不是盲信识别结果
+
+交付时会生成 `review-sheets.pdf`：左侧是 MusicXML 渲染，右侧是原始扫描；同一小节使用相同编号和颜色，优先标出值得人工检查的位置。
+
+![逐页小节对照图：左侧渲染，右侧原始扫描](docs/images/demo-3-final.png)
+
+- 红色、黄色表示不同的核对优先级，不代表系统已经判定错误。
+- `≠` 表示小节时值不符；未着色也不等于已经证明正确。
+- `review/confidence/` 另提供符号级热图，用来定位具体音符或记号。
+
+## 你会得到什么
+
+| 文件 | 用途 |
 |---|---|
-| `score.musicxml` | repaired, merged MusicXML; the semantic master |
-| `score.mscz` | MuseScore container after the display fixpoint |
-| `score.pdf` | rendered review copy |
-| `report.json` | phase rounds, pass trace, analysis, verifier violations |
-| `delivery.json` | final review manifest (convert writes `reviewed:false` draft) |
-| `mechanical/` | no-agent-facts/no-patches comparison tree |
-| `forced-truncation/` | editable overfull-voice repair; `semantic_authority:false` |
-| `work/copisteria/` | per-page OMR MusicXML, reading JSON and HTML |
-| `review/confidence/` | per-page scan painted by OMR doubt, `review.md` in review order |
-| `review/sheets/` | per-page measure-level proof sheet: this page's render beside its scan |
+| `score.mscz` | 在 MuseScore 中播放、编辑、重新排版或导出 MIDI |
+| `score.musicxml` | 合并、修复后的语义主文件，可导入其他制谱软件 |
+| `score.pdf` | 交付乐谱的渲染件 |
+| `review-sheets.pdf` | 全部页面的小节对照图，**人工核对从这里开始** |
+| `report.json` / `review-report.json` | 修复轨迹、校验结果、页覆盖和阻断项 |
+| `work/copisteria/` | 逐页 OMR 原始输出，保留用于追溯 |
 
-Keep the page directory. It is the audit trail for page-level ties/slurs and for OMR defects.
+完整交付还保留 `mechanical/` 基线和必要的 `forced-truncation/` 可编辑副本，便于比较改动。截断副本不是语义主文件；具体分工见 [`references/delivery.md`](references/delivery.md)。
 
-## Workflow
-
-1. **Configure** — `scripts/preflight.py` checks the pipeline interpreter, the separate
-   copisteria/music21 environment, the converter wrapper, MuseScore and poppler. See
-   [`references/environment.md`](references/environment.md).
-2. **OMR** — run the external copisteria converter over the PDF. Feed scorepipe the per-page
-   directory, not the old converter's final merged MusicXML. See
-   [`references/omr.md`](references/omr.md).
-3. **Repair** — scorepipe runs structural → inject → display fixed points and read-only
-   verifiers. A non-empty verifier is a blocker, not a cosmetic warning.
-4. **Facts** — apply explicit title/composer/marks facts. The text layer is a producer, not
-   ground truth. The agent/vision producer has a prepared page packet and evidence-checking workflow;
-   see [`references/facts.md`](references/facts.md).
-5. **Review** — start from `review/confidence/review.md`: it paints each scan by how much the OMR
-   reader doubted each symbol (`scripts/review_confidence.py`, run by `review.py`), so the pages
-   worth checking come first. Then run `scripts/review_sheet.py` for the measure-level view: each
-   page's own render beside its scan, the same bars tinted and numbered on both. Finally render
-   the `.mscz` to PDF, rasterize pages, and check the first/last systems, page joins, pickup, dense
-   piano pages, ledger-line octaves, and text placement.
-6. **Deliver** — follow [`references/delivery.md`](references/delivery.md). Report known OMR
-   defects by measure; do not silently transpose or invent notes.
-
-## Pipeline shape
+## 工作流程
 
 ```text
-per-page MusicXML
-  -> loader: LCM divisions, global measures, page context
-  -> structural fixpoint: voice/measure/beam/tie/slur/page restoration
-  -> facts (JSON only) -> inject fixpoint
-  -> MusicXML master
-  -> MuseScore import -> display fixpoint on .mscx
-  -> MusicXML verifier + mscx verifier
-  -> report / render / delivery
+PDF
+  → copisteria 逐页识别
+  → 逐页 MusicXML + 符号置信度
+  → scorepipe 合并、声部/时值/连线修复
+  → facts 与受限 patch（可选、可追溯）
+  → MusicXML 主文件
+  → MuseScore：.mscz + score.pdf
+  → 只读校验 + review-sheets.pdf
 ```
 
-The pipeline is a compiler-style fixed point: each mechanical pass declares what it owns and a
-monotone measure; the runner repeats until a full round changes nothing; read-only verifiers run
-afterwards. See [`docs/DESIGN.md`](docs/DESIGN.md) for the architecture and
-[`docs/SANITY.md`](docs/SANITY.md) for the pass-contract audit.
+保留“逐页”这一层很重要：跨页延音线、圆滑线和其他连续记号需要页边界上下文才能恢复。修复阶段会重复运行到稳定，再由独立校验器检查结果；命令成功退出并不等于可以跳过渲染核对。
 
-Useful commands:
+## 快速开始
+
+### 1. 准备依赖
+
+- **Python 3.10+**：运行本项目。
+- **[copisteria](https://github.com/kobimusic/copisteria) 与模型权重**：负责 OMR；按上游文档准备独立 Python 环境。
+- **MuseScore 4**：生成 `.mscz` 并渲染 PDF。
+- **poppler**：提供 `pdfinfo` 和 `pdftoppm`，用于 PDF 页数与页面图像。
+
+`preflight.py` 只检查环境，不会下载模型、安装系统软件或修改原始 PDF。
+
+### 2. 安装并检查
 
 ```bash
-python -m scorepipe.cli --list-passes
-python -m scorepipe.cli score.musicxml --trace -o out.musicxml
-python -m scorepipe.cli score.musicxml --mscz-out out.mscz --report out/report.json
-python -m scorepipe.cli score.mscz --check
-python -m scorepipe.cli pages/ --check
+git clone https://github.com/Chitius/copisteria-score-to-mscz.git
+cd copisteria-score-to-mscz
+python -m pip install -e .
+python scripts/preflight.py --save env.local.json
 ```
 
-## Facts
+`env.local.json` 只保存本机工具路径，已被 Git 忽略，不要提交。路径配置详见 [`references/environment.md`](references/environment.md)。
 
-Facts are JSON data, never direct edits:
-
-```json
-{
-  "credits": [
-    {"type": "title", "text": "Sincerely"},
-    {"type": "composer", "text": "TRUE"}
-  ],
-  "marks": [
-    {"measure": 1, "beat": 0, "placement": "above", "text": "q = 72", "tempo": 72}
-  ]
-}
-```
-
-Tempo notation is written once with a `<sound tempo>`; arranger/transcriber credits append to the
-composer line. A PDF text layer can be used through the producers; a scanned PDF with no usable
-text layer still needs the agent/vision facts path.
-
-### Agent visual facts
+### 3. 从 PDF 生成初稿
 
 ```bash
-python scripts/agent_facts.py prepare --pdf score.pdf --outdir review/facts
-python scripts/agent_facts.py validate --facts review/facts/agent-page01.json --pages 2
-python scripts/agent_facts.py merge --parts review/facts/agent-page*.json --pages 2 -o review/facts/facts.json
-python scripts/convert.py score.pdf --pages path/to/omr-pages \
-  --facts review/facts/facts.json --outdir out/score
+python scripts/convert.py "score.pdf" --outdir "out/score" \
+  --title "标题" --composer "作曲"
 ```
 
-Every agent credit/mark must carry `page`, `evidence`, and `bbox`/`crop`; ambiguous items go in
-`unresolved`. `merge` strips printed role labels (`Original Artist:TRUE` → `TRUE`) and keeps the
-original wording in evidence. See [`references/facts.md`](references/facts.md).
+这一步完成逐页 OMR、合并修复和渲染。生成的 `out/score/score.mscz` 可以立即打开，但仍是待复核初稿。
 
-### Constrained notation patches
+### 4. 生成核对材料与交付目录
 
-Long-tail symbols are not forced into facts. The prototype supports `ottava` (`8va`/`8vb`),
-constrained `tuplet`, and `clef` patches as musical-anchor operations; the compiler writes MusicXML
-`<octave-shift>` / tuplet notation / `<clef>` and MuseScore builds the spanner/bracket:
+如果还没有逐页 facts，先生成机械基线：
 
 ```bash
-python scripts/notation_patches.py map --input out/score/score.musicxml -o review/score-map.json
-python -m scorepipe.cli pages/ -o out/score/score.musicxml --mscz-out out/score/score.mscz \
-  --patches review/patches.json
+python scripts/review.py "score.pdf" --pages "out/score/work/copisteria" \
+  --skip-facts --title "标题" --composer "作曲" --outdir "review/score"
 ```
 
-See [`references/notation-patches.md`](references/notation-patches.md). The patch compiler enforces
-start/end staff and order; the rendered bracket still needs visual confirmation.
+打开 `review/score/review-sheets.pdf` 核对。`--skip-facts` 表示没有注入标题、速度等逐页事实，因此不能把这一版描述为“已完成完整人工复核”。
 
-### Delivery review
+准备好 facts 后，运行正式 review：
 
 ```bash
-python scripts/review.py score.pdf --pages path/to/omr-pages \
-  --facts-dir review/facts --patches review/patches.json --outdir review/score
+python scripts/review.py "score.pdf" --pages "out/score/work/copisteria" \
+  --facts-dir "review/facts" --outdir "review/score"
 ```
 
-The review stops before the pipeline when pages are missing, unresolved claims or proposed
-corrections remain. `--allow-unresolved` / `--allow-corrections` are explicit interim overrides;
-the report still lists what was overridden. A no-facts/no-patches baseline is written to
-`mechanical/`; the root `score.*` files are the reviewed version. Keep both. `timing-report.json`
-compares measure-length findings between the two. The default `forced-truncation/` tree trims
-overfull voices so MuseScore can edit them; it is marked `semantic_authority: false` and records
-every operation in `truncation-report.json`. See [`references/review.md`](references/review.md).
-
-## Current status (2026-11-23)
-
-Tests:
-
-```text
-python -m unittest discover -s tests   # 278 tests
-python -m pytest tests -q              # 363 tests
-```
-
-Corpus (sounding-note match; rests excluded from the primary score):
-
-| Case | Vocal / P1 | Piano / P2 | Notes |
-|---|---:|---:|---|
-| Gute Nacht | 98.94% | 99.0% | verifier clean |
-| Aus meinen Tränen | 91.38% | 90.10% | verifier clean |
-| Die Wetterfahne | 98.97% | 97.75% | verifier clean |
-| Der Lindenbaum | 99.51% | 51.44% | raw OMR is the limiting factor |
-| Sincerely | — | — | no ground truth; structural/display verifier clean |
-
-Recent Gurenge-specific fixes (2026-11):
-
-- grace chords are zero time in the mscx model (MuseScore writes `<grace16/>` and still emits a
-  `durationType`); this removed 8 false `mscx-measure-length`/`mscx-tuplet-length` findings and
-  stopped the forced copy from deleting real notes to compensate;
-- MuseScore materialises `<grace/>` + `<type>eighth</type>` as a real note, so `normalize_grace_notes`
-  rewrites grace type to the 16th value MuseScore itself exports;
-- a tie between two grace notes makes the importer lengthen the bar, so `reconcile_tie_slurs`
-  drops it;
-- `scripts/review.py` records a dirty mechanical baseline as a `finding` instead of blocking, so the
-  forced-truncation tree is still produced; `timing-report.json` reports `available: false` rather
-  than inventing deltas when a run is missing;
-- MuseScore discovery is shared by `preflight`, `convert` and `review` and searches the environment,
-  `PATH`, the Windows `App Paths` registry and every drive's `Program Files`, not one hard-coded path.
-
-## Known limitations
-
-- Agent/vision fact extraction has page preparation, coverage checking, evidence validation, merge,
-  and a separate corrections review; real delivery still needs per-page review and resolving
-  `unresolved`/`corrections`.
-- The notation-patch compiler currently supports `ottava`, constrained `tuplet` and `clef`;
-  pedal/hairpin/dynamic operations are future work.
-- Same-value beam runs are still rebuilt as one group; a full compound-metre `BeamGrouper` is
-  future work.
-- Voice merge skips tuplet measures rather than preserving nested ratios.
-- OMR octave/ledger errors are preserved. For example, Sincerely m30 has a raw C8; the pipeline
-  reports the draft, it does not silently correct the pitch.
-- MuseScore can crash on schema-valid but importer-hostile XML; `normalize_forward_durations` and
-  `normalize_tuplet_rests` handle the known cases, but a crash should always be reproduced with
-  the MuseScore CLI and bisected. See [`references/troubleshooting.md`](references/troubleshooting.md).
-- `der_lindenbaum` P2 remains an OMR-quality outlier, not a delivery showcase.
-- Text layers can be garbled (Sincerely's credits were); do not trust extracted metadata without a
-  visual check.
-
-## Repository map
-
-```text
-SKILL.md                 skill operator contract
-scripts/preflight.py     read-only environment probe
-scripts/convert.py       PDF -> OMR pages -> scorepipe -> mscz/pdf
-scripts/agent_facts.py   prepare/validate/merge agent visual facts
-scripts/notation_patches.py  map anchors / apply constrained notation patches
-scripts/review.py        page review -> pipeline -> render report
-schemas/                 facts and notation-patch JSON schemas
-scorepipe/               the Python pipeline
-references/              setup, OMR, facts, delivery references
-docs/                    architecture, acceptance evidence, archived plans
-docs/archive/            completed migration/change plans (provenance)
-tests/                   regression suite and Lieder corpus
-docs/SANITY.md            pass-contract audit
-```
-
-## Development
+只需要 MusicXML 时，也可以跳过 OMR 调用和 review，直接处理已有逐页目录：
 
 ```bash
-python -m unittest discover -s tests
-python -m pytest tests -q -p no:cacheprovider
+python -m scorepipe.cli "out/score/work/copisteria" -o "out/score/score.musicxml"
 ```
 
-The test suite covers pass contracts, fixed-point convergence, MusicXML/mscx verifiers, page
-restoration, facts injection, pickup/beam/measure regressions, and the OpenScore Lieder corpus.
-When adding a mechanical pass, add its fixture and contract in `tests/test_pass_sanity.py`.
+## facts、patch 与 AI 助手
+
+- **facts**：注入标题、作曲、速度、排练号等明确事实；每项都应带页码和证据。准备与校验流程见 [`references/facts.md`](references/facts.md)。
+- **notation patch**：用音符锚点补入证据充分的 8va/8vb、连音组或谱号修正；范围不确定时保留为未决，不自动扩张。见 [`references/notation-patches.md`](references/notation-patches.md)。
+- **AI 助手**：本仓库同时提供 [`SKILL.md`](SKILL.md)，约束助手完成环境检查、逐页 OMR、证据收集、复核和交付。助手可以提出修正，但不能自行把提案当作已接受结果。
+
+## 适用范围与限制
+
+- 面向**印刷五线谱**，目前验证较多的是钢琴谱和艺术歌曲；手写谱、简谱、六线谱和乐队总谱不属于已验证场景。
+- OMR 仍可能产生八度、加线、声部、休止符和密集和弦错误。结构校验通过不代表音高正确，**人工核对不可省略**。
+- 踏板、hairpin、可选音符括号等记号不能可靠地自动进入交付；缺失项应明确记录，不靠猜测补齐。
+- 8va/8vb 需要证据充分且经接受的 patch；无法确定覆盖范围时保持未决。
+- PDF 文字层可能错位或乱码，标题、作曲和速度应以页面证据为准。
+- 一次处理一份乐谱；没有内建批处理。扫描倾斜、透视或分辨率过低会显著影响识别质量。
+
+## 开发与文档
+
+- [`SKILL.md`](SKILL.md)：agent/运维操作契约。
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) 与 [`docs/DESIGN.md`](docs/DESIGN.md)：架构和开发说明。
+- [`references/`](references/)：环境、OMR、facts、复核与交付的详细参考。
+- 运行测试：`python -m pytest tests -q`。
+- 报告问题时，请附上页码/小节号、对应对照页，以及该页的 OMR `reading.json`；不要附带 `env.local.json` 等本机配置。
+
+## 许可证与致谢
+
+本项目使用 [MIT 许可证](LICENSE)。
+
+OMR 由 **[copisteria](https://github.com/kobimusic/copisteria)**（KobiMusic，Apache-2.0）完成；本项目负责其后的合并、结构修复、渲染与复核。感谢上游作者开放这项工作，署名见 [`NOTICE`](NOTICE)。`.mscz` 与 PDF 的生成使用 MuseScore 4，PDF 页面处理使用 poppler。

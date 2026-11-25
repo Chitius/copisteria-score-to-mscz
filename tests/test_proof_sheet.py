@@ -184,9 +184,10 @@ def test_compose_puts_both_columns_side_by_side():
     canvas = proof_sheet.compose(
         left, right, "render", "scan", red=2, yellow=3, length_count=0, width=300
     )
-    assert canvas.width == 300 * 2 + proof_sheet.COLUMN_GAP, canvas.width
+    gap = round(proof_sheet.COLUMN_GAP * 300 / proof_sheet.DESIGN_WIDTH)
+    assert canvas.width == 300 * 2 + gap, canvas.width
     # Both columns are scaled to 300 px wide: the taller (600 px) becomes 450, plus caption and legend.
-    assert canvas.height > 450 + proof_sheet.CAPTION_BAND, canvas.height
+    assert canvas.height > 450 + round(proof_sheet.CAPTION_BAND * 300 / proof_sheet.DESIGN_WIDTH), canvas.height
 
 
 def test_page_measure_count_reads_the_first_part():
@@ -216,7 +217,12 @@ def test_without_musescore_the_sheet_still_aligns_the_scan():
     report = proof_sheet.build_sheet(page, analysis, root / "out", musescore=None, width=420)
 
     assert report["scan_measures"] == 2, report
-    assert report["aligned"] is True
+    # "aligned" means both columns were overlaid bar-for-bar; without MuseScore there is no render
+    # column, so the sheet reports "scan only" while still tinting the scan it could measure.
+    assert report["render_available"] is False
+    assert report["scan_aligned"] is True
+    assert report["aligned"] is False
+    assert report["partial"] is True
     # Existence uncertainty alone is 2.0: yellow under the absolute tiers (red needs 3.0).
     assert report["yellow"] == [1], report["yellow"]
     assert report["red"] == [], report["red"]
@@ -236,6 +242,7 @@ def test_a_measure_count_mismatch_is_reported_and_not_painted():
 
     assert report["scan_measures"] == 2
     assert report["aligned"] is False
+    assert report["tinted_measures"] == 0
     assert any(failure["code"] == "scan_layout_mismatch" for failure in report["failures"])
 
 
