@@ -137,6 +137,7 @@ class ReviewFailureTest(unittest.TestCase):
         with (
             patch.object(review_script, "_pdf_pages", return_value=1),
             patch.object(review_script, "_render_pages", side_effect=[1, 1]) as render_pages,
+            patch.object(review_script, "find_musescore", return_value="musescore"),
             patch.object(review_script, "_run", side_effect=fake_run),
         ):
             code = review_script.main(
@@ -205,6 +206,7 @@ class ReviewBaselineFindingTest(unittest.TestCase):
         with (
             patch.object(review_script, "_pdf_pages", return_value=1),
             patch.object(review_script, "_render_pages", return_value=1),
+            patch.object(review_script, "find_musescore", return_value="musescore"),
             patch.object(review_script, "_run", side_effect=fake_run),
         ):
             code = review_script.main(

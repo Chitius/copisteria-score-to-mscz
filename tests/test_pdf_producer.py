@@ -70,7 +70,12 @@ class PdfProducerTest(unittest.TestCase):
         WORK.mkdir(parents=True, exist_ok=True)
         pdf = WORK / "one.pdf"
         make_pdf(pdf, "Allegro")
-        words = extract_words(pdf, binary)
+        try:
+            words = extract_words(pdf, binary)
+        except RuntimeError as exc:
+            if "Usage:" not in str(exc):
+                raise
+            self.skipTest("pdftotext does not support -bbox; poppler is required")
         self.assertTrue(any(word["text"] == "Allegro" for word in words), words)
 
         layout = {"pages": [{"page": 1, "measures": [{"number": 3, "x0": 0, "y0": 0, "x1": 612, "y1": 792}]}]}
