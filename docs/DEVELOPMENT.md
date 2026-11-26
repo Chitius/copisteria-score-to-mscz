@@ -79,11 +79,11 @@ Keep the page directory. It is the audit trail for page-level ties/slurs and for
 ## Workflow
 
 1. **Configure** — `scripts/preflight.py` checks the pipeline interpreter, the separate
-   copisteria/music21 environment, the converter wrapper, MuseScore and poppler. See
+   upstream copisteria environment/checkout/weights, MuseScore and poppler. See
    [`references/environment.md`](../references/environment.md).
-2. **OMR** — run the external copisteria converter over the PDF. Feed scorepipe the per-page
-   directory, not the old converter's final merged MusicXML. See
-   [`references/omr.md`](../references/omr.md).
+2. **OMR** — `scripts/convert.py` uses the built-in `scorepipe.copisteria` adapter to extract page
+   PNGs into `work/pages/` and invoke `python -m copisteria.pipeline` into `work/copisteria/`. Feed
+   scorepipe that per-page directory. See [`references/omr.md`](../references/omr.md).
 3. **Repair** — scorepipe runs structural → inject → display fixed points and read-only
    verifiers. A non-empty verifier is a blocker, not a cosmetic warning.
 4. **Facts** — apply explicit title/composer/marks facts. The text layer is a producer, not

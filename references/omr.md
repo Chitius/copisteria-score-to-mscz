@@ -38,13 +38,15 @@ python scripts/convert.py score.pdf --outdir out/score --env env.local.json \
 
 It runs:
 
-1. the external copisteria converter with a work directory;
+1. the built-in `scorepipe.copisteria` adapter, which extracts greyscale page PNGs into `work/pages/`
+   (`pdfimages` for single embedded scans, otherwise `pdftoppm` at 300 dpi, applying PDF `/Rotate`)
+   and invokes upstream `python -m copisteria.pipeline` into `work/copisteria/`;
 2. `scorepipe` on `work/copisteria`;
 3. MuseScore conversion and PDF render, if available.
 
-The converter may exit non-zero **after** writing valid page files (known copisteria behavior).
-The wrapper checks for page files and continues with a warning rather than discarding good output.
-It does not treat the old converter's merged MusicXML as the review master.
+No external `copisteria-to-musicxml` wrapper or `music21` installation is required. Keep `work/pages/`
+and `work/copisteria/` intact: the detection caches (`*.dets_*.json`) beside the PNGs and the reading
+JSONs (`*.reading.json`) are consumed by `review_confidence.py` and `review_sheet.py`.
 
 ## OMR failures that are not pipeline failures
 

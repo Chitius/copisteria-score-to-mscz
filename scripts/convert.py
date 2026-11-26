@@ -23,9 +23,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 try:
+    from scorepipe.copisteria import parse_page_range as _parse_page_range
+    from scorepipe.copisteria import run_copisteria as _run_copisteria
     from scorepipe.discovery import find_musescore as _discover_musescore
 except Exception:  # pragma: no cover - the scorepipe import is probed separately
     _discover_musescore = None
+    _parse_page_range = None
+    _run_copisteria = None
 
 
 def _run(command: list[str], cwd: Path, tolerate: bool = False) -> tuple[int, str]:
@@ -128,9 +132,20 @@ def main(argv: list[str] | None = None) -> int:
         help="env.local.json written by preflight.py (default: ./env.local.json or <repo>/env.local.json)",
     )
     parser.add_argument("--python", help="interpreter that imports scorepipe")
-    parser.add_argument("--omr-python", help="interpreter that imports copisteria/music21")
+    parser.add_argument("--omr-python", help="interpreter that imports copisteria")
     parser.add_argument("--repo", help="copisteria source checkout")
-    parser.add_argument("--converter", help="copisteria-to-musicxml/scripts/convert.py")
+    parser.add_argument(
+        "--detector",
+        default="28m",
+        choices=("28m", "2m"),
+        help="copisteria symbol detector (default: 28m)",
+    )
+    parser.add_argument("--device", help="copisteria torch device (e.g. cpu, cuda)")
+    parser.add_argument("--range", dest="page_range", help="PDF page range to transcribe (e.g. 1-4)")
+    parser.add_argument(
+        "--converter",
+        help="optional legacy external converter script (deprecated; built-in copisteria adapter is used by default)",
+    )
     parser.add_argument("--musescore", help="MuseScore executable")
     parser.add_argument("--pages", help="reuse an existing page directory; skip OMR")
     parser.add_argument("--facts", help="facts JSON for credits/marks")
@@ -157,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
     pipeline_python = args.python or config.get("python") or os.environ.get("SCOREPIPE_PYTHON") or sys.executable
     omr_python = args.omr_python or config.get("omr_python") or os.environ.get("COPISTERIA_PYTHON") or pipeline_python
     repo = args.repo or config.get("copisteria_repo") or os.environ.get("COPISTERIA_REPO")
-    converter = args.converter or config.get("converter") or os.environ.get("COPISTERIA_CONVERTER")
+    converter = args.converter
     musescore = _find_musescore(args.musescore or config.get("musescore"))
 
     page_dir: Path | None
@@ -167,9 +182,9 @@ def main(argv: list[str] | None = None) -> int:
         page_dir = Path(args.pages).resolve()
         if not page_dir.is_dir():
             parser.error(f"page directory not found: {page_dir}")
-    else:
-        if not repo or not converter:
-            parser.error("OMR needs --repo and --converter (or an env file from preflight.py)")
+    elif converter:
+        if not repo:
+            parser.error("legacy --converter needs --repo (or an env file from preflight.py)")
         omr_command = [
             omr_python,
             converter,
@@ -192,8 +207,25 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError(f"OMR produced no page MusicXML under {work} (exit {code})")
         if code != 0:
             print(f"warning: OMR exited {code} after writing {page_dir}; continuing with page files")
+    else:
+        if not repo:
+            parser.error("OMR needs --repo (or an env file from preflight.py)")
+        if _run_copisteria is None:
+            raise RuntimeError("scorepipe.copisteria could not be imported")
+        page_dir, omr_command = _run_copisteria(
+            pdf,
+            work,
+            omr_python=omr_python,
+            repo=repo,
+            detector=args.detector,
+            device=args.device,
+            page_range=args.page_range,
+        )
 
     expected_pages = _pdf_pages(pdf)
+    if expected_pages is not None and args.page_range and _parse_page_range is not None:
+        first_page, last_page = _parse_page_range(args.page_range, expected_pages)
+        expected_pages = last_page - first_page + 1
     actual_pages = len(list(page_dir.glob("*.musicxml")))
     if expected_pages is not None and actual_pages != expected_pages:
         raise RuntimeError(

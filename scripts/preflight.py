@@ -69,22 +69,6 @@ def _find_repo(explicit: str | None) -> Path | None:
     return None
 
 
-def _find_converter(explicit: str | None) -> Path | None:
-    candidates = []
-    if explicit:
-        candidates.append(Path(explicit))
-    if os.environ.get("COPISTERIA_CONVERTER"):
-        candidates.append(Path(os.environ["COPISTERIA_CONVERTER"]))
-    here = Path.cwd()
-    for base in (here, here.parent, here.parent.parent):
-        candidates.append(base / "musicxml_skill_dev" / "copisteria-to-musicxml" / "scripts" / "convert.py")
-        candidates.append(base / "copisteria-to-musicxml" / "scripts" / "convert.py")
-    for candidate in candidates:
-        if candidate and candidate.is_file():
-            return candidate.resolve()
-    return None
-
-
 def _find_musescore(explicit: str | None) -> Path | None:
     if _discover_musescore is not None:
         located = _discover_musescore(explicit)
@@ -154,34 +138,25 @@ def probe(args: argparse.Namespace, config: dict | None = None) -> list[Check]:
     omr_python = _pick(args.omr_python, "COPISTERIA_PYTHON", config, "omr_python") or py
     ok, detail = _run(omr_python, "import sys; print(sys.version.split()[0])")
     checks.append(Check("OMR python", ok, True, detail, omr_python))
-    ok, detail = _run(omr_python, "import copisteria, music21; print('copisteria + music21')")
-    checks.append(Check("copisteria + music21", ok, True, detail, omr_python))
+    ok, detail = _run(omr_python, "import copisteria; print(copisteria.__file__)")
+    checks.append(Check("copisteria import", ok, True, detail, omr_python))
 
     repo = _find_repo(_pick(args.repo, "COPISTERIA_REPO", config, "copisteria_repo"))
     checks.append(
         Check("copisteria source", repo is not None, True, str(repo or "not found"), str(repo or ""))
     )
     if repo is not None:
-        models = sorted((repo / "models").glob("*.pt"))
+        models_dir = repo / "models"
+        models = sorted(models_dir.rglob("*.pt")) if models_dir.is_dir() else []
         checks.append(
             Check(
                 "copisteria weights",
                 bool(models),
                 False,
-                f"{len(models)} .pt file(s) under {repo / 'models'}",
-                str(repo / "models"),
+                f"{len(models)} .pt file(s) under {models_dir}",
+                str(models_dir),
             )
         )
-    converter = _find_converter(_pick(args.converter, "COPISTERIA_CONVERTER", config, "converter"))
-    checks.append(
-        Check(
-            "copisteria converter",
-            converter is not None,
-            True,
-            str(converter or "not found"),
-            str(converter or ""),
-        )
-    )
     musescore = _find_musescore(_pick(args.musescore, "MUSESCORE_EXE", config, "musescore"))
     checks.append(
         Check(
@@ -192,7 +167,7 @@ def probe(args: argparse.Namespace, config: dict | None = None) -> list[Check]:
             str(musescore or ""),
         )
     )
-    for tool in ("pdfinfo", "pdftoppm"):
+    for tool in ("pdfinfo", "pdftoppm", "pdfimages"):
         found = shutil.which(tool)
         checks.append(Check(tool, bool(found), False, found or "not found", found or ""))
     return checks
@@ -201,7 +176,10 @@ def probe(args: argparse.Namespace, config: dict | None = None) -> list[Check]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Probe the copisteria-score-to-mscz environment without changing it")
     parser.add_argument("--repo", help="copisteria source checkout")
-    parser.add_argument("--converter", help="copisteria-to-musicxml/scripts/convert.py")
+    parser.add_argument(
+        "--converter",
+        help="deprecated legacy converter path (no longer required; built-in adapter is used)",
+    )
     parser.add_argument("--python", help="interpreter that imports scorepipe")
     parser.add_argument("--omr-python", help="interpreter that imports copisteria")
     parser.add_argument("--musescore", help="MuseScore executable")
@@ -232,7 +210,6 @@ def main(argv: list[str] | None = None) -> int:
             "python": next((c.value for c in checks if c.name == "pipeline python"), sys.executable),
             "omr_python": next((c.value for c in checks if c.name == "OMR python"), ""),
             "copisteria_repo": next((c.value for c in checks if c.name == "copisteria source"), ""),
-            "converter": next((c.value for c in checks if c.name == "copisteria converter"), ""),
             "musescore": next((c.value for c in checks if c.name == "MuseScore 4"), ""),
             "missing": missing,
         }

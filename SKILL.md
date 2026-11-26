@@ -80,7 +80,7 @@ python -m scorepipe.cli path/to/pages -o out/score/score.musicxml \
 先读 [`references/environment.md`](references/environment.md)，确认：
 
 - Python 3.10+ 能导入本仓库 `scorepipe`；
-- 独立的 copisteria/music21 环境、源码和模型权重可用；
+- 独立的 copisteria 环境（Python 3.12+）、源码和模型权重可用；
 - MuseScore 4 可用于 `.mscz`/PDF；只做 MusicXML 时可以不渲染；
 - poppler 的 `pdfinfo`、`pdftoppm` 可用于页数统计和视觉复核。
 

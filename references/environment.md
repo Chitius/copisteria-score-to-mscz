@@ -9,10 +9,10 @@ model weights, packages, or system tools. Ask the user before changing their env
 |---|---|---|
 | Python 3.10+ | runs `scorepipe` | `python --version` |
 | `scorepipe` checkout | pipeline | `python -c "import scorepipe"` |
-| OMR Python env | copisteria + music21 | `--omr-python` or `COPISTERIA_PYTHON` |
-| copisteria source | OMR engine | `--repo` or `COPISTERIA_REPO` |
+| OMR Python env | upstream `copisteria` (Python 3.12+) | `--omr-python` or `COPISTERIA_PYTHON` |
+| copisteria source | upstream OMR engine & `models/` weights | `--repo` or `COPISTERIA_REPO` |
 | MuseScore 4 | `.mscz`, PDF render | `MUSESCORE_EXE` or common paths |
-| poppler | PDF page count/raster; required by `scripts/review.py`, optional for a `--pages` pipeline-only run | `pdfinfo`, `pdftoppm` |
+| poppler | PDF page extraction, count & raster (`pdfinfo`, `pdftoppm`, `pdfimages`) | `pdfinfo`, `pdftoppm`, `pdfimages` |
 
 Optional: `pdftotext` (PDF text layer), `xmllint` (schema debugging), a LaTeX/office renderer for
 delivery packets.
@@ -30,9 +30,8 @@ The equivalent environment variables are:
 
 ```text
 SCOREPIPE_PYTHON      interpreter that can import scorepipe
-COPISTERIA_PYTHON     interpreter that can import copisteria/music21
-COPISTERIA_REPO       copisteria source checkout
-COPISTERIA_CONVERTER  path to the copisteria-to-musicxml/scripts/convert.py wrapper
+COPISTERIA_PYTHON     interpreter that can import copisteria
+COPISTERIA_REPO       upstream copisteria source checkout (contains models/)
 MUSESCORE_EXE         MuseScore executable
 ```
 
@@ -45,13 +44,13 @@ Use the user's own package manager/venv. A typical setup is:
 python -m venv .venv
 .venv/Scripts/python -m pip install -e .
 
-# 2. Separate OMR environment
+# 2. Separate OMR environment (upstream kobimusic/copisteria)
 python -m venv .venv-copisteria
-.venv-copisteria/Scripts/python -m pip install -e path/to/copisteria_src
-.venv-copisteria/Scripts/python -m pip install -r path/to/copisteria-to-musicxml/requirements.txt
+.venv-copisteria/Scripts/python -m pip install -e path/to/copisteria
 
-# 3. Put copisteria weights in its source tree's models/ directory.
-#    Check the copisteria README for the exact filenames; do not download them silently.
+# 3. Put copisteria weights in its source tree's models/ directory
+#    (e.g. models/evidence-2m.pt and models/small/v7_obj-recall-30m_best.pt).
+#    Check the copisteria README for the exact download commands; do not download them silently.
 ```
 
 MuseScore 4 and poppler are system installs. If they are unavailable, deliver MusicXML only and
@@ -59,5 +58,6 @@ say that the `.mscz`/PDF review was not produced.
 
 ## Why a separate OMR interpreter
 
-copisteria pins torch/onnx/music21 versions that are not the pipeline's dependencies. Keeping it
-separate avoids breaking the pipeline tests and makes the boundary explicit.
+copisteria pins Python 3.12+ and torch/opencv/scipy versions that are not the pipeline's
+dependencies. Keeping it separate avoids breaking the pipeline tests and makes the boundary
+explicit.
