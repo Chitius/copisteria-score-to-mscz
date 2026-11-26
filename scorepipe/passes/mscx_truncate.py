@@ -14,6 +14,7 @@ from fractions import Fraction
 from xml.etree import ElementTree
 
 from ..core.mscx import MsxcDocument
+from ..core.mscx_invariants import iter_measures_with_meter
 from ..core.musescore_ticks import duration_parts, voice_timeline
 from .mscx_canonical import canonicalize, fix_dots_order, make_voice_exact
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
@@ -30,18 +31,10 @@ class TruncateOverfullMscx:
     )
 
     def run(self, doc: MsxcDocument, ctx: Context) -> PassResult:
-        meters: dict[int, Fraction] = {}
         changed = 0
         notes: list[str] = []
-        for staff, index, measure in doc.iter_measures():
+        for staff, index, measure, meter in iter_measures_with_meter(doc):
             staff_label = staff.get("id") or "?"
-            meter = meters.get(id(staff), Fraction(4, 4))
-            for time in measure.iter("TimeSig"):
-                try:
-                    meter = Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4))
-                except (ValueError, ZeroDivisionError):
-                    pass
-            meters[id(staff)] = meter
             target = Fraction(measure.get("len")) if measure.get("len") else meter
             if target > meter:
                 # A stale irregular length longer than the nominal signature.

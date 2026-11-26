@@ -21,6 +21,7 @@ from fractions import Fraction
 from xml.etree import ElementTree
 
 from ..core.mscx import MsxcDocument
+from ..core.mscx_invariants import iter_measures_with_meter
 from ..core.musescore_ticks import (
     BASE_WHOLE,
     TICKS_PER_WHOLE,
@@ -55,15 +56,7 @@ _LEGAL_REST_PARTS = (
 def canonicalize(doc: MsxcDocument, notes: list[str] | None = None) -> int:
     """Canonicalize every note-bearing mscx voice; return the edit count."""
     changed = 0
-    meters: dict[int, Fraction] = {}
-    for staff, index, measure in doc.iter_measures():
-        meter = meters.get(id(staff), Fraction(4, 4))
-        for time in measure.iter("TimeSig"):
-            try:
-                meter = Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4))
-            except (ValueError, ZeroDivisionError):
-                pass
-        meters[id(staff)] = meter
+    for staff, index, measure, meter in iter_measures_with_meter(doc):
         expected = measure_expected_fraction(measure, meter)
         voices = measure.findall("voice")
         for slot, voice in enumerate(list(voices), start=1):

@@ -54,6 +54,28 @@ class DropTrailingDuplicateTest(unittest.TestCase):
         self.assertEqual(DropTrailingDuplicateMeasure().run(doc, Context()).changed, 0)
         self.assertEqual(len(doc.measures()), 3)
 
+    def test_uses_effective_meter_when_penultimate_measure_omits_time_signature(self):
+        m1 = (
+            '<measure number="1">'
+            "<attributes><divisions>4</divisions><time><beats>3</beats><beat-type>4</beat-type></time></attributes>"
+            "<note><pitch><step>G</step><octave>4</octave></pitch><duration>12</duration></note>"
+            "</measure>"
+        )
+        m2 = (
+            '<measure number="2">'
+            "<note><pitch><step>C</step><octave>4</octave></pitch><duration>12</duration></note>"
+            "</measure>"
+        )
+        m3 = (
+            '<measure number="3">'
+            "<note><pitch><step>C</step><octave>4</octave></pitch><duration>8</duration></note>"
+            "</measure>"
+        )
+        doc = build(m1 + m2 + m3)
+        result = DropTrailingDuplicateMeasure().run(doc, Context())
+        self.assertEqual(result.changed, 1)
+        self.assertEqual(len(doc.measures()), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -130,6 +130,26 @@ def meter_at(events: list[tuple[int, Fraction]], index: int) -> Fraction:
     return meter
 
 
+def iter_measures_with_meter(doc: MsxcDocument):
+    """Yield ``(staff, index, measure, meter)`` with shared-timeline fallback.
+
+    MuseScore writes the time signature on the top staff only; a staff without its own
+    ``<TimeSig>`` inherits the first staff's signature timeline.  Once a staff declares a
+    signature of its own, it tracks its own metre from that measure onward.
+    """
+    fallback = signature_timeline(doc)
+    meters: dict[int, Fraction] = {}
+    for staff, index, measure in doc.iter_measures():
+        meter = meters[id(staff)] if id(staff) in meters else meter_at(fallback, index)
+        for time in measure.iter("TimeSig"):
+            try:
+                meter = Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4))
+                meters[id(staff)] = meter
+            except (ValueError, ZeroDivisionError):
+                pass
+        yield staff, index, measure, meter
+
+
 def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     """MuseScore's tick model, not a local beat approximation.
 
@@ -141,27 +161,7 @@ def measure_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     from .musescore_ticks import measure_expected_fraction, voice_timeline
 
     out: list[Violation] = []
-    meters = {}
-    # MuseScore writes the time signature on the top staff only; a stave without one shares the
-    # system's metre.  Seeding every staff at 4/4 made a 3/4 score report 33 false violations
-    # (measured on the Schubert page) because the piano staff never carries the signature.
-    fallback = signature_timeline(doc)
-    own_signature = {
-        id(staff)
-        for staff in doc.staves()
-        if any(True for measure in staff.findall("Measure") for _ in measure.iter("TimeSig"))
-    }
-    for staff, index, measure in doc.iter_measures():
-        if id(staff) in own_signature:
-            meter = meters.get(id(staff), Fraction(4, 4))
-        else:
-            meter = meter_at(fallback, index)
-        for time in measure.iter("TimeSig"):
-            try:
-                meter = Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4))
-            except (ValueError, ZeroDivisionError):
-                pass
-        meters[id(staff)] = meter
+    for _staff, index, measure, meter in iter_measures_with_meter(doc):
         expected = measure_expected_fraction(measure, meter)
         if expected > meter:
             # MuseScore writes ``len`` from the imported content, so a ``len`` longer than the
@@ -229,27 +229,7 @@ def tuplet_lengths(doc: MsxcDocument, ctx: Context) -> list[Violation]:
     from .musescore_ticks import measure_expected_fraction, voice_timeline
 
     out: list[Violation] = []
-    meters = {}
-    # MuseScore writes the time signature on the top staff only; a stave without one shares the
-    # system's metre.  Seeding every staff at 4/4 made a 3/4 score report 33 false violations
-    # (measured on the Schubert page) because the piano staff never carries the signature.
-    fallback = signature_timeline(doc)
-    own_signature = {
-        id(staff)
-        for staff in doc.staves()
-        if any(True for measure in staff.findall("Measure") for _ in measure.iter("TimeSig"))
-    }
-    for staff, index, measure in doc.iter_measures():
-        if id(staff) in own_signature:
-            meter = meters.get(id(staff), Fraction(4, 4))
-        else:
-            meter = meter_at(fallback, index)
-        for time in measure.iter("TimeSig"):
-            try:
-                meter = Fraction(int(time.findtext("sigN") or 4), int(time.findtext("sigD") or 4))
-            except (ValueError, ZeroDivisionError):
-                pass
-        meters[id(staff)] = meter
+    for _staff, index, measure, meter in iter_measures_with_meter(doc):
         expected = measure_expected_fraction(measure, meter)
         for voice in measure.findall("voice"):
             for span in voice_timeline(voice, expected).invalid_tuplets:

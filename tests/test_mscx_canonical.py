@@ -143,6 +143,30 @@ class CanonicalizeVoiceTest(unittest.TestCase):
         self.assertEqual(ElementTree.tostring(doc.root.find(".//voice")), before)
         self.assertEqual(notes, [])
 
+    def test_second_staff_inherits_three_four_and_meter_changes(self):
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score>"
+                "<Staff id='1'>"
+                "<Measure><TimeSig><sigN>3</sigN><sigD>4</sigD></TimeSig>"
+                f"<voice>{chord('quarter') * 3}</voice></Measure>"
+                "<Measure><TimeSig><sigN>2</sigN><sigD>4</sigD></TimeSig>"
+                f"<voice>{chord('quarter') * 2}</voice></Measure>"
+                "</Staff>"
+                "<Staff id='2'>"
+                f"<Measure><voice>{chord('quarter') * 3}</voice></Measure>"
+                f"<Measure><voice>{chord('quarter') * 2}</voice></Measure>"
+                "</Staff>"
+                "</Score></museScore>"
+            )
+        )
+        before = ElementTree.tostring(doc.root)
+        notes: list[str] = []
+        changed = canonicalize(doc, notes)
+        self.assertEqual(changed, 0)
+        self.assertEqual(notes, [])
+        self.assertEqual(ElementTree.tostring(doc.root), before)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
 from xml.etree import ElementTree
@@ -45,29 +46,28 @@ class PageRestoreTest(unittest.TestCase):
         self.assertTrue(any(tie.get("type") == "stop" for tie in stop.findall("tie")))
 
     def test_a_slur_may_end_on_a_tied_note(self):
-        work = Path(__file__).parent / ".runs" / "slur_tied_stop"
-        work.mkdir(parents=True, exist_ok=True)
-        page = work / "page1.musicxml"
-        page.write_text(
-            '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
-            '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
-            '<part id="P1">'
-            '<measure number="1"><attributes><divisions>4</divisions>'
-            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
-            '<note><rest/><duration>12</duration><voice>1</voice></note>'
-            '<note><pitch><step>G</step><octave>5</octave></pitch><duration>4</duration>'
-            '<voice>1</voice><notations><slur type="start" number="1"/></notations></note></measure>'
-            '<measure number="2"><attributes><divisions>4</divisions></attributes>'
-            '<note><pitch><step>E</step><octave>5</octave></pitch><duration>8</duration>'
-            '<tie type="start"/><voice>1</voice><notations><tied type="start"/></notations></note>'
-            '<note><pitch><step>E</step><octave>5</octave></pitch><duration>8</duration>'
-            '<tie type="stop"/><voice>1</voice>'
-            '<notations><tied type="stop"/><slur type="stop" number="1"/></notations></note></measure>'
-            "</part></score-partwise>",
-            encoding="utf-8",
-        )
-        merged = merge_pages([page])
-        run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            page = Path(tmp) / "page1.musicxml"
+            page.write_text(
+                '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+                '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+                '<part id="P1">'
+                '<measure number="1"><attributes><divisions>4</divisions>'
+                "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+                '<note><rest/><duration>12</duration><voice>1</voice></note>'
+                '<note><pitch><step>G</step><octave>5</octave></pitch><duration>4</duration>'
+                '<voice>1</voice><notations><slur type="start" number="1"/></notations></note></measure>'
+                '<measure number="2"><attributes><divisions>4</divisions></attributes>'
+                '<note><pitch><step>E</step><octave>5</octave></pitch><duration>8</duration>'
+                '<tie type="start"/><voice>1</voice><notations><tied type="start"/></notations></note>'
+                '<note><pitch><step>E</step><octave>5</octave></pitch><duration>8</duration>'
+                '<tie type="stop"/><voice>1</voice>'
+                '<notations><tied type="stop"/><slur type="stop" number="1"/></notations></note></measure>'
+                "</part></score-partwise>",
+                encoding="utf-8",
+            )
+            merged = merge_pages([page])
+            run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
         starts = []
         stops = []
         for _number, measure in merged.document.iter_measures():
@@ -82,33 +82,33 @@ class PageRestoreTest(unittest.TestCase):
         self.assertIn("E", stops)
 
     def test_tie_propagation_respects_note_duration(self):
-        work = Path(__file__).parent / ".runs" / "tie_duration"
-        work.mkdir(parents=True, exist_ok=True)
-        page = work / "page1.musicxml"
-        page.write_text(
-            '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
-            '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'            '<part id="P1">'
-            '<measure number="1"><attributes><divisions>4</divisions>'
-            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
-            '<note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration>'
-            '<voice>1</voice><type>eighth</type></note>'
-            '<note><rest/><duration>14</duration><voice>1</voice></note>'
-            "<backup><duration>16</duration></backup>"
-            '<note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration>'
-            '<tie type="start"/><voice>2</voice><notations><tied type="start"/></notations></note>'
-            "</measure>"
-            '<measure number="2"><attributes><divisions>4</divisions></attributes>'
-            '<note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration>'
-            '<voice>1</voice><type>eighth</type></note>'
-            '<note><rest/><duration>14</duration><voice>1</voice></note>'
-            "<backup><duration>16</duration></backup>"
-            '<note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration>'
-            '<tie type="stop"/><voice>2</voice><notations><tied type="stop"/></notations></note>'
-            "</measure></part></score-partwise>",
-            encoding="utf-8",
-        )
-        merged = merge_pages([page])
-        run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            page = Path(tmp) / "page1.musicxml"
+            page.write_text(
+                '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+                '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+                '<part id="P1">'
+                '<measure number="1"><attributes><divisions>4</divisions>'
+                "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+                '<note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration>'
+                '<voice>1</voice><type>eighth</type></note>'
+                '<note><rest/><duration>14</duration><voice>1</voice></note>'
+                "<backup><duration>16</duration></backup>"
+                '<note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration>'
+                '<tie type="start"/><voice>2</voice><notations><tied type="start"/></notations></note>'
+                "</measure>"
+                '<measure number="2"><attributes><divisions>4</divisions></attributes>'
+                '<note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration>'
+                '<voice>1</voice><type>eighth</type></note>'
+                '<note><rest/><duration>14</duration><voice>1</voice></note>'
+                "<backup><duration>16</duration></backup>"
+                '<note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration>'
+                '<tie type="stop"/><voice>2</voice><notations><tied type="stop"/></notations></note>'
+                "</measure></part></score-partwise>",
+                encoding="utf-8",
+            )
+            merged = merge_pages([page])
+            run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
         for _number, measure in merged.document.iter_measures():
             for event in merged.document.events(measure):
                 octave = event.element.findtext("pitch/octave")
@@ -125,28 +125,27 @@ class PageRestoreTest(unittest.TestCase):
         self.assertEqual([pedal.get("type") for pedal in third], ["stop"])
 
     def test_pedal_cursor_advances_over_notes(self):
-        work = Path(__file__).parent / ".runs" / "pedal_cursor"
-        work.mkdir(parents=True, exist_ok=True)
-        page = work / "page1.musicxml"
-        page.write_text(
-            '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
-            '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
-            '<part id="P1">'
-            '<measure number="1"><attributes><divisions>4</divisions>'
-            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
-            '<note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration>'
-            '<voice>1</voice></note>'
-            '<direction placement="below"><direction-type><pedal type="start"/></direction-type>'
-            "<staff>2</staff></direction>"
-            "</measure>"
-            '<measure number="2"><attributes><divisions>4</divisions></attributes>'
-            '<note><pitch><step>D</step><octave>4</octave></pitch><duration>16</duration>'
-            '<voice>1</voice></note></measure>'
-            "</part></score-partwise>",
-            encoding="utf-8",
-        )
-        merged = merge_pages([page])
-        run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            page = Path(tmp) / "page1.musicxml"
+            page.write_text(
+                '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+                '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+                '<part id="P1">'
+                '<measure number="1"><attributes><divisions>4</divisions>'
+                "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+                '<note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration>'
+                '<voice>1</voice></note>'
+                '<direction placement="below"><direction-type><pedal type="start"/></direction-type>'
+                "<staff>2</staff></direction>"
+                "</measure>"
+                '<measure number="2"><attributes><divisions>4</divisions></attributes>'
+                '<note><pitch><step>D</step><octave>4</octave></pitch><duration>16</duration>'
+                '<voice>1</voice></note></measure>'
+                "</part></score-partwise>",
+                encoding="utf-8",
+            )
+            merged = merge_pages([page])
+            run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
         directions = merged.document.measures()[0].findall("direction")
         pedals = [d for d in directions if d.find("direction-type/pedal") is not None]
         self.assertEqual(len(pedals), 1)
@@ -159,11 +158,10 @@ class PageRestoreTest(unittest.TestCase):
         self.assertEqual(measure_lengths(doc, Context()), [])
 
     def test_slur_numbers_are_global_not_per_staff(self):
-        work = Path(__file__).parent / ".runs" / "slur_numbers"
-        work.mkdir(parents=True, exist_ok=True)
-        page = work / "page1.musicxml"
-        page.write_text(
-            """<?xml version="1.0" encoding="UTF-8"?>
+        with tempfile.TemporaryDirectory() as tmp:
+            page = Path(tmp) / "page1.musicxml"
+            page.write_text(
+                """<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0"><part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>
 <part id="P1">
 <measure number="1"><attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
@@ -181,11 +179,11 @@ class PageRestoreTest(unittest.TestCase):
 <notations><slur type="stop" number="1"/></notations></note>
 </measure>
 </part></score-partwise>""",
-            encoding="utf-8",
-        )
-        merged = merge_pages([page])
-        ctx = Context(pages=merged)
-        run_pipeline(merged.document, ctx, structural=STRUCTURAL_PASSES, verifiers=[])
+                encoding="utf-8",
+            )
+            merged = merge_pages([page])
+            ctx = Context(pages=merged)
+            run_pipeline(merged.document, ctx, structural=STRUCTURAL_PASSES, verifiers=[])
         numbers = {}
         for _number, measure in merged.document.iter_measures():
             for note in measure.iter("note"):
@@ -195,10 +193,7 @@ class PageRestoreTest(unittest.TestCase):
         self.assertEqual(set(numbers), {"1", "2"})
         self.assertNotEqual(numbers["1"], numbers["2"])
 
-
     def test_reused_slur_number_does_not_create_a_long_arc(self):
-        work = Path(__file__).parent / ".runs" / "slur_collision"
-        work.mkdir(parents=True, exist_ok=True)
         measure = (
             '<measure number="{number}"><attributes><divisions>4</divisions>'
             "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>{body}</measure>"
@@ -209,22 +204,23 @@ class PageRestoreTest(unittest.TestCase):
         )
         start = '<notations><slur type="start" number="1"/></notations>'
         stop = '<notations><slur type="stop" number="1"/></notations>'
-        page = work / "page1.musicxml"
-        page.write_text(
-            '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
-            "<part-list><score-part id=\"P1\"><part-name>t</part-name></score-part></part-list>"
-            '<part id="P1">'
-            + measure.format(number=1, body=note.format(step="G", slur=start))
-            + measure.format(number=2, body=note.format(step="C", slur=start) + note.format(step="G", slur=stop))
-            + measure.format(number=3, body=note.format(step="F", slur=""))
-            + measure.format(number=4, body=note.format(step="D", slur=stop) + note.format(step="E", slur=start))
-            + measure.format(number=5, body=note.format(step="F", slur=stop))
-            + "</part></score-partwise>",
-            encoding="utf-8",
-        )
-        merged = merge_pages([page])
-        ctx = Context(pages=merged)
-        run_pipeline(merged.document, ctx, structural=STRUCTURAL_PASSES, verifiers=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            page = Path(tmp) / "page1.musicxml"
+            page.write_text(
+                '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+                "<part-list><score-part id=\"P1\"><part-name>t</part-name></score-part></part-list>"
+                '<part id="P1">'
+                + measure.format(number=1, body=note.format(step="G", slur=start))
+                + measure.format(number=2, body=note.format(step="C", slur=start) + note.format(step="G", slur=stop))
+                + measure.format(number=3, body=note.format(step="F", slur=""))
+                + measure.format(number=4, body=note.format(step="D", slur=stop) + note.format(step="E", slur=start))
+                + measure.format(number=5, body=note.format(step="F", slur=stop))
+                + "</part></score-partwise>",
+                encoding="utf-8",
+            )
+            merged = merge_pages([page])
+            ctx = Context(pages=merged)
+            run_pipeline(merged.document, ctx, structural=STRUCTURAL_PASSES, verifiers=[])
         starts = []
         for number, measure_element in merged.document.iter_measures():
             for event in merged.document.events(measure_element):
@@ -247,8 +243,6 @@ class PageRestoreTest(unittest.TestCase):
         self.assertEqual(len(pairing.orphans), 1)
 
     def test_arpeggio_is_one_mark_on_the_chord_not_on_a_split_note(self):
-        work = Path(__file__).parent / ".runs" / "arpeggio_chord"
-        work.mkdir(parents=True, exist_ok=True)
         measure = (
             '<measure number="1"><attributes><divisions>4</divisions>'
             "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>{body}</measure>"
@@ -265,15 +259,16 @@ class PageRestoreTest(unittest.TestCase):
             + "<backup><duration>16</duration></backup>"
             + note.format(chord="", step="C", octave=6, duration=4, voice=2)
         )
-        page = work / "page1.musicxml"
-        page.write_text(
-            '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
-            "<part-list><score-part id=\"P1\"><part-name>t</part-name></score-part></part-list>"
-            '<part id="P1">' + measure.format(body=body) + "</part></score-partwise>",
-            encoding="utf-8",
-        )
-        merged = merge_pages([page])
-        run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            page = Path(tmp) / "page1.musicxml"
+            page.write_text(
+                '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+                "<part-list><score-part id=\"P1\"><part-name>t</part-name></score-part></part-list>"
+                '<part id="P1">' + measure.format(body=body) + "</part></score-partwise>",
+                encoding="utf-8",
+            )
+            merged = merge_pages([page])
+            run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
         marked = []
         for measure_element in merged.document.measures():
             for note_element in measure_element.iter("note"):
@@ -285,6 +280,61 @@ class PageRestoreTest(unittest.TestCase):
         doc, _ctx, _report = run()
         clone = Document(ElementTree.fromstring(ElementTree.tostring(doc.root)))
         self.assertEqual(_slur_signature(doc), _slur_signature(clone))
+
+    def test_tied_span_covers_uses_slur_start_pitch_not_last_page_pitch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            page = Path(tmp) / "page1.musicxml"
+            page.write_text(
+                '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+                '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+                '<part id="P1">'
+                '<measure number="1"><attributes><divisions>4</divisions>'
+                "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+                '<note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration>'
+                '<tie type="start"/><voice>1</voice>'
+                '<notations><tied type="start"/><slur type="start" number="1"/></notations></note>'
+                "</measure>"
+                '<measure number="2"><attributes><divisions>4</divisions></attributes>'
+                '<note><pitch><step>C</step><octave>4</octave></pitch><duration>8</duration>'
+                '<tie type="stop"/><voice>1</voice><notations><tied type="stop"/></notations></note>'
+                '<note><chord/><pitch><step>E</step><octave>4</octave></pitch><duration>8</duration>'
+                '<voice>1</voice><notations><slur type="stop" number="1"/></notations></note>'
+                '<note><pitch><step>A</step><octave>5</octave></pitch><duration>8</duration>'
+                "<voice>1</voice></note>"
+                "</measure></part></score-partwise>",
+                encoding="utf-8",
+            )
+            merged = merge_pages([page])
+            run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
+            slurs = list(merged.document.root.iter("slur"))
+            self.assertEqual(slurs, [])
+
+    def test_wedge_cursor_advances_over_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            page = Path(tmp) / "page1.musicxml"
+            page.write_text(
+                '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+                '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+                '<part id="P1">'
+                '<measure number="1"><attributes><divisions>4</divisions>'
+                "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+                '<note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration>'
+                "<voice>1</voice></note>"
+                '<direction placement="below"><direction-type><wedge type="crescendo"/></direction-type>'
+                "<staff>2</staff></direction>"
+                "</measure>"
+                '<measure number="2"><attributes><divisions>4</divisions></attributes>'
+                '<note><pitch><step>D</step><octave>4</octave></pitch><duration>16</duration>'
+                "<voice>1</voice></note></measure>"
+                "</part></score-partwise>",
+                encoding="utf-8",
+            )
+            merged = merge_pages([page])
+            run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
+            directions = merged.document.measures()[0].findall("direction")
+            wedges = [d for d in directions if d.find("direction-type/wedge") is not None]
+            self.assertEqual(len(wedges), 1)
+            self.assertEqual(wedges[0].findtext("offset"), "16")
 
 
 if __name__ == "__main__":

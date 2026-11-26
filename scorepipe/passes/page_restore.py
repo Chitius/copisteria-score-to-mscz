@@ -240,7 +240,7 @@ class RestorePageSlurs(PageRestoreMixin):
                 start_measure,
                 staff,
                 start_onset,
-                pitch,
+                start_pitch,
                 stop_measure,
                 stop_onset,
                 stop_pitch,
@@ -533,6 +533,11 @@ class RestorePageWedges(PageRestoreMixin):
                             continue
                         value = int(text)
                         cursor += -value if item.tag == "backup" else value
+                        continue
+                    if item.tag == "note":
+                        text = item.findtext("duration")
+                        if text is not None and item.find("chord") is None:
+                            cursor += int(text)
                         continue
                     if item.tag != "direction":
                         continue

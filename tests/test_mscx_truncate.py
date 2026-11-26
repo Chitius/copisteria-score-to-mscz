@@ -172,6 +172,23 @@ class TruncateOverfullMscxTest(unittest.TestCase):
         self.assertEqual(result.changed, 0)
         self.assertIsNone(doc.root.find(".//Measure").get("len"))
 
+    def test_second_staff_inherits_top_staff_three_four_meter(self):
+        quarter = "<Chord><durationType>quarter</durationType><Note><pitch>60</pitch></Note></Chord>"
+        doc = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore><Score>"
+                "<Staff id='1'><Measure><TimeSig><sigN>3</sigN><sigD>4</sigD></TimeSig>"
+                f"<voice>{quarter * 3}</voice></Measure></Staff>"
+                "<Staff id='2'><Measure>"
+                f"<voice>{quarter * 4}</voice></Measure></Staff>"
+                "</Score></museScore>"
+            )
+        )
+        result = TruncateOverfullMscx().run(doc, Context())
+        self.assertEqual(result.changed, 1)
+        self.assertEqual(len(doc.root.findall(".//Staff")[0].findall(".//Chord")), 3)
+        self.assertEqual(len(doc.root.findall(".//Staff")[1].findall(".//Chord")), 3)
+
 
 if __name__ == "__main__":
     unittest.main()
