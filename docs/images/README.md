@@ -5,7 +5,7 @@
 | 文件 | 内容 | 制作方式 |
 |---|---|---|
 | `demo-omr-xml.png` | 《Sincerely》m16–18：原谱、OMR 原始 MusicXML 与修复后 MusicXML 的对照 | 两份 XML 都用 MuseScore 渲染；各取同一小节范围，原谱跨页的两条谱表放在首组 |
-| `demo-3-final.png` | 小节级 review 对照页 | `review/sheets/<page>.compare.png`，左侧渲染、右侧原始扫描 |
+| `demo-3-final.png` | 小节级 review 对照页 | `review/sheets/<page>.compare.png`，左侧为最终交付 `score.mscz` 按扫描页分页渲染、右侧为原始扫描 |
 
 ## 替换原则
 

@@ -113,7 +113,7 @@ def _instructions(payload: dict) -> str:
 ## 命令
 
 ```bash
-python scripts/agent_facts.py validate --facts agent-page1.json --pages {payload['page_count']}
+python scripts/agent_facts.py validate --facts agent-page01.json --pages {payload['page_count']}
 python scripts/agent_facts.py merge --parts agent-page*.json -o facts.json
 python scripts/convert.py score.pdf --pages path/to/omr-pages --facts facts.json
 ```

@@ -17,7 +17,7 @@ metadata:
 ## 硬性规则
 
 - **没有干净 verifier，不宣布交付**；有视觉交付时还必须重新渲染并打开检查。退出码为 0 不够。
-- OMR 只是草稿。保留源 PDF 和逐页输出，永不覆盖，也不要把 converter 最终合并的 XML 当作流水线输入。
+- OMR 只是草稿。保留源 PDF 和 `work/copisteria/` 逐页输出，永不覆盖；始终以逐页目录作为流水线输入，不要把已合并的 `score.musicxml` 反向喂回 `review.py`。
 - 不猜测音高、节奏或记号。结构修复必须可追溯；内容修正必须经过明确 reviewer 接受。
 - facts、correction、patch 是证据驱动的数据，不是让 agent 直接改 MusicXML/mscz/mscx 的许可。
 - 看不清的内容放入 `unresolved`。缺页、未决项或 proposed correction 不得被描述为完整复核。
@@ -30,11 +30,11 @@ metadata:
 # 1. 环境检查：只报告和记录路径，不安装依赖。
 python scripts/preflight.py --save env.local.json
 
-# 2. PDF -> 逐页 OMR -> 修复 -> mscz/PDF；此时仍是初稿。
+# 2. PDF -> 逐页 OMR -> 修复 -> mscz/PDF；此时仍是初稿（可选 --device cuda / --detector 2m / --range）。
 python scripts/convert.py "score.pdf" --env env.local.json --outdir "out/score" \
   --title "标题" --composer "作曲"
 
-# 3. 有逐页 facts 时：复核、三棵交付树、对照图和验收报告。
+# 3. 有逐页 facts 时：复核、三棵交付树、交付版对照图和验收报告（同样自动读取 env.local.json，也支持 --env）。
 python scripts/review.py "score.pdf" --pages out/score/work/copisteria \
   --facts-dir review/facts --outdir "review/score"
 ```
@@ -84,13 +84,11 @@ python -m scorepipe.cli path/to/pages -o out/score/score.musicxml \
 - MuseScore 4 可用于 `.mscz`/PDF；只做 MusicXML 时可以不渲染；
 - poppler 的 `pdfinfo`、`pdftoppm` 可用于页数统计和视觉复核。
 
-确认 PDF 版本、页数、标题/作曲/编曲，以及弱起、反复、移调乐器等已知信息。原始 PDF 只读。
+确认 PDF 版本、页数、标题/作曲/编曲，以及是否为**单 `<part>` 乐谱**（双谱表钢琴或单行器乐/声乐；声乐+钢琴等多 `<part>` 乐谱目前会被 `scorepipe` 拒绝，遇到应先告知用户，不要盲跑），同时记录弱起、反复、移调乐器等已知信息。原始 PDF 只读。
 
 ### 2. 逐页 OMR 与机械修复
 
-`convert.py` 调用 copisteria，并把**逐页目录**交给 scorepipe。页契约见
-[`references/omr.md`](references/omr.md)。流水线按 structural → inject → display 运行到不动点，
-然后执行只读 verifier。
+`convert.py` 通过内建 `scorepipe.copisteria` 适配器提取灰度页图并直接调用上游 `python -m copisteria.pipeline`（支持 `--detector 28m|2m`、`--device`、`--range`），再把**逐页目录**交给 scorepipe。页契约见 [`references/omr.md`](references/omr.md)。流水线按 structural → inject → display 运行到不动点，然后执行只读 verifier。
 
 检查 `report.json`：所有阶段必须 `stable=true`，交付件的 `verifier` 必须为空；无法解释的
 `measure-length`、hidden-rest 或导入差异都要追查。存在 ground truth 时再运行对应 comparator。
@@ -136,8 +134,7 @@ review 自动生成两类辅助图：
 
 - `review/confidence/`：符号级热图。红色表示上下文改写，橙色表示存在性不确定，琥珀表示属性概率偏低；
   编号只是建议查看顺序。
-- `review/sheets/` + 根目录 `review-sheets.pdf`：逐页 MusicXML 渲染与扫描并排，同一小节同色同号，
-  `≠` 表示时值不符；`review_sheet.md` 给出跨页核对顺序。
+- `review/sheets/` + 根目录 `review-sheets.pdf`：左侧为**最终交付乐谱**（优先 `score.mscz`，无 `.mscz` 时用修复后的 `score.musicxml`）按扫描页边界分页渲染的结果，右侧为原始扫描，同一小节同色同号，`≠` 表示时值不符；`review_sheet.md` 给出跨页核对顺序。验收时检查 `review/sheets/review_sheet_summary.json` 的 `render_mode` 应为 `score-mscz` 或 `score-musicxml`（若退回 `raw-pages` 或出现 `score_measure_count_mismatch` 需明确报告，不要当成正常对齐；`--raw-pages` 仅用于调试原始 OMR）。
 
 两者都是审查辅助，失败记录为 finding，不代替 verifier，也不证明未标色内容正确。对齐与分档细节见
 [`references/review.md`](references/review.md)。
@@ -152,8 +149,7 @@ review 自动生成两类辅助图：
 - 根目录 `score.*` 是 reviewed 交付。根 `score.musicxml` 始终保持未截断的语义主文件。
 - `forced-truncation/` 对 overfull voice 强制收尾以便 MuseScore 编辑，必须标记
   `semantic_authority: false`。`truncation-report.json` 列出每个删除或缩短操作，agent 必须转告用户。
-- 实际发生截断时，根 `score.mscz` / `score.pdf` 来自 forced 副本，`rendered/` 也从它重新生成；
-  未截断 reviewed 树移入 `semantic/`。不要把截断称为语义修复。
+- 实际发生截断时，根 `score.mscz` / `score.pdf` 来自 forced 副本，`rendered/` 与 `review-sheets.pdf` 也均基于该交付 `.mscz` 生成；未截断 reviewed 树移入 `semantic/`。不要把截断称为语义修复。
 
 ### 6. Agent 提案边界
 

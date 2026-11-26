@@ -91,10 +91,15 @@ PDF
 git clone https://github.com/Chitius/copisteria-score-to-mscz.git
 cd copisteria-score-to-mscz
 python -m pip install -e .
-python scripts/preflight.py --save env.local.json
+
+# 如果 copisteria 装在独立虚拟环境里，首次探测直接指明解释器和源码目录：
+python scripts/preflight.py \
+  --omr-python "path/to/.venv-copisteria/Scripts/python.exe" \
+  --repo "path/to/copisteria" \
+  --save env.local.json
 ```
 
-`env.local.json` 只保存本机工具路径，已被 Git 忽略，不要提交。路径配置详见 [`references/environment.md`](references/environment.md)。
+`env.local.json` 只保存本机工具路径，已被 Git 忽略，不要提交；后续运行 `convert.py` / `review.py` 会自动读取它。路径配置详见 [`references/environment.md`](references/environment.md)。
 
 ### 3. 从 PDF 生成初稿
 
@@ -103,7 +108,7 @@ python scripts/convert.py "score.pdf" --outdir "out/score" \
   --title "标题" --composer "作曲"
 ```
 
-这一步完成逐页 OMR、合并修复和渲染。生成的 `out/score/score.mscz` 可以立即打开，但仍是待复核初稿。
+这一步完成逐页 OMR、合并修复和渲染。有 NVIDIA GPU 可加 `--device cuda` 提速，低配环境可用 `--detector 2m`，局部试跑可加 `--range 1-2`。生成的 `out/score/score.mscz` 可以立即打开，但仍是待复核初稿。
 
 ### 4. 生成核对材料与交付目录
 
@@ -137,7 +142,7 @@ python -m scorepipe.cli "out/score/work/copisteria" -o "out/score/score.musicxml
 
 ## 适用范围与限制
 
-- 面向**印刷五线谱**，目前验证较多的是钢琴谱和艺术歌曲；手写谱、简谱、六线谱和乐队总谱不属于已验证场景。
+- 面向**印刷五线谱**，目前支持**单 `<part>` 乐谱**（以双谱表钢琴谱和单行旋律为主）；多 `<part>` 乐谱（如声乐 + 钢琴艺术歌曲、弦乐四重奏、乐队总谱）目前需先按声部拆分，整谱多 part 合并尚未支持；手写谱、简谱、六线谱不属于已验证场景。
 - OMR 仍可能产生八度、加线、声部、休止符和密集和弦错误。结构校验通过不代表音高正确，**人工核对不可省略**。
 - 踏板、hairpin、可选音符括号等记号不能可靠地自动进入交付；缺失项应明确记录，不靠猜测补齐。
 - 8va/8vb 需要证据充分且经接受的 patch；无法确定覆盖范围时保持未决。

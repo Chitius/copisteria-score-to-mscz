@@ -91,10 +91,15 @@ Keeping the "per-page" layer matters: cross-page ties, slurs, and other continuo
 git clone https://github.com/Chitius/copisteria-score-to-mscz.git
 cd copisteria-score-to-mscz
 python -m pip install -e .
-python scripts/preflight.py --save env.local.json
+
+# When copisteria lives in its own venv, pass its interpreter and checkout once:
+python scripts/preflight.py \
+  --omr-python "path/to/.venv-copisteria/Scripts/python.exe" \
+  --repo "path/to/copisteria" \
+  --save env.local.json
 ```
 
-`env.local.json` stores only local tool paths, is ignored by Git, and must not be committed. See [`references/environment.md`](references/environment.md) for path configuration.
+`env.local.json` stores only local tool paths, is ignored by Git, and must not be committed; subsequent `convert.py` and `review.py` runs pick it up automatically. See [`references/environment.md`](references/environment.md) for path configuration.
 
 ### 3. Generate a first draft from a PDF
 
@@ -103,7 +108,7 @@ python scripts/convert.py "score.pdf" --outdir "out/score" \
   --title "Title" --composer "Composer"
 ```
 
-This runs per-page OMR, merge/repair, and rendering. The resulting `out/score/score.mscz` can be opened right away, but it is still a draft pending review.
+This runs per-page OMR, merge/repair, and rendering. Pass `--device cuda` if you have an NVIDIA GPU, `--detector 2m` for the lighter detector, or `--range 1-2` to test a few pages first. The resulting `out/score/score.mscz` can be opened right away, but it is still a draft pending review.
 
 ### 4. Generate review materials and the delivery directory
 
@@ -137,7 +142,7 @@ python -m scorepipe.cli "out/score/work/copisteria" -o "out/score/score.musicxml
 
 ## Scope and limitations
 
-- Targets **printed staff notation**; piano scores and art songs are the most-tested scenarios. Handwritten scores, numbered notation (jianpu), tablature, and full orchestral scores are not validated.
+- Targets **printed staff notation** and currently supports **single-`<part>` scores** (primarily grand-staff piano and solo-line parts). Multi-`<part>` scores (such as voice + piano art songs, string quartets, or orchestral scores) are refused until split per part; handwritten scores, numbered notation (jianpu), and tablature are not validated.
 - OMR can still produce octave, ledger-line, voice, rest, and dense-chord errors. Passing structural validation does not mean pitches are correct — **human review is not optional**.
 - Pedals, hairpins, and optional-note brackets cannot be reliably auto-delivered; missing items are recorded explicitly rather than filled in by guesswork.
 - 8va/8vb requires a well-evidenced, accepted patch; if the covered range cannot be determined, it stays unresolved.
