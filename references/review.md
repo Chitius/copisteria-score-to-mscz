@@ -147,15 +147,17 @@ positionally and is only correct when the render is paginated like the scan.
 
 ## Page proof sheets (measure-level comparison)
 
-`scripts/review_sheet.py` renders **each page's own MusicXML** and puts it beside that page's scan,
-with the same bars tinted on both sides and the same global measure number above them. This is the
-measure-level companion to the symbol heat map: the heat map says which glyph is doubtful, the
-sheet says whether the render and the page agree bar for bar. `review.py` runs it automatically
-after the delivery is chosen and writes `review/sheets/` (skip with `--no-sheets`); a failure is
-recorded as a finding, never a blocker.
+`scripts/review_sheet.py` renders the **delivered score** (`--score score.mscz`, falling back to
+repaired `score.musicxml` when no `.mscz` exists), paginated with forced page breaks to match the
+scan pages, and puts each page beside its original scan with the same bars tinted and the same
+global measure number above them. Pass `--raw-pages` only when debugging raw per-page OMR output.
+This is the measure-level companion to the symbol heat map: the heat map says which glyph is
+doubtful, the sheet says whether the delivered score and the scan agree bar for bar. `review.py`
+runs it automatically after the delivery is chosen (passing the delivered `score.mscz`) and writes
+`review/sheets/` (skip with `--no-sheets`); a failure is recorded as a finding, never a blocker.
 
 ```bash
-python scripts/review_sheet.py --pages out/song/work/copisteria --report out/song/report.json
+python scripts/review_sheet.py --pages out/song/work/copisteria --score out/song/score.mscz --report out/song/report.json
 python scripts/review_sheet.py --pages review/pages --scan-dir review/scans --musescore "...\MuseScore4.exe"
 ```
 

@@ -38,7 +38,7 @@ It **never changes pitches by guesswork**. Titles, tempo marks, and supplementar
 
 ## Compare against the original — don't blindly trust the recognition
 
-Delivery includes a `review-sheets.pdf`: the MusicXML rendering on the left, the original scan on the right; matching measures share the same number and color, with locations worth checking flagged first.
+Delivery includes a `review-sheets.pdf`: the delivered score rendering on the left (using `score.mscz` when available, or the repaired `score.musicxml`, paginated to match the scan pages) and the original scan on the right; matching measures share the same number and color, with locations worth checking flagged first.
 
 ![Page-by-page measure comparison: rendering on the left, original scan on the right](docs/images/demo-3-final.png)
 
@@ -81,7 +81,7 @@ Keeping the "per-page" layer matters: cross-page ties, slurs, and other continuo
 - **Python 3.10+**: runs this project.
 - **[copisteria](https://github.com/kobimusic/copisteria) and its model weights**: handles the OMR; set up its own Python environment per the upstream docs.
 - **MuseScore 4**: generates the `.mscz` and renders the PDF.
-- **poppler**: provides `pdfinfo` and `pdftoppm` for page counts and page images.
+- **poppler**: provides `pdfinfo`, `pdftoppm`, and `pdfimages` for page counts and page image extraction.
 
 `preflight.py` only checks the environment — it downloads no models, installs no system software, and does not modify your original PDF.
 

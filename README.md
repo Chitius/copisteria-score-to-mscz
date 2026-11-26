@@ -38,7 +38,7 @@
 
 ## 对照原谱，而不是盲信识别结果
 
-交付时会生成 `review-sheets.pdf`：左侧是 MusicXML 渲染，右侧是原始扫描；同一小节使用相同编号和颜色，优先标出值得人工检查的位置。
+交付时会生成 `review-sheets.pdf`：左侧是最终交付乐谱（优先使用 `score.mscz`，无 `.mscz` 时退回修复后的 `score.musicxml`）按原扫描页分页渲染的结果，右侧是原始扫描；同一小节使用相同编号和颜色，优先标出值得人工检查的位置。
 
 ![逐页小节对照图：左侧渲染，右侧原始扫描](docs/images/demo-3-final.png)
 
@@ -81,7 +81,7 @@ PDF
 - **Python 3.10+**：运行本项目。
 - **[copisteria](https://github.com/kobimusic/copisteria) 与模型权重**：负责 OMR；按上游文档准备独立 Python 环境。
 - **MuseScore 4**：生成 `.mscz` 并渲染 PDF。
-- **poppler**：提供 `pdfinfo` 和 `pdftoppm`，用于 PDF 页数与页面图像。
+- **poppler**：提供 `pdfinfo`、`pdftoppm` 和 `pdfimages`，用于 PDF 页数与页面图像提取。
 
 `preflight.py` 只检查环境，不会下载模型、安装系统软件或修改原始 PDF。
 

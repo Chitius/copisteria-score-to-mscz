@@ -104,6 +104,27 @@ def _write(path: Path, payload) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _default_env_file() -> Path | None:
+    """``env.local.json`` beside the caller, else beside the repository."""
+    for candidate in (Path.cwd() / "env.local.json", ROOT / "env.local.json"):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _load_config(path: str | Path | None) -> dict:
+    if not path:
+        return {}
+    source = Path(path)
+    if not source.is_file():
+        return {}
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
 def _timing(report_path: Path) -> dict:
     """Extract measure-length findings from a scorepipe report."""
     if not report_path.is_file():
@@ -235,6 +256,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--facts-dir", help="directory containing agent-page*.json")
     parser.add_argument("--outdir", required=True)
     parser.add_argument("--patches", help="notation patches JSON")
+    parser.add_argument(
+        "--env",
+        help="env.local.json written by preflight.py (default: ./env.local.json or <repo>/env.local.json)",
+    )
     parser.add_argument("--musescore", help="MuseScore executable")
     parser.add_argument("--python", help="interpreter for scorepipe")
     parser.add_argument("--title", help="title credit to inject into the reviewed score")
@@ -276,14 +301,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.env and not Path(args.env).is_file():
+        parser.error(f"env file not found: {args.env}")
+    env_path = Path(args.env) if args.env else _default_env_file()
+    config = _load_config(env_path)
     pdf = Path(args.pdf).resolve()
     page_dir = Path(args.pages).resolve()
     outdir = Path(args.outdir).resolve()
     outdir.mkdir(parents=True, exist_ok=True)
     pdf_sha256 = hashlib.sha256(pdf.read_bytes()).hexdigest()
     facts_dir = Path(args.facts_dir).resolve() if args.facts_dir else outdir / "facts"
-    python = args.python or os.environ.get("SCOREPIPE_PYTHON") or sys.executable
-    musescore = find_musescore(args.musescore or os.environ.get("MUSESCORE_EXE"))
+    python = (
+        args.python
+        or os.environ.get("SCOREPIPE_PYTHON")
+        or config.get("python")
+        or sys.executable
+    )
+    musescore = find_musescore(
+        args.musescore or os.environ.get("MUSESCORE_EXE") or config.get("musescore")
+    )
     page_count = _pdf_pages(pdf)
     if page_count is None:
         raise RuntimeError("pdfinfo is required to verify page coverage; install poppler or pass a supported PDF")
@@ -587,6 +623,7 @@ def main(argv: list[str] | None = None) -> int:
             spanner_risks = [note for note in operations if "[spanner-risk:" in note]
             forced_pdf = None
             forced_render_exit = None
+            forced_render_error = None
             if forced_mscz.is_file() and not args.no_pdf and musescore:
                 forced_pdf = forced_dir / "score.pdf"
                 forced_render_exit = _run([musescore, "-f", "-o", str(forced_pdf), str(forced_mscz)], ROOT)
@@ -594,7 +631,7 @@ def main(argv: list[str] | None = None) -> int:
                     try:
                         _render_pages(forced_pdf, forced_dir / "rendered")
                     except RuntimeError as exc:
-                        report["forced_truncation"] = {"render_error": str(exc)}
+                        forced_render_error = str(exc)
             forced = {
                 "semantic_authority": False,
                 "status": (
@@ -614,6 +651,7 @@ def main(argv: list[str] | None = None) -> int:
                 "report": str(forced_report) if forced_report.is_file() else None,
                 "pipeline_exit": forced_exit,
                 "render_exit": forced_render_exit,
+                "render_error": forced_render_error,
                 "operations": operations,
                 "unresolved": unresolved,
                 "irregular_durations": irregular,
@@ -625,6 +663,8 @@ def main(argv: list[str] | None = None) -> int:
                 and forced["verifier_count"] == 0
                 and not unresolved
                 and forced_mscz.is_file()
+                and (forced_render_exit is None or forced_render_exit == 0)
+                and forced_render_error is None
             )
             report["forced_truncation"] = forced
             _write(forced_dir / "truncation-report.json", forced)
@@ -705,6 +745,11 @@ def main(argv: list[str] | None = None) -> int:
         # Measure-level proof sheets of the delivered tree: same pages, same measure numbers, the
         # same bars tinted on the scan and on the render.  A reading aid, so a failure is a finding.
         sheets_dir = outdir / "review" / "sheets"
+        delivered_score = (
+            outdir / "score.mscz"
+            if (outdir / "score.mscz").is_file()
+            else (outdir / "score.musicxml" if (outdir / "score.musicxml").is_file() else None)
+        )
         sheet_command = [
             python,
             str(SCRIPTS / "review_sheet.py"),
@@ -719,6 +764,8 @@ def main(argv: list[str] | None = None) -> int:
             "--source-name",
             pdf.name,
         ]
+        if delivered_score is not None:
+            sheet_command.extend(["--score", str(delivered_score)])
         scan_dir = page_dir.parent / "pages"
         if scan_dir.is_dir():
             sheet_command.extend(["--scan-dir", str(scan_dir)])

@@ -944,6 +944,263 @@ def _join_role_credits(root, credits: list) -> None:
         root.remove(credit)
 
 
+def _page_sort_key(path: Path) -> tuple[int, str]:
+    """Sort MuseScore/pdftoppm page outputs numerically (``-1``, ``-2``, ..., ``-10``)."""
+    stem = path.stem
+    if "-" in stem:
+        suffix = stem.rsplit("-", 1)[1]
+        if suffix.isdigit():
+            return int(suffix), path.name
+    return 0, path.name
+
+
+def _write_tall_style(out_dir: Path) -> Path:
+    style = out_dir / "onepage.mss"
+    style.write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<museScore version="4.00">\n  <Style>\n'
+        "    <pageWidth>8.27</pageWidth>\n"
+        f"    <pageHeight>{TALL_PAGE_HEIGHT:.2f}</pageHeight>\n"
+        "    <spatium>1.35</spatium>\n"
+        "  </Style>\n</museScore>\n",
+        encoding="utf-8",
+    )
+    return style
+
+
+def score_measure_count(score_path: Path) -> int:
+    """Total measures in a delivered ``.mscz`` or ``.musicxml`` score."""
+    path = Path(score_path)
+    if path.suffix.lower() == ".mscz":
+        from .core.mscz import MsczArchive
+
+        archive = MsczArchive.open(path)
+        staves = archive.document.staves()
+        return len(staves[0].findall("Measure")) if staves else 0
+    return page_measure_count(path)
+
+
+def _dropped_trailing_measures(report_path: Path | None) -> int:
+    if report_path is None or not Path(report_path).is_file():
+        return 0
+    try:
+        data = json.loads(Path(report_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0
+    return sum(
+        int(entry.get("changed") or 0)
+        for entry in data.get("trace") or []
+        if entry.get("pass") == "drop_trailing_duplicate_measure"
+    )
+
+
+def reconcile_page_measure_counts(
+    raw_counts: Sequence[int],
+    delivered_total: int,
+    report_path: Path | None = None,
+) -> tuple[list[int] | None, list[str]]:
+    """Map delivered measures onto the original scan pages.
+
+    Normally the delivered score has the exact same measure count as the sum of the raw OMR pages.
+    When ``drop_trailing_duplicate_measure`` removed trailing duplicate bar(s) on the last page,
+    only the last page shrinks by that amount; any unexplained count difference is refused so page
+    boundaries are never guessed silently.
+    """
+    counts = [int(count) for count in raw_counts]
+    raw_total = sum(counts)
+    if delivered_total == raw_total:
+        return counts, []
+    diff = raw_total - delivered_total
+    if diff > 0 and counts:
+        dropped = _dropped_trailing_measures(report_path)
+        if dropped == diff and counts[-1] > diff:
+            adjusted = list(counts)
+            adjusted[-1] -= diff
+            return adjusted, [
+                f"pipeline removed {diff} trailing duplicate measure(s); "
+                f"last page aligned to {adjusted[-1]} delivered measure(s)"
+            ]
+    return None, [
+        f"delivered score has {delivered_total} measure(s) but raw OMR pages declare {raw_total}; "
+        "cannot map scan page boundaries safely"
+    ]
+
+
+def prepare_paginated_mscz(
+    mscz_path: Path, page_counts: Sequence[int], out_path: Path
+) -> Path:
+    """Copy a delivered ``.mscz`` and force page breaks to match ``page_counts``."""
+    from .core.mscz import MsczArchive
+
+    archive = MsczArchive.open(mscz_path)
+    staves = archive.document.staves()
+    if not staves:
+        raise ValueError(f"{mscz_path}: mscz has no staves with measures")
+    for staff in staves:
+        for measure in staff.findall("Measure"):
+            for layout_break in list(measure.findall("LayoutBreak")):
+                if (layout_break.findtext("subtype") or "").strip() == "page":
+                    measure.remove(layout_break)
+    measures = staves[0].findall("Measure")
+    expected = sum(page_counts)
+    if len(measures) != expected:
+        raise ValueError(
+            f"{mscz_path}: expected {expected} measures for pagination, found {len(measures)}"
+        )
+    running = 0
+    for count in page_counts[:-1]:
+        running += count
+        if 0 < running <= len(measures):
+            target = measures[running - 1]
+            layout_break = ElementTree.Element("LayoutBreak")
+            ElementTree.SubElement(layout_break, "subtype").text = "page"
+            target.insert(0, layout_break)
+    out_path = Path(out_path)
+    archive.save(out_path)
+    return out_path
+
+
+def prepare_paginated_musicxml(
+    musicxml_path: Path, page_counts: Sequence[int], out_path: Path
+) -> Path:
+    """Copy a repaired MusicXML and insert ``<print new-page="yes"/>`` at scan page boundaries."""
+    root = ElementTree.parse(str(musicxml_path)).getroot()
+    part = root.find("part")
+    if part is None:
+        raise ValueError(f"{musicxml_path}: MusicXML has no <part>")
+    measures = part.findall("measure")
+    expected = sum(page_counts)
+    if len(measures) != expected:
+        raise ValueError(
+            f"{musicxml_path}: expected {expected} measures for pagination, found {len(measures)}"
+        )
+    for measure in measures:
+        for print_node in measure.findall("print"):
+            print_node.attrib.pop("new-page", None)
+    running = 0
+    for count in page_counts[:-1]:
+        running += count
+        if 0 < running < len(measures):
+            target = measures[running]
+            print_node = target.find("print")
+            if print_node is None:
+                print_node = ElementTree.Element("print")
+                target.insert(0, print_node)
+            print_node.set("new-page", "yes")
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    ElementTree.ElementTree(root).write(out_path, encoding="utf-8", xml_declaration=True)
+    return out_path
+
+
+def _group_overflow_pages(
+    png_pages: Sequence[Path],
+    svg_pages: Sequence[Path],
+    page_counts: Sequence[int],
+) -> list[tuple[list[Path], list[Path]]] | None:
+    """Group rendered pages back onto the original scan pages when a dense page split in two."""
+    expected_pages = len(page_counts)
+    if len(png_pages) == expected_pages:
+        return [
+            ([png_pages[index]], [svg_pages[index]] if len(svg_pages) == len(png_pages) else [])
+            for index in range(expected_pages)
+        ]
+    if len(png_pages) < expected_pages or len(svg_pages) != len(png_pages):
+        return None
+    svg_counts = []
+    for svg in svg_pages:
+        try:
+            geometry = parse_svg_measures(svg)
+            svg_counts.append(sum(len(system["cells"]) for system in geometry["systems"]))
+        except Exception:  # noqa: BLE001 - cannot group reliably without SVG geometry
+            return None
+    groups: list[tuple[list[Path], list[Path]]] = []
+    cursor = 0
+    total_rendered = len(png_pages)
+    for page_index, target in enumerate(page_counts):
+        remaining_scan = expected_pages - page_index - 1
+        max_end = total_rendered - remaining_scan
+        if cursor >= max_end:
+            return None
+        if page_index == expected_pages - 1:
+            groups.append((list(png_pages[cursor:]), list(svg_pages[cursor:])))
+            cursor = total_rendered
+            break
+        acc = 0
+        start = cursor
+        while cursor < max_end:
+            acc += svg_counts[cursor]
+            cursor += 1
+            if acc >= target:
+                break
+        groups.append((list(png_pages[start:cursor]), list(svg_pages[start:cursor])))
+    return groups if len(groups) == expected_pages and cursor == total_rendered else None
+
+
+def render_paginated_score(
+    score_path: Path,
+    page_counts: Sequence[int],
+    musescore: str,
+    out_dir: Path,
+) -> tuple[list[dict], list[str]]:
+    """Render the delivered ``.mscz`` or ``.musicxml`` once, paginated to match the scan pages."""
+    score_path = Path(score_path)
+    render_dir = Path(out_dir) / "_render" / "_score"
+    if render_dir.exists():
+        shutil.rmtree(render_dir, ignore_errors=True)
+    render_dir.mkdir(parents=True, exist_ok=True)
+
+    is_mscz = score_path.suffix.lower() == ".mscz"
+    if is_mscz:
+        paginated = prepare_paginated_mscz(score_path, page_counts, render_dir / "paginated.mscz")
+        mode = "score-mscz"
+    else:
+        paginated = prepare_paginated_musicxml(
+            score_path, page_counts, render_dir / "paginated.musicxml"
+        )
+        mode = "score-musicxml"
+
+    warnings: list[str] = []
+    used_tall = False
+    png_pages = _render(paginated, musescore, render_dir, tall=False)
+    if len(png_pages) != len(page_counts):
+        used_tall = True
+        png_pages = _render(paginated, musescore, render_dir, tall=True)
+
+    svg_pages: list[Path] = []
+    try:
+        svg_pages = _render_svg(paginated, musescore, render_dir, tall=used_tall)
+    except Exception as error:  # noqa: BLE001 - the ink fallback still works
+        warnings.append(f"SVG export unavailable ({error}); using ink barline detection")
+    if svg_pages and len(svg_pages) != len(png_pages):
+        warnings.append(
+            f"SVG export produced {len(svg_pages)} page(s) for {len(png_pages)} render page(s); "
+            "using ink barline detection"
+        )
+        svg_pages = []
+
+    groups = _group_overflow_pages(png_pages, svg_pages, page_counts)
+    if groups is None:
+        raise RuntimeError(
+            f"delivered score rendered as {len(png_pages)} page(s) for {len(page_counts)} scan page(s)"
+        )
+
+    entries: list[dict] = []
+    for (page_pngs, page_svgs), delivered_measures in zip(groups, page_counts):
+        entries.append(
+            {
+                "png_pages": page_pngs,
+                "svg_pages": page_svgs,
+                "render_mode": mode,
+                "source_path": str(score_path),
+                "source_label": score_path.name,
+                "delivered_measures": delivered_measures,
+                "warnings": list(warnings),
+            }
+        )
+    return entries, warnings
+
+
 def render_page_svg(musicxml: Path, musescore: str, out_dir: Path) -> list[Path]:
     """Export the page's MusicXML to SVG; MuseScore writes the exact barline geometry into it."""
     pages = _render_svg(musicxml, musescore, out_dir, tall=False)
@@ -960,16 +1217,7 @@ def _render_svg(musicxml: Path, musescore: str, out_dir: Path, *, tall: bool) ->
         stale.unlink(missing_ok=True)
     extra: list[str] = []
     if tall:
-        style = out_dir / "onepage.mss"
-        style.write_text(
-            '<?xml version="1.0" encoding="UTF-8"?>\n'
-            '<museScore version="4.00">\n  <Style>\n'
-            "    <pageWidth>8.27</pageWidth>\n"
-            f"    <pageHeight>{TALL_PAGE_HEIGHT:.2f}</pageHeight>\n"
-            "    <spatium>1.35</spatium>\n"
-            "  </Style>\n</museScore>\n",
-            encoding="utf-8",
-        )
+        style = _write_tall_style(out_dir)
         extra = ["-S", str(style)]
     completed = subprocess.run(
         [musescore, "-f", *extra, "-o", str(target), str(musicxml)],
@@ -978,7 +1226,7 @@ def _render_svg(musicxml: Path, musescore: str, out_dir: Path, *, tall: bool) ->
         encoding="utf-8",
         errors="replace",
     )
-    pages = sorted(out_dir.glob(f"{musicxml.stem}_svg-*.svg"))
+    pages = sorted(out_dir.glob(f"{musicxml.stem}_svg-*.svg"), key=_page_sort_key)
     if not pages and target.is_file():
         pages = [target]
     if not pages:
@@ -1136,16 +1384,7 @@ def _render(musicxml: Path, musescore: str, out_dir: Path, *, tall: bool) -> lis
         stale.unlink(missing_ok=True)
     extra: list[str] = []
     if tall:
-        style = out_dir / "onepage.mss"
-        style.write_text(
-            '<?xml version="1.0" encoding="UTF-8"?>\n'
-            '<museScore version="4.00">\n  <Style>\n'
-            "    <pageWidth>8.27</pageWidth>\n"
-            f"    <pageHeight>{TALL_PAGE_HEIGHT:.2f}</pageHeight>\n"
-            "    <spatium>1.35</spatium>\n"
-            "  </Style>\n</museScore>\n",
-            encoding="utf-8",
-        )
+        style = _write_tall_style(out_dir)
         extra = ["-S", str(style)]
     completed = subprocess.run(
         [musescore, "-f", *extra, "-o", str(pdf), str(musicxml)],
@@ -1169,7 +1408,7 @@ def _render(musicxml: Path, musescore: str, out_dir: Path, *, tall: bool) -> lis
         encoding="utf-8",
         errors="replace",
     )
-    pages = sorted(out_dir.glob(f"{prefix.name}-*.png"))
+    pages = sorted(out_dir.glob(f"{prefix.name}-*.png"), key=_page_sort_key)
     if raster.returncode != 0 or not pages:
         raise RuntimeError(f"pdftoppm failed for {pdf.name}: {(raster.stderr or '').strip()[:300]}")
     return pages
@@ -1593,6 +1832,7 @@ def build_sheet(
     yellow_min: float = YELLOW_MIN,
     width: int = COLUMN_WIDTH,
     title_source: Path | None = None,
+    prerendered: dict | None = None,
 ) -> dict:
     """Render the page, align both sides by measured bar count and write ``<stem>.compare.png``."""
     from PIL import Image
@@ -1604,6 +1844,11 @@ def build_sheet(
     scan_cells = analysis["cells"]
     scores = analysis["scores"]
     expected = analysis["expected"]
+    expected_render = (
+        int(prerendered["delivered_measures"])
+        if prerendered is not None and prerendered.get("delivered_measures") is not None
+        else expected
+    )
     lengths = analysis["lengths"]
     warnings = report["warnings"]
     failures = report["failures"]
@@ -1621,6 +1866,11 @@ def build_sheet(
         if yellow_min <= scores[measure]["content_score"] < red_min and measure - 1 not in inferred
     ]
     report["measures"] = expected
+    report["delivered_measures"] = expected_render
+    report["render_mode"] = prerendered["render_mode"] if prerendered is not None else "raw-pages"
+    if prerendered is not None:
+        report["render_source_file"] = prerendered["source_path"]
+        warnings.extend(prerendered.get("warnings") or [])
     report["red"] = [page.offset + measure for measure in red]
     report["yellow"] = [page.offset + measure for measure in yellow]
 
@@ -1629,46 +1879,50 @@ def build_sheet(
         colours[measure - 1] = RED
     for measure in yellow:
         colours[measure - 1] = YELLOW
-    labels = {index: str(page.offset + index + 1) for index in range(expected)}
+    labels = {index: str(page.offset + index + 1) for index in range(max(expected, expected_render))}
     for measure in lengths:
         labels[measure - page.offset - 1] = f"{measure}≠"
 
     left = None
     render_cells: list[tuple[float, float, float, float]] = []
-    if musescore is None:
+    if prerendered is None and musescore is None:
         warnings.append("MuseScore not found: the render column falls back to the scan")
         failures.append({"code": "render_unavailable", "message": "MuseScore not found"})
     else:
         try:
-            render_dir = out_dir / "_render" / page.stem
-            if render_dir.exists():
-                shutil.rmtree(render_dir, ignore_errors=True)
-            render_dir.mkdir(parents=True, exist_ok=True)
-            source_xml = page.musicxml
-            if page.offset == 0 and title_source is not None and Path(title_source).is_file():
-                titled = render_dir / "with-title.musicxml"
-                injected = copy_header(Path(title_source), page.musicxml, titled)
-                if injected:
-                    source_xml = titled
-                    report["title_injected"] = injected
-                    warnings.append(
-                        "first page: title/credit block copied from "
-                        f"{Path(title_source).name} before rendering ({len(injected)} credit(s))"
-                    )
             panels = []
             collapsed: list[tuple[int, int]] = []
-            png_pages = render_page_musicxml(source_xml, musescore, render_dir)
-            svg_pages: list[Path] = []
-            try:
-                svg_pages = render_page_svg(source_xml, musescore, render_dir)
-            except Exception as error:  # noqa: BLE001 - the ink fallback still works
-                warnings.append(f"SVG export unavailable ({error}); using ink barline detection")
-            if svg_pages and len(svg_pages) != len(png_pages):
-                warnings.append(
-                    f"SVG export produced {len(svg_pages)} page(s) for {len(png_pages)} render "
-                    "page(s); using ink barline detection"
-                )
+            if prerendered is not None:
+                png_pages = list(prerendered["png_pages"])
+                svg_pages = list(prerendered.get("svg_pages") or [])
+            else:
+                render_dir = out_dir / "_render" / page.stem
+                if render_dir.exists():
+                    shutil.rmtree(render_dir, ignore_errors=True)
+                render_dir.mkdir(parents=True, exist_ok=True)
+                source_xml = page.musicxml
+                if page.offset == 0 and title_source is not None and Path(title_source).is_file():
+                    titled = render_dir / "with-title.musicxml"
+                    injected = copy_header(Path(title_source), page.musicxml, titled)
+                    if injected:
+                        source_xml = titled
+                        report["title_injected"] = injected
+                        warnings.append(
+                            "first page: title/credit block copied from "
+                            f"{Path(title_source).name} before rendering ({len(injected)} credit(s))"
+                        )
+                png_pages = render_page_musicxml(source_xml, musescore, render_dir)
                 svg_pages = []
+                try:
+                    svg_pages = render_page_svg(source_xml, musescore, render_dir)
+                except Exception as error:  # noqa: BLE001 - the ink fallback still works
+                    warnings.append(f"SVG export unavailable ({error}); using ink barline detection")
+                if svg_pages and len(svg_pages) != len(png_pages):
+                    warnings.append(
+                        f"SVG export produced {len(svg_pages)} page(s) for {len(png_pages)} render "
+                        "page(s); using ink barline detection"
+                    )
+                    svg_pages = []
             svg_cells_by_panel: list[list[tuple[float, float, float, float]]] = []
             svg_ok = bool(svg_pages)
             for index, path in enumerate(png_pages):
@@ -1700,7 +1954,7 @@ def build_sheet(
                     plain, _, _ = detect_measures(panel)
                     plain_by_panel.append(plain)
                 plain_total = sum(len(cells) for cells in plain_by_panel)
-                cells_by_panel, folded = fit_cells_to_count(plain_by_panel, expected)
+                cells_by_panel, folded = fit_cells_to_count(plain_by_panel, expected_render)
                 if folded:
                     report["slivers_merged"] = folded
             report["render_measures_detected"] = plain_total
@@ -1708,7 +1962,7 @@ def build_sheet(
             flat: list[tuple[int, int, int, int]] = []
             for cells, offset_y in zip(cells_by_panel, panel_offsets):
                 flat.extend((x0, y0 + offset_y, x1, y1 + offset_y) for x0, y0, x1, y1 in cells)
-            flat, slivers = fold_trailing_slivers(flat, expected)
+            flat, slivers = fold_trailing_slivers(flat, expected_render)
             if slivers:
                 report["trailing_slivers_folded"] = slivers
                 warnings.append(
@@ -1716,7 +1970,7 @@ def build_sheet(
                 )
             report["render_measures"] = len(flat)
             if len(panels) > 1:
-                warnings.append(f"the page MusicXML rendered as {len(panels)} pages; stacked in order")
+                warnings.append(f"the page rendered as {len(panels)} panels; stacked in order")
             render_cells = flat
             left = stacked
         except Exception as error:  # noqa: BLE001 - a renderer problem must not cost the sheet
@@ -1731,15 +1985,16 @@ def build_sheet(
     # Tint as much as both columns agree on, not "all or nothing".  A page whose last bar was
     # mis-detected still has a trustworthy prefix: an uncoloured page tells the reviewer less
     # than a page with the verified bars coloured and the tail left plain.
-    render_ok = bool(render_cells) and len(render_cells) == expected
+    render_ok = bool(render_cells) and len(render_cells) == expected_render
     scan_ok = len(scan_cells) == expected
+    shared_expected = min(expected, expected_render)
     report["render_aligned"] = render_ok
     report["scan_aligned"] = scan_ok
     report["render_available"] = bool(render_cells)
     if render_ok and scan_ok:
-        tint = expected
+        tint = shared_expected
     elif render_cells:
-        tint = common_prefix_measures(render_cells, scan_cells, expected)
+        tint = common_prefix_measures(render_cells, scan_cells, shared_expected)
     else:
         # MusicXML-only run: there is no render column to compare with, so only the scan's own
         # bar count can be trusted.
@@ -1750,8 +2005,8 @@ def build_sheet(
 
     if render_cells and not render_ok:
         message = (
-            f"the render detected {len(render_cells)} measures but the page MusicXML declares "
-            f"{expected}; "
+            f"the render detected {len(render_cells)} measures but the page expects "
+            f"{expected_render}; "
             + (f"tinted the first {tint} bar(s)" if tint else "no overlay")
         )
         warnings.append(message)
@@ -1768,10 +2023,17 @@ def build_sheet(
         left = annotate(stacked, render_cells[:tint], colours, labels)
     right = annotate(scan_crop, scan_cells[:tint], colours, labels) if tint else scan_crop
 
+    if prerendered is not None:
+        if prerendered["render_mode"] == "score-mscz":
+            left_caption = f"delivered score \u00b7 MuseScore render of {prerendered['source_label']}"
+        else:
+            left_caption = f"repaired MusicXML \u00b7 MuseScore render of {prerendered['source_label']}"
+    else:
+        left_caption = f"OMR result \u00b7 MuseScore re-engraving of {page.musicxml.name}"
     sheet = compose(
         left,
         right,
-        f"OMR result \u00b7 MuseScore re-engraving of {page.musicxml.name}",
+        left_caption,
         f"original page \u00b7 scan of {page.stem}",
         red=len(red),
         yellow=len(yellow),
@@ -1881,11 +2143,27 @@ def write_priority_list(reports: Sequence[dict], out_dir: Path, summary: dict) -
 
 
 def read_score_title(musicxml: Path | str | None) -> str | None:
-    """The ``title`` credit of a MusicXML file, if it has one."""
+    """The ``title`` credit of a MusicXML or ``.mscz`` score, if it has one."""
     if musicxml is None:
         return None
     path = Path(musicxml)
     if not path.is_file():
+        return None
+    if path.suffix.lower() == ".mscz":
+        try:
+            from .core.mscz import MsczArchive
+
+            root = MsczArchive.open(path).document.root
+        except Exception:  # noqa: BLE001 - title lookup is best-effort
+            return None
+        for node in root.iter("Text"):
+            if (node.findtext("style") or "").strip() != "title":
+                continue
+            text = node.find("text")
+            if text is not None:
+                value = "".join(text.itertext()).strip()
+                if value:
+                    return value
         return None
     try:
         root = ElementTree.parse(str(path)).getroot()
@@ -1920,6 +2198,7 @@ def build_cover_page(
     entries: Sequence[dict],
     *,
     size: tuple[int, int] = SHEET_PDF_SIZE,
+    render_mode: str = "raw-pages",
 ):
     """A cover/TOC page so the printed packet explains itself.
 
@@ -2036,9 +2315,24 @@ def build_cover_page(
         fill=(210, 210, 210),
         width=1,
     )
+    if render_mode == "score-mscz":
+        left_note = (
+            "Left column: delivered MuseScore score (score.mscz), paginated to match the scan. "
+            "Right column: the original scan."
+        )
+    elif render_mode == "score-musicxml":
+        left_note = (
+            "Left column: repaired MusicXML (score.musicxml), paginated to match the scan. "
+            "Right column: the original scan."
+        )
+    else:
+        left_note = (
+            "Left column: MuseScore re-engraving of that page's raw OMR MusicXML. "
+            "Right column: the original scan."
+        )
     draw.text(
         (margin, note_y),
-        "Left column: MuseScore re-engraving of that page's MusicXML. Right column: the original scan.",
+        left_note,
         font=note_font,
         fill=(90, 90, 90),
     )
@@ -2060,6 +2354,7 @@ def write_sheet_pdf(
     title: str | None = None,
     source_name: str | None = None,
     entries: Sequence[dict] | None = None,
+    render_mode: str = "raw-pages",
 ) -> Path | None:
     """Bind the per-page comparison images into one A4-landscape PDF, in page order.
 
@@ -2087,7 +2382,11 @@ def write_sheet_pdf(
     pages = []
     try:
         if entries is not None:
-            pages.append(build_cover_page(title, source_name, entries, size=target))
+            pages.append(
+                build_cover_page(
+                    title, source_name, entries, size=target, render_mode=render_mode
+                )
+            )
         label_font = _font(round(15 * scale), f"{title or ''} {source_name or ''}")
         total = len(opened)
         for index, image in enumerate(opened, start=1):
@@ -2154,8 +2453,14 @@ def review_sheets(
     title_source: Path | None = None,
     title: str | None = None,
     source_name: str | None = None,
+    score_path: Path | None = None,
 ) -> dict:
-    """Analyze every page first, then build the sheets; the ranking is score-wide."""
+    """Analyze every page first, then build the sheets; the ranking is score-wide.
+
+    When ``score_path`` (a delivered ``.mscz`` or repaired ``.musicxml``) is supplied, the whole
+    delivered score is rendered once with page breaks matching the scan pages so the left column
+    shows the real delivered edition rather than raw per-page OMR output.
+    """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     failures: list[dict] = []
@@ -2169,8 +2474,50 @@ def review_sheets(
             failures.append({"page": page.stem, "code": "page_analysis_failed", "message": str(error)})
             skipped.append({"page": page.stem, "reason": str(error)})
 
+    prerendered_pages: list[dict | None] = [None] * len(analyses)
+    active_render_mode = "raw-pages"
+    score_warnings: list[str] = []
+    if score_path is not None and Path(score_path).is_file() and musescore and analyses:
+        if len(analyses) != len(pages):
+            failures.append(
+                {
+                    "page": "global",
+                    "code": "score_pagination_skipped",
+                    "message": "some pages failed analysis; falling back to per-page rendering",
+                }
+            )
+        else:
+            raw_counts = [analysis["expected"] for _, analysis in analyses]
+            try:
+                delivered_total = score_measure_count(Path(score_path))
+                reconciled, count_notes = reconcile_page_measure_counts(
+                    raw_counts, delivered_total, report_path
+                )
+                if reconciled is None:
+                    message = "; ".join(count_notes)
+                    failures.append(
+                        {"page": "global", "code": "score_measure_count_mismatch", "message": message}
+                    )
+                    score_warnings.append(message + "; falling back to raw per-page MusicXML")
+                else:
+                    score_warnings.extend(count_notes)
+                    rendered_list, render_notes = render_paginated_score(
+                        Path(score_path), reconciled, musescore, out_dir
+                    )
+                    if count_notes and rendered_list:
+                        rendered_list[-1]["warnings"] = (
+                            list(rendered_list[-1].get("warnings") or []) + count_notes
+                        )
+                    prerendered_pages = list(rendered_list)
+                    active_render_mode = rendered_list[0]["render_mode"]
+                    score_warnings.extend(render_notes)
+            except Exception as error:  # noqa: BLE001 - report clearly and keep per-page fallback
+                message = f"delivered score render failed ({error}); falling back to raw per-page MusicXML"
+                failures.append({"page": "global", "code": "score_render_failed", "message": message})
+                score_warnings.append(message)
+
     reports: list[dict] = []
-    for page, analysis in analyses:
+    for (page, analysis), prerendered in zip(analyses, prerendered_pages):
         try:
             report = build_sheet(
                 page,
@@ -2181,6 +2528,7 @@ def review_sheets(
                 yellow_min=yellow_min,
                 width=width,
                 title_source=title_source,
+                prerendered=prerendered,
             )
         except Exception as error:  # noqa: BLE001 - same rule
             failures.append({"page": page.stem, "code": "page_build_failed", "message": str(error)})
@@ -2195,6 +2543,9 @@ def review_sheets(
     overall = status(issue_total, bool(failures or skipped))
     summary = {
         "status": overall,
+        "render_mode": active_render_mode,
+        "score_path": str(score_path) if score_path is not None else None,
+        "warnings": score_warnings,
         "pages": len(reports),
         "requested_pages": len(pages),
         "skipped": len(skipped),
@@ -2214,10 +2565,11 @@ def review_sheets(
             "pages": [{"page": report["page"], "json": report["outputs"]["json"], "image": report["outputs"]["image"]} for report in reports],
         },
     }
+    resolved_title = title or read_score_title(title_source) or read_score_title(score_path)
     combined = write_sheet_pdf(
         [report["outputs"]["image"] for report in reports],
         out_dir / "review-sheets.pdf",
-        title=title or read_score_title(title_source),
+        title=resolved_title,
         source_name=source_name,
         entries=[
             {
@@ -2234,13 +2586,15 @@ def review_sheets(
             }
             for index, report in enumerate(reports, start=1)
         ],
+        render_mode=active_render_mode,
     )
     if combined is not None:
         summary["outputs"]["pdf"] = str(combined)
         summary["pdf_cover"] = {
-            "title": title or read_score_title(title_source),
+            "title": resolved_title,
             "source": source_name,
             "pages": len(reports),
+            "render_mode": active_render_mode,
         }
     write_priority_list(reports, out_dir, summary)
     (out_dir / "review_sheet_summary.json").write_text(

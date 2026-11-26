@@ -27,7 +27,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scorepipe import proof_sheet  # noqa: E402
-from scorepipe.mscz_export import find_musescore  # noqa: E402
+from scorepipe.discovery import find_musescore  # noqa: E402
 
 
 def _stems(directory: Path) -> list[str]:
@@ -79,9 +79,20 @@ def main() -> int:
     parser.add_argument("--scan-dir", type=Path, help="where the page images are, if not beside the MusicXML")
     parser.add_argument("--report", type=Path, help="scorepipe report.json; marks measure-length mismatches with =")
     parser.add_argument(
+        "--score",
+        type=Path,
+        help="delivered score.mscz (preferred) or repaired score.musicxml to render on the left column, "
+        "paginated to match the scan pages (default: auto-discover nearby score.mscz / score.musicxml)",
+    )
+    parser.add_argument(
+        "--raw-pages",
+        action="store_true",
+        help="render each page's raw OMR MusicXML instead of the delivered score (for OMR debugging)",
+    )
+    parser.add_argument(
         "--title-from",
         type=Path,
-        help="merged score.musicxml; its title/credit block is put on the first page before rendering",
+        help="merged score.musicxml (or score.mscz); supplies the cover title (and first-page header in --raw-pages mode)",
     )
     parser.add_argument(
         "--title",
@@ -123,9 +134,29 @@ def main() -> int:
     if not pages:
         parser.error(f"no page MusicXML in {directory}")
 
+    if args.score is not None and args.raw_pages:
+        parser.error("--score and --raw-pages cannot be used together")
+    if args.score is not None and not args.score.is_file():
+        parser.error(f"score file not found: {args.score}")
+
+    score_path = None
+    if not args.raw_pages:
+        if args.score is not None:
+            score_path = args.score
+        else:
+            search_roots = [directory.parent, directory.parent.parent, directory]
+            for filename in ("score.mscz", "score.musicxml"):
+                for root in search_roots:
+                    candidate = root / filename
+                    if candidate.is_file():
+                        score_path = candidate
+                        break
+                if score_path is not None:
+                    break
+
     title_source = args.title_from
     if title_source is None:
-        for candidate in (directory.parent / "score.musicxml", directory / "score.musicxml"):
+        for candidate in (directory.parent / "score.musicxml", directory.parent.parent / "score.musicxml", directory / "score.musicxml"):
             if candidate.is_file():
                 title_source = candidate
                 break
@@ -143,6 +174,7 @@ def main() -> int:
         title_source=title_source,
         title=args.title,
         source_name=args.source_name,
+        score_path=score_path,
     )
     for page in summary["outputs"]["pages"]:
         report = json.loads(Path(page["json"]).read_text(encoding="utf-8"))
@@ -153,7 +185,10 @@ def main() -> int:
         )
     for failure in summary["failures"]:
         print(f"{failure.get('page')}: {failure['code']}: {failure['message']}", file=sys.stderr)
-    print(f"status: {summary['status']} ({summary['pages']}/{summary['requested_pages']} pages)")
+    print(
+        f"status: {summary['status']} ({summary['pages']}/{summary['requested_pages']} pages, "
+        f"mode: {summary.get('render_mode', 'raw-pages')})"
+    )
     print(f"priority list: {summary['outputs']['markdown']}")
     if summary["outputs"].get("pdf"):
         print(f"combined PDF:  {summary['outputs']['pdf']}")
