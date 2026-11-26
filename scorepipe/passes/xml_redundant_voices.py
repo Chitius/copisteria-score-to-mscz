@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from xml.etree import ElementTree
 
+from ..core.directions import direction_insertion_index, direction_onsets, set_direction_offset
 from ..core.document import Document
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
 
@@ -94,6 +95,7 @@ def _pitch(note) -> str | None:
 
 
 def _remove_voice(measure, events: list) -> bool:
+    onsets = direction_onsets(measure)
     elements = {id(event.element) for event in events}
     children = list(measure)
     starts = [0] + [index + 1 for index, child in enumerate(children) if child.tag == "backup"]
@@ -102,12 +104,21 @@ def _remove_voice(measure, events: list) -> bool:
         segment = children[start:end]
         if not any(child.tag == "note" and id(child) in elements for child in segment):
             continue
+        rescued_directions: list[ElementTree.Element] = []
         for child in segment:
+            if child.tag in ("attributes", "print", "sound", "barline"):
+                continue
+            if child.tag == "direction":
+                set_direction_offset(child, onsets.get(id(child), 0))
+                rescued_directions.append(child)
             measure.remove(child)
         if start > 0:
             measure.remove(children[start - 1])
         elif end < len(children):
             measure.remove(children[end])
+        if rescued_directions:
+            insert_at = direction_insertion_index(measure)
+            measure[insert_at:insert_at] = rescued_directions
         return True
     return False
 

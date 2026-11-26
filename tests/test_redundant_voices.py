@@ -59,6 +59,33 @@ class DropRedundantVoicesTest(unittest.TestCase):
         self.assertEqual({event.voice for event in doc.events(doc.measures()[0])}, {"1"})
         self.assertEqual(measure_lengths(doc, Context()), [])
 
+    def test_direction_in_dropped_redundant_voice_is_preserved(self):
+        from scorepipe.core.directions import direction_onsets
+
+        pp = (
+            '<direction placement="below">'
+            "<direction-type><dynamics><pp/></dynamics></direction-type>"
+            "<staff>1</staff></direction>"
+        )
+        body = (
+            note("C", 8)
+            + note("D", 8)
+            + "<backup><duration>16</duration></backup>"
+            + note("C", 8, voice="2")
+            + pp
+            + note("D", 8, voice="2")
+        )
+        doc = build(measure(1, body) + measure(2, note("E")))
+        result = DropRedundantVoices().run(doc, Context())
+        self.assertEqual(result.changed, 1)
+        first = doc.measures()[0]
+        self.assertEqual({event.voice for event in doc.events(first)}, {"1"})
+        directions = first.findall("direction")
+        self.assertEqual(len(directions), 1)
+        self.assertIsNotNone(directions[0].find("direction-type/dynamics/pp"))
+        self.assertEqual(direction_onsets(first)[id(directions[0])], 8)
+        self.assertEqual(directions[0].findtext("offset"), "8")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,7 @@ from __future__ import annotations
 from fractions import Fraction
 from xml.etree import ElementTree
 
+from ..core.directions import direction_onsets, set_direction_offset
 from ..core.document import Document
 from ..core.musescore_ticks import TICKS_PER_WHOLE, duration_parts, legal_ticks_parts
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
@@ -229,6 +230,7 @@ def _protected_blocks(events: list, bar: float, divisions: float, staff: str) ->
 def _replace_staff(
     doc: Document, measure, staff: str, sequence: list, extras: list[list] | None = None
 ) -> None:
+    onsets = direction_onsets(measure)
     children = list(measure)
     segments: list[tuple[list, ElementTree.Element | None]] = []
     current: list = []
@@ -242,10 +244,15 @@ def _replace_staff(
 
     leading_tags = ("attributes", "print", "sound", "barline")
     leading = [child for child in children if child.tag in leading_tags]
+    rescued_directions: list[ElementTree.Element] = []
     other_blocks: list[list] = []
     for position, (segment, _following_backup) in enumerate(segments):
         staffs = {child.findtext("staff") or "1" for child in segment if child.tag == "note"}
         if not staffs or staffs == {staff}:
+            for child in segment:
+                if child.tag == "direction":
+                    set_direction_offset(child, onsets.get(id(child), 0))
+                    rescued_directions.append(child)
             continue
         # keep the whole block (forwards, gaps, directions), not only its notes, otherwise the
         # other staff's onsets move (laputa m31: bass D3 from beat 3 to beat 1)
@@ -269,6 +276,8 @@ def _replace_staff(
     for child in children:
         measure.remove(child)
     for child in leading:
+        measure.append(child)
+    for child in rescued_directions:
         measure.append(child)
     meter = doc.effective_time_signature(measure)
     bar = meter[0] * 4.0 / meter[1]

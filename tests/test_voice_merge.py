@@ -294,6 +294,57 @@ class MergeStaffVoicesTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             _type_for(1.0 / 3.0)
 
+    def test_directions_in_rebuilt_staff_are_preserved_with_exact_onset(self):
+        from scorepipe.core.directions import direction_onsets
+
+        staff_one = (
+            '<note><pitch><step>G</step><octave>4</octave></pitch><duration>16</duration>'
+            "<voice>1</voice><staff>1</staff></note>"
+        )
+        ff = (
+            '<direction placement="above">'
+            "<direction-type><dynamics><ff/></dynamics></direction-type>"
+            "<staff>2</staff></direction>"
+        )
+        mp = (
+            '<direction placement="below">'
+            "<direction-type><dynamics><mp/></dynamics></direction-type>"
+            "<staff>2</staff></direction>"
+        )
+        staff_two = (
+            ff
+            + '<note><pitch><step>C</step><octave>3</octave></pitch><duration>8</duration>'
+            "<voice>1</voice><staff>2</staff></note>"
+            + mp
+            + '<note><pitch><step>D</step><octave>3</octave></pitch><duration>8</duration>'
+            "<voice>1</voice><staff>2</staff></note>"
+            + "<backup><duration>16</duration></backup>"
+            + "<forward><duration>8</duration></forward>"
+            + '<note><pitch><step>E</step><octave>3</octave></pitch><duration>8</duration>'
+            "<voice>2</voice><staff>2</staff></note>"
+        )
+        body = staff_one + "<backup><duration>16</duration></backup>" + staff_two
+        doc = Document(ElementTree.fromstring(PART.format(measures=measure(body) + LAST)))
+        MERGE_STAFF_VOICES.run(doc, Context())
+        first = doc.measures()[0]
+        onsets = direction_onsets(first)
+        by_dyn = {}
+        for direction in first.findall("direction"):
+            dyn = direction.find("direction-type/dynamics")
+            self.assertIsNotNone(dyn)
+            tag = list(dyn)[0].tag
+            by_dyn[tag] = (onsets[id(direction)], direction)
+        self.assertEqual(set(by_dyn), {"ff", "mp"})
+        self.assertEqual(by_dyn["ff"][0], 0)
+        self.assertIsNone(by_dyn["ff"][1].find("offset"))
+        self.assertEqual(by_dyn["ff"][1].findtext("staff"), "2")
+        self.assertEqual(by_dyn["mp"][0], 8)
+        self.assertEqual(by_dyn["mp"][1].findtext("offset"), "8")
+        self.assertEqual(
+            [child.tag for child in by_dyn["mp"][1]],
+            ["direction-type", "offset", "staff"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

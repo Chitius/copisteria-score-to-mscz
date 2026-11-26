@@ -101,6 +101,43 @@ class VoiceLayersTest(unittest.TestCase):
         again = run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, verifiers=[])
         self.assertEqual(again.changes, 0)
 
+    def test_mid_measure_direction_keeps_its_onset_after_rebuild(self):
+        from scorepipe.core.directions import direction_onsets
+        from scorepipe.passes.xml_layers import REBUILD_VOICE_LAYERS
+
+        forte = (
+            '<direction placement="below">'
+            "<direction-type><dynamics><f/></dynamics></direction-type>"
+            "<staff>1</staff></direction>"
+        )
+        piano = (
+            '<direction placement="below">'
+            "<direction-type><dynamics><p/></dynamics></direction-type>"
+            "<staff>1</staff></direction>"
+        )
+        body = (
+            forte
+            + note("C", 4, 4)
+            + piano
+            + note("D", 4, 12)
+            + "<backup><duration>16</duration></backup>"
+            + note("F", 5, 6)
+        )
+        doc = build(measure(1, body) + measure(2, note("G", 4, 16)))
+        result = REBUILD_VOICE_LAYERS.run(doc, Context())
+        self.assertEqual(result.changed, 1)
+        first = doc.measures()[0]
+        onsets = direction_onsets(first)
+        by_dyn = {
+            list(direction.find("direction-type/dynamics"))[0].tag: (onsets[id(direction)], direction)
+            for direction in first.findall("direction")
+        }
+        self.assertEqual(set(by_dyn), {"f", "p"})
+        self.assertEqual(by_dyn["f"][0], 0)
+        self.assertIsNone(by_dyn["f"][1].find("offset"))
+        self.assertEqual(by_dyn["p"][0], 4)
+        self.assertEqual(by_dyn["p"][1].findtext("offset"), "4")
+
 
 if __name__ == "__main__":
     unittest.main()

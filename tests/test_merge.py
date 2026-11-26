@@ -84,6 +84,34 @@ class MergeAlignedVoicesTest(unittest.TestCase):
         pitches = [event.element.findtext("pitch/step") for event in doc.events(doc.measures()[0]) if not event.rest]
         self.assertEqual(sorted(pitches), ["C", "E", "G"])
 
+    def test_direction_in_merged_secondary_voice_is_preserved(self):
+        from scorepipe.core.directions import direction_onsets
+
+        mf = (
+            '<direction placement="below">'
+            "<direction-type><dynamics><mf/></dynamics></direction-type>"
+            "<staff>1</staff></direction>"
+        )
+        body = (
+            note("C", 8)
+            + "<note><chord/><pitch><step>G</step><octave>4</octave></pitch>"
+            "<duration>8</duration><voice>1</voice></note>"
+            + note("D", 8)
+            + "<backup><duration>16</duration></backup>"
+            + note("E", 8, voice="2")
+            + mf
+            + note("F", 8, voice="2")
+        )
+        doc = build(measure(1, body) + measure(2, note("A", 16)))
+        MERGE_ALIGNED_VOICES.run(doc, Context())
+        first = doc.measures()[0]
+        self.assertEqual({event.voice for event in doc.events(first)}, {"1"})
+        directions = first.findall("direction")
+        self.assertEqual(len(directions), 1)
+        self.assertIsNotNone(directions[0].find("direction-type/dynamics/mf"))
+        self.assertEqual(direction_onsets(first)[id(directions[0])], 8)
+        self.assertEqual(directions[0].findtext("offset"), "8")
+
 
 if __name__ == "__main__":
     unittest.main()

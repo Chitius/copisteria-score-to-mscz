@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from xml.etree import ElementTree
 
+from ..core.directions import direction_insertion_index, direction_onsets, set_direction_offset
 from ..core.document import Document
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
 
@@ -101,6 +102,7 @@ def _segments(measure) -> list[list]:
 
 
 def _remove_block(measure, staff: str, voice: str) -> bool:
+    onsets = direction_onsets(measure)
     children = list(measure)
     starts = [0] + [index + 1 for index, child in enumerate(children) if child.tag == "backup"]
     ends = [index for index, child in enumerate(children) if child.tag == "backup"] + [len(children)]
@@ -115,13 +117,21 @@ def _remove_block(measure, staff: str, voice: str) -> bool:
         }
         if keys != {(staff, voice)}:
             continue
+        rescued_directions: list[ElementTree.Element] = []
         for child in segment:
-            if child.tag in ("note", "forward", "location", "direction"):
+            if child.tag == "direction":
+                set_direction_offset(child, onsets.get(id(child), 0))
+                rescued_directions.append(child)
+                measure.remove(child)
+            elif child.tag in ("note", "forward", "location"):
                 measure.remove(child)
         if start > 0 and children[start - 1] in list(measure):
             measure.remove(children[start - 1])
         elif end < len(children) and children[end] in list(measure):
             measure.remove(children[end])
+        if rescued_directions:
+            insert_at = direction_insertion_index(measure)
+            measure[insert_at:insert_at] = rescued_directions
         return True
     return False
 

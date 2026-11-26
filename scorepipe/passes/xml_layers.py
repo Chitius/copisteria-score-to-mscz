@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from xml.etree import ElementTree
 
+from ..core.directions import direction_onsets, set_direction_offset
 from ..core.document import Document
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
 
@@ -70,11 +71,13 @@ def _rebuild(doc: Document, measure) -> bool:
     meter = doc.effective_time_signature(measure)
     bar = meter[0] * 4.0 / meter[1]
     divisions = doc.divisions()
-    leading = [
-        child
-        for child in list(measure)
-        if child.tag in ("attributes", "print", "direction", "sound", "barline")
-    ]
+    onsets = direction_onsets(measure)
+    leading = []
+    for child in list(measure):
+        if child.tag in ("attributes", "print", "direction", "sound", "barline"):
+            if child.tag == "direction":
+                set_direction_offset(child, onsets.get(id(child), 0))
+            leading.append(child)
     by_staff: dict[str, list] = {}
     for event in events:
         if event.rest:
