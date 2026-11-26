@@ -5,6 +5,18 @@
   "type": "object",
   "additionalProperties": true,
   "properties": {
+    "producer": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "pages": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 1}
+        },
+        "pdf_sha256": {"type": "string", "minLength": 1}
+      }
+    },
     "credits": {
       "type": "array",
       "items": {
@@ -73,7 +85,12 @@
           "measure": {"type": "integer", "minimum": 1},
           "beat": {"type": "number", "minimum": 0},
           "staff": {"type": "integer", "minimum": 1},
-          "voice": {"type": "integer", "minimum": 1},
+          "voice": {
+            "oneOf": [
+              {"type": "integer", "minimum": 1},
+              {"type": "string", "minLength": 1}
+            ]
+          },
           "from": {"type": "string", "minLength": 1},
           "to": {"type": "string", "minLength": 1},
           "status": {"type": "string", "enum": ["proposed", "accepted", "rejected"]},
@@ -83,6 +100,23 @@
           "crop": {"type": "string"},
           "evidence": {"type": "string", "minLength": 1},
           "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "unresolved": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "anyOf": [
+          {"required": ["reason"]},
+          {"required": ["note"]}
+        ],
+        "properties": {
+          "page": {"type": "integer", "minimum": 1},
+          "measure": {"type": "integer", "minimum": 1},
+          "reason": {"type": "string", "minLength": 1},
+          "note": {"type": "string", "minLength": 1}
         }
       }
     }

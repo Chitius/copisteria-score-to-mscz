@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
 from xml.etree import ElementTree
 
 from scorepipe.proof_sheet import copy_header
-
-WORK = Path(__file__).parent / ".runs" / "credits"
 
 SOURCE = """<?xml version="1.0"?>
 <score-partwise version="4.0">
@@ -31,21 +30,22 @@ class CreditHeaderTest(unittest.TestCase):
     def test_composer_and_arranger_are_joined_into_one_credit(self):
         # MuseScore puts both right-justified credits on the same baseline, so a separate arranger
         # credit printed on top of the composer one on the sheet's first page.
-        WORK.mkdir(parents=True, exist_ok=True)
-        source = WORK / "score.musicxml"
-        page = WORK / "page1.musicxml"
-        target = WORK / "with-title.musicxml"
-        source.write_text(SOURCE, encoding="utf-8")
-        page.write_text(PAGE, encoding="utf-8")
-        added = copy_header(source, page, target)
-        self.assertEqual(
-            added,
-            [("title", "First Step"), ("subtitle", "Interstellar OST"),
-             ("composer", "Hans Zimmer\nPianiCast")],
-        )
-        root = ElementTree.parse(target).getroot()
-        types = [credit.findtext("credit-type") for credit in root.findall("credit")]
-        self.assertEqual(types, ["title", "subtitle", "composer"])
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            source = work / "score.musicxml"
+            page = work / "page1.musicxml"
+            target = work / "with-title.musicxml"
+            source.write_text(SOURCE, encoding="utf-8")
+            page.write_text(PAGE, encoding="utf-8")
+            added = copy_header(source, page, target)
+            self.assertEqual(
+                added,
+                [("title", "First Step"), ("subtitle", "Interstellar OST"),
+                 ("composer", "Hans Zimmer\nPianiCast")],
+            )
+            root = ElementTree.parse(target).getroot()
+            types = [credit.findtext("credit-type") for credit in root.findall("credit")]
+            self.assertEqual(types, ["title", "subtitle", "composer"])
 
 
 if __name__ == "__main__":

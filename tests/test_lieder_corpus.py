@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -52,35 +53,35 @@ class LiederCorpusTest(unittest.TestCase):
                 self.assertEqual(part["extra"], 0, name)
 
     def test_rest_only_difference_does_not_lower_the_score(self):
-        work = Path(__file__).parent / ".runs" / "rest_score"
-        work.mkdir(parents=True, exist_ok=True)
-        template = (
-            '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
-            '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
-            '<part id="P1"><measure number="1"><attributes><divisions>4</divisions>'
-            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>{body}"
-            "</measure></part></score-partwise>"
-        )
-        ground_truth = work / "gt.musicxml"
-        candidate = work / "candidate.musicxml"
-        ground_truth.write_text(
-            template.format(
-                body="<note><rest/><duration>8</duration><voice>1</voice></note>"
-                '<note><pitch><step>C</step><octave>4</octave></pitch>'
-                "<duration>8</duration><voice>1</voice></note>"
-            ),
-            encoding="utf-8",
-        )
-        candidate.write_text(
-            template.format(
-                body="<note><rest/><duration>4</duration><voice>1</voice></note>"
-                "<note><rest/><duration>4</duration><voice>1</voice></note>"
-                '<note><pitch><step>C</step><octave>4</octave></pitch>'
-                "<duration>8</duration><voice>1</voice></note>"
-            ),
-            encoding="utf-8",
-        )
-        result = load_comparator().compare(ground_truth, candidate)["parts"]["P1"]
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            template = (
+                '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+                '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+                '<part id="P1"><measure number="1"><attributes><divisions>4</divisions>'
+                "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>{body}"
+                "</measure></part></score-partwise>"
+            )
+            ground_truth = work / "gt.musicxml"
+            candidate = work / "candidate.musicxml"
+            ground_truth.write_text(
+                template.format(
+                    body="<note><rest/><duration>8</duration><voice>1</voice></note>"
+                    '<note><pitch><step>C</step><octave>4</octave></pitch>'
+                    "<duration>8</duration><voice>1</voice></note>"
+                ),
+                encoding="utf-8",
+            )
+            candidate.write_text(
+                template.format(
+                    body="<note><rest/><duration>4</duration><voice>1</voice></note>"
+                    "<note><rest/><duration>4</duration><voice>1</voice></note>"
+                    '<note><pitch><step>C</step><octave>4</octave></pitch>'
+                    "<duration>8</duration><voice>1</voice></note>"
+                ),
+                encoding="utf-8",
+            )
+            result = load_comparator().compare(ground_truth, candidate)["parts"]["P1"]
         self.assertEqual(result["match"], 1.0)
         self.assertLess(result["overall_match"], 1.0)
         self.assertGreater(result["rest_missing"] + result["rest_extra"], 0)

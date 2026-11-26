@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import atexit
 import json
 import shutil
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -13,13 +15,10 @@ from scorepipe import proof_sheet
 pytest.importorskip("PIL")
 pytest.importorskip("numpy")
 
-RUNS = Path(__file__).parent / ".runs" / "proof_sheet"
-
 
 def workspace(name: str) -> Path:
-    directory = RUNS / name
-    shutil.rmtree(directory, ignore_errors=True)
-    directory.mkdir(parents=True, exist_ok=True)
+    directory = Path(tempfile.mkdtemp(prefix=f"scorepipe_sheet_{name}_"))
+    atexit.register(shutil.rmtree, directory, ignore_errors=True)
     return directory
 
 

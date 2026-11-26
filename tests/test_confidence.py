@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import atexit
 import json
 import shutil
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -12,14 +14,11 @@ from scorepipe import confidence
 
 pytest.importorskip("PIL")
 
-RUNS = Path(__file__).parent / ".runs" / "confidence"
-
 
 def workspace(name: str) -> Path:
-    """A clean directory under tests/.runs (gitignored), away from the pytest temp root."""
-    directory = RUNS / name
-    shutil.rmtree(directory, ignore_errors=True)
-    directory.mkdir(parents=True, exist_ok=True)
+    """An isolated temporary directory, cleaned up at process exit."""
+    directory = Path(tempfile.mkdtemp(prefix=f"scorepipe_conf_{name}_"))
+    atexit.register(shutil.rmtree, directory, ignore_errors=True)
     return directory
 
 

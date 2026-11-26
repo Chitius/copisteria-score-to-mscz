@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,8 +11,6 @@ from scorepipe.agent_facts import (
     validate_agent_facts,
 )
 from scorepipe.facts import load_facts
-
-WORK = Path(__file__).parent / ".runs" / "agent_facts"
 
 
 def payload(**extra):
@@ -132,25 +131,25 @@ class AgentFactsTest(unittest.TestCase):
         self.assertEqual(validate_agent_facts(normalize_agent_facts(data)), [])
 
     def test_facts_loader_normalizes_agent_payload(self):
-        WORK.mkdir(parents=True, exist_ok=True)
-        path = WORK / "facts.json"
-        path.write_text(
-            json.dumps(
-                payload(
-                    credits=[
-                        {
-                            "type": "composer",
-                            "text": "Original Artist:TRUE",
-                            "page": 1,
-                            "bbox": [1, 2, 3, 4],
-                            "evidence": "credit",
-                        }
-                    ]
-                )
-            ),
-            encoding="utf-8",
-        )
-        loaded = load_facts(path)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "facts.json"
+            path.write_text(
+                json.dumps(
+                    payload(
+                        credits=[
+                            {
+                                "type": "composer",
+                                "text": "Original Artist:TRUE",
+                                "page": 1,
+                                "bbox": [1, 2, 3, 4],
+                                "evidence": "credit",
+                            }
+                        ]
+                    )
+                ),
+                encoding="utf-8",
+            )
+            loaded = load_facts(path)
         self.assertEqual(loaded["credits"][0]["text"], "TRUE")
 
 

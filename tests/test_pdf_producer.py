@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import shutil
+import tempfile
 import unittest
 from pathlib import Path
 
 from scorepipe.producers import resolve
 from scorepipe.producers.pdf import PdfTextProducer, assign_measures, extract_words
-
-WORK = Path(__file__).parent / ".runs" / "pdf"
 
 
 def make_pdf(path: Path, text: str, x: int = 100, y: int = 700) -> None:
@@ -67,20 +66,20 @@ class PdfProducerTest(unittest.TestCase):
         binary = pdftotext_path()
         if binary is None:
             self.skipTest("pdftotext is not available")
-        WORK.mkdir(parents=True, exist_ok=True)
-        pdf = WORK / "one.pdf"
-        make_pdf(pdf, "Allegro")
-        try:
-            words = extract_words(pdf, binary)
-        except RuntimeError as exc:
-            if "Usage:" not in str(exc):
-                raise
-            self.skipTest("pdftotext does not support -bbox; poppler is required")
-        self.assertTrue(any(word["text"] == "Allegro" for word in words), words)
+        with tempfile.TemporaryDirectory() as tmp:
+            pdf = Path(tmp) / "one.pdf"
+            make_pdf(pdf, "Allegro")
+            try:
+                words = extract_words(pdf, binary)
+            except RuntimeError as exc:
+                if "Usage:" not in str(exc):
+                    raise
+                self.skipTest("pdftotext does not support -bbox; poppler is required")
+            self.assertTrue(any(word["text"] == "Allegro" for word in words), words)
 
-        layout = {"pages": [{"page": 1, "measures": [{"number": 3, "x0": 0, "y0": 0, "x1": 612, "y1": 792}]}]}
-        marks = PdfTextProducer(pdf, layout=layout, pdftotext=binary).produce(Path("unused")).marks
-        self.assertTrue(any(mark["measure"] == 3 and mark["text"] == "Allegro" for mark in marks))
+            layout = {"pages": [{"page": 1, "measures": [{"number": 3, "x0": 0, "y0": 0, "x1": 612, "y1": 792}]}]}
+            marks = PdfTextProducer(pdf, layout=layout, pdftotext=binary).produce(Path("unused")).marks
+            self.assertTrue(any(mark["measure"] == 3 and mark["text"] == "Allegro" for mark in marks))
 
     def test_resolve_returns_a_pdf_producer(self):
         self.assertIsInstance(resolve("x.pdf", layout={"pages": []}), PdfTextProducer)

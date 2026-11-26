@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,8 +11,6 @@ from scorepipe.proof_sheet import (
     parse_svg_measures,
     svg_cells_to_panel,
 )
-
-WORK = Path(__file__).parent / ".runs" / "svg"
 
 SVG = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg width="100mm" height="100mm" viewBox="0 0 1000 1000"
@@ -37,10 +36,10 @@ SVG = """<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 
 class SvgParseTest(unittest.TestCase):
     def _parse(self, text: str) -> dict:
-        WORK.mkdir(parents=True, exist_ok=True)
-        path = WORK / "page.svg"
-        path.write_text(text, encoding="utf-8")
-        return parse_svg_measures(path)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "page.svg"
+            path.write_text(text, encoding="utf-8")
+            return parse_svg_measures(path)
 
     def test_systems_come_from_overlapping_staff_barlines(self):
         geometry = self._parse(SVG)

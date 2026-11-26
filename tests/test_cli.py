@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import tempfile
 import unittest
 import zipfile
 from pathlib import Path
@@ -26,9 +27,13 @@ CONTAINER = """<?xml version="1.0" encoding="UTF-8"?>
 
 
 class CliTest(unittest.TestCase):
+    def _work(self) -> Path:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        return Path(tmp.name)
+
     def test_mscz_display_pipeline_runs_end_to_end(self):
-        work = Path(__file__).parent / ".runs" / "cli"
-        work.mkdir(parents=True, exist_ok=True)
+        work = self._work()
         source = work / "in.mscz"
         target = work / "out.mscz"
         with zipfile.ZipFile(source, "w") as archive:
@@ -58,8 +63,7 @@ class CliTest(unittest.TestCase):
         self.assertIn("canonical_voice_order", output)
 
     def test_check_mode_never_writes(self):
-        work = Path(__file__).parent / ".runs" / "cli"
-        work.mkdir(parents=True, exist_ok=True)
+        work = self._work()
         source = work / "check_in.mscz"
         target = work / "check_out.mscz"
         with zipfile.ZipFile(source, "w") as archive:
@@ -74,8 +78,7 @@ class CliTest(unittest.TestCase):
         self.assertFalse(target.exists())
 
     def test_display_failure_is_written_to_final_report(self):
-        work = Path(__file__).parent / ".runs" / "cli"
-        work.mkdir(parents=True, exist_ok=True)
+        work = self._work()
         source = Path(__file__).parent / "fixtures" / "tiny.musicxml"
         output = work / "display_report.musicxml"
         report_path = work / "display_report.json"
@@ -107,8 +110,7 @@ class CliTest(unittest.TestCase):
         self.assertEqual(payload["trace"][-1]["pass"], "mock_display")
 
     def test_tuplet_precedes_pipeline_and_ottava_follows_it(self):
-        work = Path(__file__).parent / ".runs" / "cli"
-        work.mkdir(parents=True, exist_ok=True)
+        work = self._work()
         patch_path = work / "mixed-patches.json"
         patch_path.write_text(
             json.dumps(

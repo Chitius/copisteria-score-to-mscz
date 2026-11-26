@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -32,8 +33,6 @@ class LoaderTest(unittest.TestCase):
         self.assertEqual(len(merged.document.measures()), 4)
 
     def test_pages_are_rescaled_to_one_divisions(self):
-        work = Path(__file__).parent / ".runs" / "loader_divisions"
-        work.mkdir(parents=True, exist_ok=True)
         template = (
             '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
             '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
@@ -43,11 +42,13 @@ class LoaderTest(unittest.TestCase):
             '<duration>{duration}</duration><voice>1</voice></note></measure>'
             "</part></score-partwise>"
         )
-        first = work / "page1.musicxml"
-        second = work / "page2.musicxml"
-        first.write_text(template.format(divisions=4, step="C", duration=4), encoding="utf-8")
-        second.write_text(template.format(divisions=8, step="D", duration=8), encoding="utf-8")
-        merged = merge_pages([first, second])
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            first = work / "page1.musicxml"
+            second = work / "page2.musicxml"
+            first.write_text(template.format(divisions=4, step="C", duration=4), encoding="utf-8")
+            second.write_text(template.format(divisions=8, step="D", duration=8), encoding="utf-8")
+            merged = merge_pages([first, second])
         self.assertEqual(merged.document.divisions(), 8)
         durations = [
             event.duration
@@ -58,13 +59,14 @@ class LoaderTest(unittest.TestCase):
         self.assertEqual(durations, [1.0, 1.0])
 
     def test_cli_accepts_a_page_directory(self):
-        output = Path(__file__).parent / ".runs" / "pages" / "merged.musicxml"
-        buffer = io.StringIO()
-        with contextlib.redirect_stdout(buffer):
-            code = main([str(PAGES), "--check", "-o", str(output)])
-        self.assertEqual(code, 0, buffer.getvalue())
-        self.assertIn("pages: 2 files", buffer.getvalue())
-        self.assertFalse(output.exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "merged.musicxml"
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                code = main([str(PAGES), "--check", "-o", str(output)])
+            self.assertEqual(code, 0, buffer.getvalue())
+            self.assertIn("pages: 2 files", buffer.getvalue())
+            self.assertFalse(output.exists())
 
 
 if __name__ == "__main__":
@@ -87,11 +89,11 @@ class MultiPartPageTest(unittest.TestCase):
         clone_list = ElementTree.fromstring(ElementTree.tostring(score_part))
         clone_list.set("id", "P2")
         root.find("part-list").append(clone_list)
-        target = Path(__file__).parent / ".runs" / "two_parts.musicxml"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        ElementTree.ElementTree(root).write(target, encoding="utf-8", xml_declaration=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "two_parts.musicxml"
+            ElementTree.ElementTree(root).write(target, encoding="utf-8", xml_declaration=True)
 
-        with self.assertRaises(ValueError) as raised:
-            merge_pages([target])
+            with self.assertRaises(ValueError) as raised:
+                merge_pages([target])
         self.assertIn("2 parts", str(raised.exception))
         self.assertIn("silently", str(raised.exception))

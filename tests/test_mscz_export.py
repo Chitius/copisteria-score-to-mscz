@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,7 +11,6 @@ from scorepipe.mscz_export import export_and_display, find_musescore
 from scorepipe.passes import DISPLAY_PASSES, STRUCTURAL_PASSES
 
 FIXTURE = Path(__file__).parent / "fixtures" / "tiny.musicxml"
-WORK = Path(__file__).parent / ".runs" / "mscz"
 
 
 class ExportAndDisplayTest(unittest.TestCase):
@@ -22,20 +22,19 @@ class ExportAndDisplayTest(unittest.TestCase):
 
         from scorepipe.core.document import Document
 
-        WORK.mkdir(parents=True, exist_ok=True)
         doc = Document.load(FIXTURE)
         run_pipeline(doc, Context(), structural=STRUCTURAL_PASSES, verifiers=[])
-        target = WORK / "out.mscz"
-        target.unlink(missing_ok=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "out.mscz"
 
-        report = export_and_display(doc, target, Context(), musescore=musescore)
-        self.assertTrue(target.is_file())
-        self.assertTrue(report.phases[0].stable)
-        self.assertEqual(report.verifier, [])
+            report = export_and_display(doc, target, Context(), musescore=musescore)
+            self.assertTrue(target.is_file())
+            self.assertTrue(report.phases[0].stable)
+            self.assertEqual(report.verifier, [])
 
-        archive = MsczArchive.open(target)
-        again = run_display(archive.document, Context(), DISPLAY_PASSES)
-        self.assertEqual(again.changes, 0)
+            archive = MsczArchive.open(target)
+            again = run_display(archive.document, Context(), DISPLAY_PASSES)
+            self.assertEqual(again.changes, 0)
 
     def test_forced_truncation_is_clean_after_musescore_roundtrip(self):
         try:
@@ -59,14 +58,13 @@ class ExportAndDisplayTest(unittest.TestCase):
                 </score-partwise>"""
             )
         )
-        WORK.mkdir(parents=True, exist_ok=True)
-        target = WORK / "forced.mscz"
-        target.unlink(missing_ok=True)
-        report = export_and_display(
-            doc, target, Context(options={"truncate_overfull": True}), musescore=musescore
-        )
-        self.assertTrue(target.is_file())
-        self.assertEqual(report.verifier, [])
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "forced.mscz"
+            report = export_and_display(
+                doc, target, Context(options={"truncate_overfull": True}), musescore=musescore
+            )
+            self.assertTrue(target.is_file())
+            self.assertEqual(report.verifier, [])
 
 
 if __name__ == "__main__":
