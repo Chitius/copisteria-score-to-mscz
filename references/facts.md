@@ -37,13 +37,31 @@ edits to the score; an inject pass applies them mechanically.
       "gradual": "ritardando",
       "length_measures": 2
     }
+  ],
+  "parts": [
+    {
+      "part": "P1",
+      "name": "Acoustic Guitar",
+      "abbreviation": "Guit.",
+      "instrument": "acoustic-guitar"
+    },
+    {
+      "part": "P4",
+      "name": "Drumset",
+      "abbreviation": "D. Set",
+      "instrument": "drumset"
+    }
   ]
 }
 ```
 
 `measure` is 1-based; `beat` is 0-based in quarter-note beats within the measure. `placement` is
 `above` or `below`. Tempo-notation text such as `q = 72` is injected once with a `<sound tempo>`,
-not duplicated as a metronome glyph.
+not duplicated as a metronome glyph. For multi-`<part>` scores (experimental), `marks` accepts an
+optional `"part"` ID (defaults to the first part) and `parts` injects per-part `<part-name>`,
+`<part-abbreviation>`, `<instrument-sound>`, and GM `<midi-program>` / `<midi-channel>` (using a
+preset `"instrument"` key from `schemas/facts.schema.json` or explicit `"sound"` /
+`"midi_program"` / `"midi_channel"`; percussion parts preserve per-drum `<midi-unpitched>` bindings).
 
 `gradual` marks a printed `rit.`/`rall.`/`accel.`/`string.`/`allarg.` word. Without it the word is
 injected as plain staff text; with it the display pass `upgrade_gradual_texts` replaces the text

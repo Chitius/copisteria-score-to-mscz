@@ -84,7 +84,7 @@ python -m scorepipe.cli path/to/pages -o out/score/score.musicxml \
 - MuseScore 4 可用于 `.mscz`/PDF；只做 MusicXML 时可以不渲染；
 - poppler 的 `pdfinfo`、`pdftoppm` 可用于页数统计和视觉复核。
 
-确认 PDF 版本、页数、标题/作曲/编曲，以及是否为**单 `<part>` 乐谱**（双谱表钢琴或单行器乐/声乐；声乐+钢琴等多 `<part>` 乐谱目前会被 `scorepipe` 拒绝，遇到应先告知用户，不要盲跑），同时记录弱起、反复、移调乐器等已知信息。原始 PDF 只读。
+确认 PDF 版本、页数、标题/作曲/编曲，以及谱表结构：单 `<part>` 乐谱（双谱表钢琴或单行器乐/声乐）为稳定主力场景；**多 `<part>` 乐谱（实验性）**（如声乐+钢琴、室内乐、乐队总谱）现已支持整谱合并、逐声部修复/截断、单谱表架子鼓自动 GM 鼓键与镲片 `x` 符头归一化，以及 `facts.json` 的 `parts` 乐器注入，但仍属实验性能力，处理前应先告知用户实验性边界，并注意中文/非西文乐器标签需通过 `facts.json` 的 `parts` 显式补齐。同时记录弱起、反复、移调乐器等已知信息。原始 PDF 只读。
 
 ### 2. 逐页 OMR 与机械修复
 
@@ -96,8 +96,8 @@ python -m scorepipe.cli path/to/pages -o out/score/score.musicxml \
 ### 3. 收集 facts 与受限 patch
 
 文字层只是 producer，不是 ground truth。添加 facts 前读
-[`references/facts.md`](references/facts.md)。每条 credit/mark 必须有 `page`、`evidence` 和
-`bbox`/`crop`；`rit.`、`rall.`、`accel.` 等渐进速度术语还必须提供 `gradual`。
+[`references/facts.md`](references/facts.md)。每条 credit/mark/part 必须有 `page`、`evidence` 和
+`bbox`/`crop`；`rit.`、`rall.`、`accel.` 等渐进速度术语还必须提供 `gradual`；多 `<part>` 乐谱可通过 `parts` 指定各声部名称、简称与乐器预设/GM 音色。
 
 ```bash
 python scripts/agent_facts.py prepare --pdf "score.pdf" --outdir review/facts

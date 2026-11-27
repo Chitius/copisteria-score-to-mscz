@@ -136,13 +136,14 @@ python -m scorepipe.cli "out/score/work/copisteria" -o "out/score/score.musicxml
 
 ## facts、patch 与 AI 助手
 
-- **facts**：注入标题、作曲、速度、排练号等明确事实；每项都应带页码和证据。准备与校验流程见 [`references/facts.md`](references/facts.md)。
-- **notation patch**：用音符锚点补入证据充分的 8va/8vb、连音组或谱号修正；范围不确定时保留为未决，不自动扩张。见 [`references/notation-patches.md`](references/notation-patches.md)。
+- **facts**：注入标题、作曲、速度、排练号以及多声部乐器元数据（`parts`：声部名、简称、乐器预设或 GM 音色）等明确事实；每项都应带页码和证据。准备与校验流程见 [`references/facts.md`](references/facts.md)。
+- **notation patch**：用音符锚点补入证据充分的 8va/8vb、连音组或谱号修正（支持按 `part` 定位）；范围不确定时保留为未决，不自动扩张。见 [`references/notation-patches.md`](references/notation-patches.md)。
 - **AI 助手**：本仓库同时提供 [`SKILL.md`](SKILL.md)，约束助手完成环境检查、逐页 OMR、证据收集、复核和交付。助手可以提出修正，但不能自行把提案当作已接受结果。
 
 ## 适用范围与限制
 
-- 面向**印刷五线谱**，目前支持**单 `<part>` 乐谱**（以双谱表钢琴谱和单行旋律为主）；多 `<part>` 乐谱（如声乐 + 钢琴艺术歌曲、弦乐四重奏、乐队总谱）目前需先按声部拆分，整谱多 part 合并尚未支持；手写谱、简谱、六线谱不属于已验证场景。
+- 面向**印刷五线谱**，稳定主力场景为**单 `<part>` 乐谱**（双谱表钢琴谱与单行旋律）。
+- **多 `<part>` 乐谱（实验性）**：已实验性支持声乐 + 钢琴艺术歌曲、小型室内乐与乐队总谱的整谱合并、逐声部修复/截断、单谱表架子鼓 GM 鼓键与镲片 `x` 符头自动映射，以及通过 `facts.json` 注入各声部乐器音色；但跨页声部对齐、复杂打击乐连音与中文乐器标签等场景仍处于实验阶段，需结合 `review-sheets.pdf` 人工复核。手写谱、简谱、六线谱不属于已验证场景。
 - OMR 仍可能产生八度、加线、声部、休止符和密集和弦错误。结构校验通过不代表音高正确，**人工核对不可省略**。
 - 踏板、hairpin、可选音符括号等记号不能可靠地自动进入交付；缺失项应明确记录，不靠猜测补齐。
 - 8va/8vb 需要证据充分且经接受的 patch；无法确定覆盖范围时保持未决。
