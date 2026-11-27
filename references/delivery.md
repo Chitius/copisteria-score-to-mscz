@@ -73,8 +73,13 @@ Before saying "done":
 
 When `--mscz-out` is requested, `report.json` combines structural, inject and display phases, traces,
 analysis and verifier violations. A failed run may still leave draft MSCZ/PDF artifacts for review;
-`delivery.json` records `ready`, `pipeline_exit` and `render_exit`. Draft artifacts do not make a failed
-run deliverable.
+`delivery.json` records `ready`, `pipeline_exit`, `reviewed_pipeline_exit` and `render_exit`. Draft
+artifacts do not make a failed run deliverable.
+
+`pipeline_exit` is the exit code of the run that produced the root artifacts: the reviewed run, or
+the forced-truncation run once that copy ships. `reviewed_pipeline_exit` is always the untruncated
+reviewed run's code, so a report whose delivery is the trimmed copy cannot hide a reviewed failure.
+The same split appears in `review-report.json`, together with `reviewed_verifier_codes`.
 
 - `stable=false`: a pass did not reach a fixed point. Do not deliver until understood.
 - `verifier` non-empty: structural or display problem. Treat as a blocker unless the user accepts

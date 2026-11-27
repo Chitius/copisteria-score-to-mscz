@@ -427,5 +427,126 @@ class TimingReportTest(_TempWorkMixin, unittest.TestCase):
         self.assertEqual([item["measure"] for item in delta["resolved"]], [16])
 
 
+class ReviewLengthToleranceTest(_TempWorkMixin, unittest.TestCase):
+    """A reviewed tree that only complains about length is repaired by the editable copy.
+
+    Gurenge m42/m76 produced a one-voice overfull bar *and* a short tuplet inside it; the forced
+    copy trims/retimes both, so the delivery must not be blocked and the reviewed exit must stay
+    visible in its own field.
+    """
+
+    TRUNCATION_NOTE = "m12 staff 1: 4.25->4 beats; remove 0.25"
+
+    def _run(self, reviewed_verifier):
+        work = self._work("review_length")
+        pages = work / "pages"
+        pages.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(FIXTURE, pages / "page1.musicxml")
+        facts = work / "facts"
+        facts.mkdir(parents=True, exist_ok=True)
+        (facts / "agent-page1.json").write_text(
+            json.dumps({"producer": {"name": "agent-visual", "pages": [1]}}),
+            encoding="utf-8",
+        )
+        source = work / "source.pdf"
+        source.write_bytes(b"draft")
+        outdir = work / "out"
+
+        def fake_run(command, cwd):
+            if any("review_sheet.py" in part for part in command):
+                return 0
+            if "scorepipe.cli" in command:
+                musicxml = Path(command[command.index("-o") + 1])
+                musicxml.parent.mkdir(parents=True, exist_ok=True)
+                musicxml.write_text("musicxml", encoding="utf-8")
+                report_path = Path(command[command.index("--report") + 1])
+                if "--truncate-overfull" in command:
+                    report_path.write_text(
+                        json.dumps(
+                            {
+                                "verifier": [],
+                                "trace": [
+                                    {
+                                        "pass": "truncate_overfull_mscx",
+                                        "notes": [self.TRUNCATION_NOTE],
+                                    }
+                                ],
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                    Path(command[command.index("--mscz-out") + 1]).write_bytes(b"mscz")
+                    return 0
+                report_path.write_text(
+                    json.dumps({"verifier": reviewed_verifier}), encoding="utf-8"
+                )
+                if "--mscz-out" in command:
+                    Path(command[command.index("--mscz-out") + 1]).write_bytes(b"mscz")
+                return 1
+            Path(command[command.index("-o") + 1]).write_bytes(b"pdf")
+            return 0
+
+        with (
+            patch.object(review_script, "_pdf_pages", return_value=1),
+            patch.object(review_script, "_render_pages", return_value=1),
+            patch.object(review_script, "find_musescore", return_value="musescore"),
+            patch.object(review_script, "_run", side_effect=fake_run),
+        ):
+            code = review_script.main(
+                [
+                    str(source),
+                    "--pages",
+                    str(pages),
+                    "--facts-dir",
+                    str(facts),
+                    "--outdir",
+                    str(outdir),
+                    "--musescore",
+                    "musescore",
+                ]
+            )
+        report = json.loads((outdir / "review-report.json").read_text(encoding="utf-8"))
+        delivery = json.loads((outdir / "delivery.json").read_text(encoding="utf-8"))
+        return code, report, delivery
+
+    def test_measure_and_tuplet_length_findings_are_tolerated(self):
+        code, report, delivery = self._run(
+            [
+                {"code": "mscx-measure-length", "measure": 42, "detail": "voice 4.3 beats"},
+                {"code": "mscx-tuplet-length", "measure": 42, "detail": "tuplet 0.5/0.75"},
+                {"code": "mscx-tuplet-length", "measure": 76, "detail": "tuplet 0.5/0.75"},
+            ]
+        )
+
+        self.assertEqual(code, 0)
+        self.assertTrue(report["ready"], report["blockers"])
+        self.assertEqual(report["blockers"], [])
+        # the shipped artifacts come from the forced copy, but the reviewed failure stays visible
+        self.assertEqual(report["pipeline_exit"], 0)
+        self.assertEqual(report["reviewed_pipeline_exit"], 1)
+        self.assertEqual(delivery["reviewed_pipeline_exit"], 1)
+        self.assertEqual(
+            report["reviewed_verifier_codes"], ["mscx-measure-length", "mscx-tuplet-length"]
+        )
+        finding = next(text for text in report["findings"] if "length complaints" in text)
+        self.assertIn("mscx-measure-length", finding)
+        self.assertIn("mscx-tuplet-length", finding)
+
+    def test_a_non_length_finding_still_blocks_and_keeps_both_exits(self):
+        code, report, delivery = self._run(
+            [
+                {"code": "mscx-measure-length", "measure": 42, "detail": "voice 4.3 beats"},
+                {"code": "duplicate-tie", "measure": 12, "detail": "2x tie start"},
+            ]
+        )
+
+        self.assertNotEqual(code, 0)
+        self.assertFalse(report["ready"])
+        self.assertEqual(report["blockers"], ["reviewed pipeline exited 1"])
+        self.assertEqual(report["pipeline_exit"], 0)
+        self.assertEqual(report["reviewed_pipeline_exit"], 1)
+        self.assertEqual(delivery["reviewed_pipeline_exit"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

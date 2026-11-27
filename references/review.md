@@ -101,7 +101,9 @@ review/score/
 `mechanical/` is the pipeline output without agent facts or patches. It is the comparison/baseline
 artifact, not an alternative final delivery. `review-report.json` records page coverage, missing
 pages, unresolved claims, corrections, patch count, the mechanical baseline exits and artifact
-paths, plus a `findings` list for non-blocking problems (a dirty baseline, for example).
+paths, plus a `findings` list for non-blocking problems (a dirty baseline, for example). It also
+keeps `reviewed_pipeline_exit` and `reviewed_verifier_codes` beside `pipeline_exit`, because
+`pipeline_exit` follows the root artifacts once the forced copy ships.
 `timing-report.json` compares `measure-length` / `mscx-measure-length` findings between the
 mechanical baseline and the reviewed output, with `introduced` and `resolved` lists. It reports
 `available: false` instead of inventing deltas when one of the two runs did not produce a report.

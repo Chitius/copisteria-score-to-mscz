@@ -20,6 +20,7 @@ from .helpers import (
     _timing_report,
     _truncation_notes,
     _truncation_performed,
+    _verifier_codes,
     _verifier_count,
     _write,
 )
@@ -263,7 +264,12 @@ def run_reviewed_pipeline(
             command.extend(["--musescore", str(musescore)])
     reviewed_exit = hooks.run(command, root)
     reviewed_only_overfull = _only_overfull_violations(report_json)
+    # ``pipeline_exit`` describes the run that produced the root artifacts.  When the editable
+    # copy ships, promote_forced_truncation overwrites it with the forced exit, so the reviewed
+    # (semantic) exit is kept separately instead of being lost.
     report["pipeline_exit"] = reviewed_exit
+    report["reviewed_pipeline_exit"] = reviewed_exit
+    report["reviewed_verifier_codes"] = _verifier_codes(report_json)
     report["artifacts"].update({"musicxml": str(musicxml), "report": str(report_json)})
     if mscz:
         report["artifacts"]["mscz"] = str(mscz)

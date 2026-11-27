@@ -152,14 +152,17 @@ def run_review(
             and reviewed_only_overfull
         )
         if tolerated:
+            codes = ", ".join(report.get("reviewed_verifier_codes") or []) or "length findings"
             report["findings"].append(
-                "reviewed (untruncated) tree reported overfull voices only; "
-                "the editable delivery trims them"
+                "reviewed (untruncated) tree reported length complaints only "
+                f"({codes}); the editable delivery trims/retimes them"
             )
             report["ready"] = not report["blockers"]
         else:
             report["ready"] = False
-            report["blockers"].append(f"pipeline exited {reviewed_exit}")
+            # ``pipeline_exit`` may already be the delivered (forced) run's exit once that copy
+            # shipped, so name the failing tree explicitly instead of just "pipeline exited N".
+            report["blockers"].append(f"reviewed pipeline exited {reviewed_exit}")
 
     if not args.no_sheets:
         run_proof_sheets(
@@ -184,6 +187,7 @@ def run_review(
             "source_pdf": report.get("source_pdf"),
             "artifacts_missing": report.get("artifacts_missing"),
             "pipeline_exit": report.get("pipeline_exit"),
+            "reviewed_pipeline_exit": report.get("reviewed_pipeline_exit"),
             "render_exit": report.get("render_exit"),
             "artifacts": report.get("artifacts"),
             "semantic_authority": report.get("semantic_authority", True),
