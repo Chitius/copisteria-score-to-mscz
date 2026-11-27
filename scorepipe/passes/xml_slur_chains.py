@@ -26,78 +26,85 @@ class MergeAdjacentSlurs:
     )
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
-        endpoints = _collect_slurs(doc)
-        pairs = pair_endpoints(endpoints).pairs
-        if len(pairs) < 2:
-            return PassResult()
-
-        all_starts: dict[int, list[int]] = defaultdict(list)
-        all_stops: dict[int, list[int]] = defaultdict(list)
-        for endpoint in endpoints:
-            note = id(endpoint.payload[1].element)
-            if endpoint.kind == "start":
-                all_starts[note].append(id(endpoint))
-            else:
-                all_stops[note].append(id(endpoint))
-
-        starts: dict[int, list[int]] = defaultdict(list)
-        stops: dict[int, list[int]] = defaultdict(list)
-        for index, (start, stop) in enumerate(pairs):
-            starts[id(start.payload[1].element)].append(index)
-            stops[id(stop.payload[1].element)].append(index)
-
-        links: dict[int, int] = {}
-        for index, (_start, stop) in enumerate(pairs):
-            note = id(stop.payload[1].element)
-            if len(starts[note]) != 1 or len(stops[note]) != 1:
-                continue
-            if len(all_starts[note]) != 1 or len(all_stops[note]) != 1:
-                continue
-            following = starts[note][0]
-            if following == index or following in links:
-                continue
-            next_start = pairs[following][0].payload[1]
-            if next_start.staff != stop.payload[1].staff or next_start.voice != stop.payload[1].voice:
-                continue
-            links[index] = following
-
-        incoming = {target for target in links.values()}
-        chains: list[list[int]] = []
-        visited: set[int] = set()
-        for index in range(len(pairs)):
-            if index in incoming or index in visited:
-                continue
-            chain = []
-            current = index
-            while current not in visited:
-                visited.add(current)
-                chain.append(current)
-                current = links.get(current, -1)
-                if current == -1:
-                    break
-            if len(chain) > 1:
-                chains.append(chain)
-
         changed = 0
-        for chain in chains:
-            first_start = pairs[chain[0]][0]
-            last_stop = pairs[chain[-1]][1]
-            number = _free_slur_number(doc, first_start.payload[1].staff)
-            if number is None:
-                continue
-            for index in chain:
-                start, stop = pairs[index]
-                _remove_slur(start.payload[1].element, start.payload[2])
-                _remove_slur(stop.payload[1].element, stop.payload[2])
-            _add_slur(first_start.payload[1].element, "start", number)
-            _add_slur(last_stop.payload[1].element, "stop", number)
-            changed += 1
+        for _part_id, part in doc.iter_parts():
+            changed += _merge_part_slurs(doc, part)
         return PassResult(changed=changed)
 
 
-def _collect_slurs(doc: Document) -> list[Endpoint]:
+def _merge_part_slurs(doc: Document, part: ElementTree.Element) -> int:
+    endpoints = _collect_slurs(doc, part)
+    pairs = pair_endpoints(endpoints).pairs
+    if len(pairs) < 2:
+        return 0
+
+    all_starts: dict[int, list[int]] = defaultdict(list)
+    all_stops: dict[int, list[int]] = defaultdict(list)
+    for endpoint in endpoints:
+        note = id(endpoint.payload[1].element)
+        if endpoint.kind == "start":
+            all_starts[note].append(id(endpoint))
+        else:
+            all_stops[note].append(id(endpoint))
+
+    starts: dict[int, list[int]] = defaultdict(list)
+    stops: dict[int, list[int]] = defaultdict(list)
+    for index, (start, stop) in enumerate(pairs):
+        starts[id(start.payload[1].element)].append(index)
+        stops[id(stop.payload[1].element)].append(index)
+
+    links: dict[int, int] = {}
+    for index, (_start, stop) in enumerate(pairs):
+        note = id(stop.payload[1].element)
+        if len(starts[note]) != 1 or len(stops[note]) != 1:
+            continue
+        if len(all_starts[note]) != 1 or len(all_stops[note]) != 1:
+            continue
+        following = starts[note][0]
+        if following == index or following in links:
+            continue
+        next_start = pairs[following][0].payload[1]
+        if next_start.staff != stop.payload[1].staff or next_start.voice != stop.payload[1].voice:
+            continue
+        links[index] = following
+
+    incoming = {target for target in links.values()}
+    chains: list[list[int]] = []
+    visited: set[int] = set()
+    for index in range(len(pairs)):
+        if index in incoming or index in visited:
+            continue
+        chain = []
+        current = index
+        while current not in visited:
+            visited.add(current)
+            chain.append(current)
+            current = links.get(current, -1)
+            if current == -1:
+                break
+        if len(chain) > 1:
+            chains.append(chain)
+
+    changed = 0
+    for chain in chains:
+        first_start = pairs[chain[0]][0]
+        last_stop = pairs[chain[-1]][1]
+        number = _free_slur_number(doc, part, first_start.payload[1].staff)
+        if number is None:
+            continue
+        for index in chain:
+            start, stop = pairs[index]
+            _remove_slur(start.payload[1].element, start.payload[2])
+            _remove_slur(stop.payload[1].element, stop.payload[2])
+        _add_slur(first_start.payload[1].element, "start", number)
+        _add_slur(last_stop.payload[1].element, "stop", number)
+        changed += 1
+    return changed
+
+
+def _collect_slurs(doc: Document, part: ElementTree.Element) -> list[Endpoint]:
     endpoints: list[Endpoint] = []
-    for number, measure in doc.iter_measures():
+    for number, measure in enumerate(doc.part_measures(part), start=1):
         for event in doc.events(measure):
             if event.rest:
                 continue
@@ -121,13 +128,12 @@ def _collect_slurs(doc: Document) -> list[Endpoint]:
 
 
 def _remove_slur(note, slur) -> None:
-    notations = note.find("notations")
-    if notations is None:
-        return
-    if slur in list(notations):
-        notations.remove(slur)
-    if len(notations) == 0:
-        note.remove(notations)
+    for notations in list(note.findall("notations")):
+        if slur in list(notations):
+            notations.remove(slur)
+            if len(notations) == 0:
+                note.remove(notations)
+            return
 
 
 def _add_slur(note, kind: str, number: str) -> None:
@@ -142,10 +148,10 @@ def _add_slur(note, kind: str, number: str) -> None:
     ElementTree.SubElement(notations, "slur", {"type": kind, "number": number})
 
 
-def _free_slur_number(doc: Document, staff: str) -> str | None:
+def _free_slur_number(doc: Document, part: ElementTree.Element, staff: str) -> str | None:
     used = {
         slur.get("number") or "1"
-        for _number, measure in doc.iter_measures()
+        for measure in doc.part_measures(part)
         for note in measure.iter("note")
         if (note.findtext("staff") or "1") == staff
         for slur in note.findall("notations/slur")

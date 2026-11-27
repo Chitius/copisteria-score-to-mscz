@@ -35,7 +35,7 @@ class NormalizeGraceNotes:
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
         changed = 0
-        for _number, measure in doc.iter_measures():
+        for _part_id, _part, _number, measure in doc.iter_part_measures():
             for note in measure.iter("note"):
                 if note.find("grace") is None:
                     continue

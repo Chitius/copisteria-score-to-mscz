@@ -116,6 +116,7 @@ class JsonSchemaContractTest(unittest.TestCase):
             "patches": [
                 {
                     "op": "ottava",
+                    "part": "P2",
                     "subtype": "8vb",
                     "staff": 2,
                     "start": {"measure": 1, "beat": 0},

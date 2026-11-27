@@ -36,12 +36,11 @@ NOTE_TYPE_BEATS = {
 }
 
 
-def score_map(doc: Document) -> dict:
-    """Stable note anchors for an agent choosing patch start/end positions."""
+def _part_score_map(doc: Document, part: ElementTree.Element) -> list[dict]:
     measures = []
-    for number, measure in doc.iter_measures():
+    for number, measure in enumerate(doc.part_measures(part), start=1):
         staves: dict[str, list[dict]] = {}
-        for event in doc.events(measure):
+        for event in doc.events(measure, doc.effective_divisions(measure, part)):
             if event.rest:
                 continue
             note = event.element
@@ -64,7 +63,32 @@ def score_map(doc: Document) -> dict:
                 }
             )
         measures.append({"number": number, "staves": staves})
-    return {"measures": measures}
+    return measures
+
+
+def score_map(doc: Document) -> dict:
+    """Stable note anchors for an agent choosing patch start/end positions."""
+    parts = list(doc.iter_parts())
+    if len(parts) <= 1:
+        return {"measures": _part_score_map(doc, parts[0][1]) if parts else []}
+    by_part = {part_id: {"measures": _part_score_map(doc, part)} for part_id, part in parts}
+    return {"measures": by_part[parts[0][0]]["measures"], "parts": by_part}
+
+
+def _resolve_patch_part(
+    patch: dict, doc: Document | None, prefix: str
+) -> tuple[str | None, ElementTree.Element | None, list[str]]:
+    part_id = patch.get("part")
+    if part_id is not None and (not isinstance(part_id, str) or not part_id.strip()):
+        return None, None, [f"{prefix}: part must be a non-empty string"]
+    if doc is None:
+        return part_id, None, []
+    try:
+        part = doc.part_by_id(part_id)
+    except ValueError:
+        return part_id, None, [f"{prefix}: unknown part {part_id!r}"]
+    resolved_id = part.get("id") or "P1"
+    return resolved_id, part, []
 
 
 def load_patches(path: str | Path | None) -> dict:
@@ -114,9 +138,7 @@ def validate_patches(
 
 def apply_patches(doc: Document, payload: dict) -> int:
     """Apply validated patches; return directions written plus tuplet spans rewritten."""
-    divisions = doc.divisions()
-    measures = doc.measures()
-    next_number = _next_octave_number(doc)
+    next_number_by_part: dict[str, int] = {}
     patches = payload.get("patches") or []
     # Select every range before deleting forwards or changing durations shifts later onsets.
     tuplet_plans = {
@@ -133,17 +155,21 @@ def apply_patches(doc: Document, payload: dict) -> int:
         if patch.get("op") == "clef":
             changed += _apply_clef(doc, patch)
             continue
+        part_id, part, _problems = _resolve_patch_part(patch, doc, f"patches[{index}]")
+        assert part is not None and part_id is not None
+        measures = doc.part_measures(part)
         start = patch["start"]
         end = patch["end"]
         subtype = patch["subtype"]
         staff = str(patch["staff"])
         mode = patch.get("mode") or "add"
         if mode in ("replace", "remove"):
-            changed += remove_octave_shifts(doc, staff)
+            changed += remove_octave_shifts(doc, staff, part_id=part_id)
         if mode == "remove":
             continue
+        next_number = next_number_by_part.setdefault(part_id, _next_octave_number(doc, part_id))
         number = str(patch.get("number") or next_number)
-        next_number += 1
+        next_number_by_part[part_id] = next_number + 1
         start_measure = measures[start["measure"] - 1]
         end_measure = measures[end["measure"] - 1]
         _insert_octave(
@@ -153,7 +179,7 @@ def apply_patches(doc: Document, payload: dict) -> int:
             "start",
             OTTAAVA_SUBTYPES[subtype],
             number,
-            divisions,
+            doc.effective_divisions(start_measure, part),
         )
         _insert_octave(
             end_measure,
@@ -162,7 +188,7 @@ def apply_patches(doc: Document, payload: dict) -> int:
             "stop",
             OTTAAVA_SUBTYPES[subtype],
             number,
-            divisions,
+            doc.effective_divisions(end_measure, part),
         )
         changed += 2
     return changed
@@ -176,7 +202,9 @@ def _validate_ottava(
         status = patch.get("status")
         if status not in (None, "accepted"):
             problems.append(f"{prefix}: ottava patch must be accepted before apply")
-    measure_count = len(doc.measures()) if doc is not None else None
+    _part_id, part, part_problems = _resolve_patch_part(patch, doc, prefix)
+    problems.extend(part_problems)
+    measure_count = len(doc.part_measures(part)) if doc is not None and part is not None else None
     if patch.get("mode") not in (None, "add", "replace", "remove"):
         problems.append(f"{prefix}: mode must be add/replace/remove")
     if patch.get("subtype") not in OTTAAVA_SUBTYPES:
@@ -260,11 +288,13 @@ def _validate_tuplet(
         problems.append(f"{prefix}: bbox or crop evidence is required")
     if not isinstance(patch.get("evidence"), str) or not patch["evidence"]:
         problems.append(f"{prefix}: evidence is required")
+    _part_id, part, part_problems = _resolve_patch_part(patch, doc, prefix)
+    problems.extend(part_problems)
     if doc is None:
         problems.append(f"{prefix}: tuplet validation requires a document")
         return None, problems
-    if _positive_integer(patch.get("measure")) and patch["measure"] > len(doc.measures()):
-        problems.append(f"{prefix}: measure exceeds {len(doc.measures())}")
+    if part is not None and _positive_integer(patch.get("measure")) and patch["measure"] > len(doc.part_measures(part)):
+        problems.append(f"{prefix}: measure exceeds {len(doc.part_measures(part))}")
     if problems:
         return None, problems
     return _select_tuplet(patch, doc, prefix)
@@ -273,10 +303,14 @@ def _validate_tuplet(
 def _select_tuplet(patch: dict, doc: Document, prefix: str) -> tuple[dict | None, list[str]]:
     """Resolve a complete segment and check its new durations without changing the tree."""
     problems: list[str] = []
-    measure = doc.measures()[patch["measure"] - 1]
+    _part_id, part, part_problems = _resolve_patch_part(patch, doc, prefix)
+    if part_problems or part is None:
+        return None, part_problems
+    measure = doc.part_measures(part)[patch["measure"] - 1]
     staff = str(patch["staff"])
     voice = patch["voice"]
-    events = doc.events(measure)
+    active_divisions = doc.effective_divisions(measure, part)
+    events = doc.events(measure, active_divisions)
     voice_events = [event for event in events if event.staff == staff and event.voice == voice]
     groups: list[list] = []
     for event in voice_events:
@@ -334,7 +368,7 @@ def _select_tuplet(patch: dict, doc: Document, prefix: str) -> tuple[dict | None
             problems.append(f"{prefix}: every note must have a type")
 
     _check_existing_tuplets(voice_events, selected_groups, prefix, problems)
-    divisions = Fraction(str(doc.divisions()))
+    divisions = Fraction(str(active_divisions))
     actual = patch["actual_notes"]
     normal = patch["normal_notes"]
     durations = []
@@ -491,10 +525,13 @@ def _integer_text(element, path: str) -> int | None:
 
 def _validate_clef(patch: dict, doc: Document | None, prefix: str) -> list[str]:
     problems: list[str] = []
+    _part_id, part, part_problems = _resolve_patch_part(patch, doc, prefix)
+    problems.extend(part_problems)
+    measure_count = len(doc.part_measures(part)) if doc is not None and part is not None else None
     if not _positive_integer(patch.get("measure")):
         problems.append(f"{prefix}: measure must be a positive integer")
-    elif doc is not None and patch["measure"] > len(doc.measures()):
-        problems.append(f"{prefix}: measure exceeds {len(doc.measures())}")
+    elif measure_count is not None and patch["measure"] > measure_count:
+        problems.append(f"{prefix}: measure exceeds {measure_count}")
     if not _positive_integer(patch.get("staff")):
         problems.append(f"{prefix}: staff must be a positive integer")
     if patch.get("clef") not in CLEF_SIGNS:
@@ -507,8 +544,8 @@ def _validate_clef(patch: dict, doc: Document | None, prefix: str) -> list[str]:
     if from_measure is not None:
         if not _positive_integer(from_measure):
             problems.append(f"{prefix}: from_measure must be a positive integer")
-        elif doc is not None and from_measure > len(doc.measures()):
-            problems.append(f"{prefix}: from_measure exceeds {len(doc.measures())}")
+        elif measure_count is not None and from_measure > measure_count:
+            problems.append(f"{prefix}: from_measure exceeds {measure_count}")
         elif from_measure == patch.get("measure"):
             problems.append(f"{prefix}: from_measure must differ from measure")
     if not _positive_integer(patch.get("page")):
@@ -521,7 +558,9 @@ def _validate_clef(patch: dict, doc: Document | None, prefix: str) -> list[str]:
 
 
 def _apply_clef(doc: Document, patch: dict) -> int:
-    measures = doc.measures()
+    _part_id, part, _problems = _resolve_patch_part(patch, doc, "clef")
+    assert part is not None
+    measures = doc.part_measures(part)
     staff = str(patch["staff"])
     changed = 0
     from_measure = patch.get("from_measure")
@@ -571,13 +610,16 @@ def _remove_staff_clefs(measure, staff: str, sign: str | None = None) -> int:
     return removed
 
 
-def list_clefs(doc: Document) -> list[dict]:
+def list_clefs(doc: Document, part_id: str | None = None) -> list[dict]:
     """Read back the clefs so a review can compare them with the page."""
     result = []
-    for number, measure in doc.iter_measures():
+    for current_part, _part, number, measure in doc.iter_part_measures():
+        if part_id is not None and current_part != part_id:
+            continue
         for clef in measure.iter("clef"):
             result.append(
                 {
+                    "part": current_part,
                     "measure": number,
                     "staff": clef.get("number") or "1",
                     "sign": clef.findtext("sign"),
@@ -587,10 +629,10 @@ def list_clefs(doc: Document) -> list[dict]:
     return result
 
 
-def remove_octave_shifts(doc: Document, staff: str) -> int:
+def remove_octave_shifts(doc: Document, staff: str, part_id: str | None = None) -> int:
     """Remove all octave-shift directions on one staff; returns directions removed."""
     removed = 0
-    for measure in doc.measures():
+    for measure in doc.measures(part_id):
         for direction in list(measure.findall("direction")):
             if direction.find("direction-type/octave-shift") is None:
                 continue
@@ -601,16 +643,19 @@ def remove_octave_shifts(doc: Document, staff: str) -> int:
     return removed
 
 
-def list_octave_shifts(doc: Document) -> list[dict]:
+def list_octave_shifts(doc: Document, part_id: str | None = None) -> list[dict]:
     """Read back the octave shifts so a review can compare them with the page."""
     result = []
-    for number, measure in doc.iter_measures():
+    for current_part, _part, number, measure in doc.iter_part_measures():
+        if part_id is not None and current_part != part_id:
+            continue
         for direction in measure.findall("direction"):
             shift = direction.find("direction-type/octave-shift")
             if shift is None:
                 continue
             result.append(
                 {
+                    "part": current_part,
                     "measure": number,
                     "staff": direction.findtext("staff") or "1",
                     "type": shift.get("type"),
@@ -627,10 +672,14 @@ def verify_patches(doc: Document, payload: dict) -> list[str]:
     for index, patch in enumerate(payload.get("patches") or []):
         prefix = f"patches[{index}]"
         op = patch.get("op")
+        part_id, part, part_problems = _resolve_patch_part(patch, doc, prefix)
+        if part_problems or part is None:
+            problems.extend(part_problems)
+            continue
         if op == "ottava":
             if patch.get("mode") == "remove":
                 continue
-            shifts = list_octave_shifts(doc)
+            shifts = list_octave_shifts(doc, part_id=part_id)
             staff = str(patch.get("staff"))
             expected_type = OTTAAVA_SUBTYPES.get(patch.get("subtype"))
             start_measure = (patch.get("start") or {}).get("measure")
@@ -659,7 +708,7 @@ def verify_patches(doc: Document, payload: dict) -> list[str]:
                 problems.append(f"{prefix}: ottava stop missing or does not match its start")
             continue
         if op == "clef":
-            clefs = list_clefs(doc)
+            clefs = list_clefs(doc, part_id=part_id)
             staff = str(patch.get("staff"))
             sign = patch.get("clef")
             line = str(patch.get("line"))
@@ -684,13 +733,14 @@ def verify_patches(doc: Document, payload: dict) -> list[str]:
             problems.append(f"{prefix}: unsupported op {op!r}")
             continue
         measure_index = patch.get("measure")
-        if not isinstance(measure_index, int) or not 1 <= measure_index <= len(doc.measures()):
+        part_measures = doc.part_measures(part)
+        if not isinstance(measure_index, int) or not 1 <= measure_index <= len(part_measures):
             problems.append(f"{prefix}: measure missing after pipeline")
             continue
-        measure = doc.measures()[measure_index - 1]
+        measure = part_measures[measure_index - 1]
         events = [
             event
-            for event in doc.events(measure)
+            for event in doc.events(measure, doc.effective_divisions(measure, part))
             if event.staff == str(patch.get("staff")) and event.voice == patch.get("voice")
         ]
         for label in ("start", "end"):
@@ -801,9 +851,10 @@ def _insertion_index(measure, beat: float, staff: str, divisions: float) -> int:
     return len(children)
 
 
-def _next_octave_number(doc: Document) -> int:
+def _next_octave_number(doc: Document, part_id: str | None = None) -> int:
     used = []
-    for element in doc.root.iter("octave-shift"):
+    scope = doc.part_by_id(part_id) if part_id is not None else doc.root
+    for element in scope.iter("octave-shift"):
         value = element.get("number")
         if value and value.isdigit():
             used.append(int(value))

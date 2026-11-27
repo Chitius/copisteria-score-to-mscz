@@ -59,6 +59,7 @@ class NoteSnapshot:
     type: str | None
     tie_start: bool
     tie_stop: bool
+    part: str = "P1"
 
     @property
     def pitched(self) -> bool:
@@ -86,6 +87,7 @@ class MeasureSnapshot:
     number: int
     time_signature: tuple[float, float] | None
     notes: tuple[NoteSnapshot, ...] = ()
+    part: str = "P1"
 
     @property
     def voice_count(self) -> int:
@@ -94,7 +96,7 @@ class MeasureSnapshot:
 
 @dataclass(frozen=True)
 class Snapshot:
-    """An ordered score snapshot keyed by integer measure number."""
+    """An ordered score snapshot keyed by integer measure number (and part for multi-part)."""
 
     measures: tuple[MeasureSnapshot, ...] = ()
     measure_numbers: tuple[int, ...] = ()
@@ -102,21 +104,26 @@ class Snapshot:
     def __post_init__(self) -> None:
         if not self.measure_numbers:
             object.__setattr__(
-                self, "measure_numbers", tuple(measure.number for measure in self.measures)
+                self,
+                "measure_numbers",
+                tuple(dict.fromkeys(measure.number for measure in self.measures)),
             )
 
     @property
     def notes(self) -> tuple[NoteSnapshot, ...]:
         return tuple(note for measure in self.measures for note in measure.notes)
 
-    def measure(self, number: int) -> MeasureSnapshot:
+    def measure(self, number: int, part: str | None = None) -> MeasureSnapshot:
         for measure in self.measures:
-            if measure.number == number:
+            if measure.number == number and (part is None or measure.part == part):
                 return measure
         raise KeyError(number)
 
     def by_number(self) -> dict[int, MeasureSnapshot]:
         return {measure.number: measure for measure in self.measures}
+
+    def by_part_number(self) -> dict[tuple[str, int], MeasureSnapshot]:
+        return {(measure.part, measure.number): measure for measure in self.measures}
 
 
 @dataclass(frozen=True)
@@ -268,10 +275,10 @@ class SanityDiff:
 def snapshot(doc: Document) -> Snapshot:
     """Freeze the note-level state of ``doc`` into hashable/immutable dataclasses."""
     measures: list[MeasureSnapshot] = []
-    for fallback, measure in doc.iter_measures():
+    for part_id, part, fallback, measure in doc.iter_part_measures():
         number = _measure_number(measure, fallback)
         notes: list[NoteSnapshot] = []
-        for event in doc.events(measure):
+        for event in doc.events(measure, doc.effective_divisions(measure, part)):
             element = event.element
             rest = event.rest
             step = None if rest else element.findtext("pitch/step")
@@ -295,6 +302,7 @@ def snapshot(doc: Document) -> Snapshot:
                     type=element.findtext("type"),
                     tie_start="start" in tie_types,
                     tie_stop="stop" in tie_types,
+                    part=part_id,
                 )
             )
         measures.append(
@@ -302,9 +310,13 @@ def snapshot(doc: Document) -> Snapshot:
                 number=number,
                 time_signature=doc.time_signature(measure),
                 notes=tuple(notes),
+                part=part_id,
             )
         )
-    return Snapshot(tuple(measures), tuple(measure.number for measure in measures))
+    return Snapshot(
+        tuple(measures),
+        tuple(dict.fromkeys(measure.number for measure in measures)),
+    )
 
 
 def diff_snapshots(before: Snapshot, after: Snapshot) -> SanityDiff:
@@ -315,17 +327,18 @@ def diff_snapshots(before: Snapshot, after: Snapshot) -> SanityDiff:
     (pitch changed).  Whatever remains is a genuine addition or removal.
     """
     diff = SanityDiff()
-    before_by = before.by_number()
-    after_by = after.by_number()
-    before_numbers = set(before_by)
-    after_numbers = set(after_by)
+    before_by = before.by_part_number()
+    after_by = after.by_part_number()
+    before_keys = set(before_by)
+    after_keys = set(after_by)
 
-    diff.added_measures = sorted(after_numbers - before_numbers)
-    diff.removed_measures = sorted(before_numbers - after_numbers)
+    diff.added_measures = sorted({number for _part, number in (after_keys - before_keys)})
+    diff.removed_measures = sorted({number for _part, number in (before_keys - after_keys)})
 
-    for number in sorted(before_numbers & after_numbers):
-        _diff_measure(number, before_by[number].notes, after_by[number].notes, diff)
-        _diff_voice_counts(before_by[number], after_by[number], diff)
+    for key in sorted(before_keys & after_keys):
+        _part, number = key
+        _diff_measure(number, before_by[key].notes, after_by[key].notes, diff)
+        _diff_voice_counts(before_by[key], after_by[key], diff)
 
     return diff
 
@@ -610,24 +623,27 @@ def check_no_new_verifier_violations(
 def check_note_inventory_preserved(
     before: Snapshot | Document, after: Snapshot | Document
 ) -> list[str]:
-    """Compare the pitched-note multiset per measure (staff/voice/onset ignored)."""
+    """Compare the pitched-note multiset per part/measure (staff/voice/onset ignored)."""
     before_snapshot = _as_snapshot(before)
     after_snapshot = _as_snapshot(after)
+    multi = len({m.part for m in before_snapshot.measures} | {m.part for m in after_snapshot.measures}) > 1
     before_counts = Counter(
-        (note.measure, note.pitch)
+        (note.part, note.measure, note.pitch)
         for note in before_snapshot.notes
         if note.pitched and note.pitch is not None
     )
     after_counts = Counter(
-        (note.measure, note.pitch)
+        (note.part, note.measure, note.pitch)
         for note in after_snapshot.notes
         if note.pitched and note.pitch is not None
     )
     messages: list[str] = []
-    for (measure, pitch), count in sorted((after_counts - before_counts).items()):
-        messages.append(f"m{measure} {pitch}: {count} pitched note(s) added")
-    for (measure, pitch), count in sorted((before_counts - after_counts).items()):
-        messages.append(f"m{measure} {pitch}: {count} pitched note(s) removed")
+    for (part, measure, pitch), count in sorted((after_counts - before_counts).items()):
+        prefix = f"{part} " if multi else ""
+        messages.append(f"{prefix}m{measure} {pitch}: {count} pitched note(s) added")
+    for (part, measure, pitch), count in sorted((before_counts - after_counts).items()):
+        prefix = f"{part} " if multi else ""
+        messages.append(f"{prefix}m{measure} {pitch}: {count} pitched note(s) removed")
     return messages
 
 
@@ -638,7 +654,7 @@ def check_onsets_preserved(before: Snapshot | Document, after: Snapshot | Docume
 
 
 def check_pitch_set_preserved(before: Snapshot | Document, after: Snapshot | Document) -> list[str]:
-    """No unique (measure, staff, pitch) may disappear, whatever the note-level contract says.
+    """No unique (part, measure, staff, pitch) may disappear, whatever the note-level contract says.
 
     Removing a duplicated pitch is fine; deleting the only occurrence of a sounding pitch is not.
     This catches a rebuild that drops a sustained chord while a permissive "may remove notes"
@@ -646,15 +662,20 @@ def check_pitch_set_preserved(before: Snapshot | Document, after: Snapshot | Doc
     """
     before_snapshot = _as_snapshot(before)
     after_snapshot = _as_snapshot(after)
+    multi = len({m.part for m in before_snapshot.measures} | {m.part for m in after_snapshot.measures}) > 1
     before_pitches = {
-        (note.measure, note.staff, note.pitch) for note in before_snapshot.notes if note.pitched
+        (note.part, note.measure, note.staff, note.pitch)
+        for note in before_snapshot.notes
+        if note.pitched
     }
     after_pitches = {
-        (note.measure, note.staff, note.pitch) for note in after_snapshot.notes if note.pitched
+        (note.part, note.measure, note.staff, note.pitch)
+        for note in after_snapshot.notes
+        if note.pitched
     }
     return [
-        f"pitch disappeared: m{measure} staff {staff} {pitch}"
-        for measure, staff, pitch in sorted(before_pitches - after_pitches)
+        f"pitch disappeared: {f'{part} ' if multi else ''}m{measure} staff {staff} {pitch}"
+        for part, measure, staff, pitch in sorted(before_pitches - after_pitches)
     ]
 
 
@@ -667,7 +688,7 @@ def check_sounding_notes_preserved(
     """Every pitched note that sounds in a measure must still sound in that measure.
 
     This is the global invariant of the sanity flow: no pass may make music disappear.  The
-    comparison is a *set* per ``(measure, staff, pitch)`` so that removing one of two identical
+    comparison is a *set* per ``(part, measure, staff, pitch)`` so that removing one of two identical
     occurrences (a duplicate that sounds at the same time and pitch) is not a loss, and retiming
     or re-voicing a surviving note is still allowed.
 
@@ -678,23 +699,23 @@ def check_sounding_notes_preserved(
     """
     before_snapshot = _as_snapshot(before)
     after_snapshot = _as_snapshot(after)
-    after_numbers = {measure.number for measure in after_snapshot.measures}
+    multi = len({m.part for m in before_snapshot.measures} | {m.part for m in after_snapshot.measures}) > 1
+    after_by = after_snapshot.by_part_number()
     messages: list[str] = []
 
     for measure in before_snapshot.measures:
-        if allow_measure_removal and measure.number not in after_numbers:
+        key = (measure.part, measure.number)
+        if allow_measure_removal and key not in after_by:
             continue
         before_index = _sounding_index(measure)
-        after_measure = next(
-            (candidate for candidate in after_snapshot.measures if candidate.number == measure.number),
-            None,
-        )
+        after_measure = after_by.get(key)
         after_index = {} if after_measure is None else _sounding_index(after_measure)
         for (staff, pitch), (onset, duration) in sorted(before_index.items()):
             if (staff, pitch) in after_index:
                 continue
+            prefix = f"{measure.part} " if multi else ""
             messages.append(
-                f"m{measure.number} staff {staff} {pitch} at {_fmt(onset)} "
+                f"{prefix}m{measure.number} staff {staff} {pitch} at {_fmt(onset)} "
                 f"(duration {_fmt(duration)}): sounding note lost"
             )
     return messages
@@ -711,21 +732,22 @@ def check_piece_pitch_set_preserved(
     """
     before_snapshot = _as_snapshot(before)
     after_snapshot = _as_snapshot(after)
+    multi = len({m.part for m in before_snapshot.measures} | {m.part for m in after_snapshot.measures}) > 1
     before_pitches = {
-        (note.staff, note.pitch)
+        (note.part, note.staff, note.pitch)
         for measure in before_snapshot.measures
         for note in measure.notes
         if note.pitched and note.pitch is not None
     }
     after_pitches = {
-        (note.staff, note.pitch)
+        (note.part, note.staff, note.pitch)
         for measure in after_snapshot.measures
         for note in measure.notes
         if note.pitched and note.pitch is not None
     }
     return [
-        f"staff {staff} {pitch}: sounding note lost from the whole piece"
-        for staff, pitch in sorted(before_pitches - after_pitches)
+        f"{f'{part} ' if multi else ''}staff {staff} {pitch}: sounding note lost from the whole piece"
+        for part, staff, pitch in sorted(before_pitches - after_pitches)
     ]
 
 

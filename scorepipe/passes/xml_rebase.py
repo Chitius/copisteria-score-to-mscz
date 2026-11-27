@@ -26,73 +26,84 @@ class RebaseMeasures:
     )
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
-        measures = doc.measures()
-        divisions = doc.divisions()
-        meter = (4.0, 4.0)
         moved = 0
-        for index, measure in enumerate(measures):
-            declared = doc.time_signature(measure)
-            if declared is not None:
-                meter = declared
-            bar = meter[0] * 4.0 / meter[1]
-            if index + 1 >= len(measures):
-                continue
-            next_measure = measures[index + 1]
-            next_meter = doc.time_signature(next_measure)
-            next_bar = next_meter[0] * 4.0 / next_meter[1] if next_meter is not None else bar
-            next_voices = {
-                staff: _max_voice(next_measure, staff) + 1
-                for staff in {event.staff for event in doc.events(next_measure)}
-            }
-
-            groups: dict[tuple[str, str], list[Event]] = {}
-            removals: list[ElementTree.Element] = []
-            for event in doc.events(measure):
-                if event.onset >= bar - 1e-6:
-                    if event.rest:
-                        # Stray padding rests after the barline are not musical overflow; moving
-                        # them into the next measure corrupts that measure (Sincerely m24→m25).
-                        removals.append(event.element)
-                        continue
-                    groups.setdefault((event.staff, event.voice), []).append(event)
-                    removals.append(event.element)
-                elif event.end > bar + 1e-6:
-                    first = bar - event.onset
-                    remainder = event.end - bar
-                    continuation = ElementTree.fromstring(ElementTree.tostring(event.element))
-                    _truncate(event.element, first, divisions)
-                    _set_duration(continuation, remainder, divisions)
-                    _remove_tie(continuation, "start")
-                    _add_tie(continuation, "stop")
-                    _drop_type(continuation)
-                    groups.setdefault((event.staff, event.voice), []).append(
-                        Event(continuation, event.staff, event.voice, bar, remainder, event.rest, False)
-                    )
-                    moved += 1
-            if not groups:
-                continue
-            fragments: list[list[ElementTree.Element]] = []
-            for (staff, _voice), events in groups.items():
-                offset = min(event.onset for event in events) - bar
-                if offset >= next_bar - 1e-6:
+        for _part_id, part in doc.iter_parts():
+            measures = doc.part_measures(part)
+            meter = (4.0, 4.0)
+            for index, measure in enumerate(measures):
+                divisions = doc.effective_divisions(measure, part)
+                declared = doc.time_signature(measure)
+                if declared is not None:
+                    meter = declared
+                bar = meter[0] * 4.0 / meter[1]
+                if index + 1 >= len(measures):
                     continue
-                number = next_voices.get(staff, _max_voice(next_measure, staff) + 1)
-                next_voices[staff] = number + 1
-                fragments.append(
-                    _block(events, offset, bar, staff, divisions, next_measure, next_bar, number)
-                )
-            if fragments:
-                insertion = _insertion_index(next_measure)
-                payload: list[ElementTree.Element] = []
-                for fragment in fragments:
-                    payload.extend(fragment)
-                next_measure[insertion:insertion] = payload
-            for element in removals:
-                if element in list(measure):
-                    measure.remove(element)
-                    moved += 1
-        for measure in measures:
-            _shrink_backups(measure)
+                next_measure = measures[index + 1]
+                next_divisions = doc.effective_divisions(next_measure, part)
+                next_meter = doc.time_signature(next_measure)
+                next_bar = next_meter[0] * 4.0 / next_meter[1] if next_meter is not None else bar
+                next_voices = {
+                    staff: _max_voice(next_measure, staff) + 1
+                    for staff in {event.staff for event in doc.events(next_measure, next_divisions)}
+                }
+
+                groups: dict[tuple[str, str], list[Event]] = {}
+                removals: list[ElementTree.Element] = []
+                for event in doc.events(measure, divisions):
+                    if event.onset >= bar - 1e-6:
+                        if event.rest:
+                            # Stray padding rests after the barline are not musical overflow; moving
+                            # them into the next measure corrupts that measure (Sincerely m24→m25).
+                            removals.append(event.element)
+                            continue
+                        groups.setdefault((event.staff, event.voice), []).append(event)
+                        removals.append(event.element)
+                    elif event.end > bar + 1e-6:
+                        first = bar - event.onset
+                        remainder = event.end - bar
+                        continuation = ElementTree.fromstring(ElementTree.tostring(event.element))
+                        _truncate(event.element, first, divisions)
+                        _set_duration(continuation, remainder, next_divisions)
+                        _remove_tie(continuation, "start")
+                        _add_tie(continuation, "stop")
+                        _drop_type(continuation)
+                        groups.setdefault((event.staff, event.voice), []).append(
+                            Event(continuation, event.staff, event.voice, bar, remainder, event.rest, False)
+                        )
+                        moved += 1
+                if not groups:
+                    continue
+                fragments: list[list[ElementTree.Element]] = []
+                for (staff, _voice), events in groups.items():
+                    offset = min(event.onset for event in events) - bar
+                    if offset >= next_bar - 1e-6:
+                        continue
+                    number = next_voices.get(staff, _max_voice(next_measure, staff) + 1)
+                    next_voices[staff] = number + 1
+                    fragments.append(
+                        _block(
+                            events,
+                            offset,
+                            bar,
+                            staff,
+                            next_divisions,
+                            next_measure,
+                            next_bar,
+                            number,
+                        )
+                    )
+                if fragments:
+                    insertion = _insertion_index(next_measure)
+                    payload: list[ElementTree.Element] = []
+                    for fragment in fragments:
+                        payload.extend(fragment)
+                    next_measure[insertion:insertion] = payload
+                for element in removals:
+                    if element in list(measure):
+                        measure.remove(element)
+                        moved += 1
+            for measure in measures:
+                _shrink_backups(measure)
         return PassResult(changed=moved)
 
 
@@ -249,31 +260,32 @@ class DropOverflowRests:
     )
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
-        meter = (4.0, 4.0)
-        divisions = doc.divisions()
         changed = 0
-        for measure in doc.measures():
-            declared = doc.time_signature(measure)
-            if declared is not None:
-                meter = declared
-            bar = meter[0] * 4.0 / meter[1]
-            touched = False
-            for event in list(doc.events(measure)):
-                if not event.rest:
-                    continue
-                if event.onset >= bar - 1e-6:
-                    if event.element in list(measure):
-                        measure.remove(event.element)
-                        changed += 1
-                        touched = True
-                elif event.end > bar + 1e-6:
-                    duration = event.element.find("duration")
-                    if duration is not None:
-                        duration.text = str(int(round((bar - event.onset) * divisions)))
-                        changed += 1
-                        touched = True
-            if touched:
-                _shrink_backups(measure)
+        for _part_id, part in doc.iter_parts():
+            meter = (4.0, 4.0)
+            for measure in doc.part_measures(part):
+                divisions = doc.effective_divisions(measure, part)
+                declared = doc.time_signature(measure)
+                if declared is not None:
+                    meter = declared
+                bar = meter[0] * 4.0 / meter[1]
+                touched = False
+                for event in list(doc.events(measure, divisions)):
+                    if not event.rest:
+                        continue
+                    if event.onset >= bar - 1e-6:
+                        if event.element in list(measure):
+                            measure.remove(event.element)
+                            changed += 1
+                            touched = True
+                    elif event.end > bar + 1e-6:
+                        duration = event.element.find("duration")
+                        if duration is not None:
+                            duration.text = str(int(round((bar - event.onset) * divisions)))
+                            changed += 1
+                            touched = True
+                if touched:
+                    _shrink_backups(measure)
         return PassResult(changed=changed)
 
 

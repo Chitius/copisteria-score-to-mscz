@@ -29,11 +29,12 @@ class RestoreBeams:
     )
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
-        divisions = doc.divisions()
         changed = 0
-        for _number, measure in doc.iter_measures():
+        for _part_id, part, _number, measure in doc.iter_part_measures():
             changed += _restore_measure(
-                measure, divisions, doc.effective_time_signature(measure)
+                measure,
+                doc.effective_divisions(measure, part),
+                doc.effective_time_signature(measure, part),
             )
         return PassResult(changed=changed)
 

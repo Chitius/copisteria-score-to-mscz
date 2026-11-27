@@ -26,7 +26,7 @@ class MergeAlignedVoices:
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
         merged = 0
-        for _number, measure in doc.iter_measures():
+        for _part_id, _part, _number, measure in doc.iter_part_measures():
             events = doc.events(measure)
             if len({event.staff for event in events}) > 1:
                 # the block/backup structure mixes staves; removing a block can shift the other

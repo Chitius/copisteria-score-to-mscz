@@ -18,7 +18,7 @@ class DropDuplicateNotes:
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
         changed = 0
-        for _number, measure in doc.iter_measures():
+        for _part_id, _part, _number, measure in doc.iter_part_measures():
             children = list(measure)
             groups: dict[tuple[str, str, float, str], list] = {}
             for event in doc.events(measure):

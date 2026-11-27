@@ -42,6 +42,7 @@
         "required": ["measure"],
         "additionalProperties": true,
         "properties": {
+          "part": {"type": "string", "minLength": 1},
           "measure": {"type": "integer", "minimum": 1},
           "beat": {"type": "number", "minimum": 0},
           "placement": {"type": "string", "enum": ["above", "below"]},
@@ -82,6 +83,7 @@
         "required": ["measure", "from", "to"],
         "additionalProperties": true,
         "properties": {
+          "part": {"type": "string", "minLength": 1},
           "measure": {"type": "integer", "minimum": 1},
           "beat": {"type": "number", "minimum": 0},
           "staff": {"type": "integer", "minimum": 1},

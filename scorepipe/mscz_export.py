@@ -130,27 +130,31 @@ def export_and_display(
 
 
 def extract_ties(document: Document) -> list[dict]:
-    """Tie pairs as (measure, staff, pitch, onset); the importer can lose these on chords."""
+    """Tie pairs as (measure, global_staff, pitch, onset); the importer can lose these on chords."""
     from .core.pairing import Endpoint, pair_endpoints
 
+    offsets = document.part_staff_offsets()
     endpoints: list[Endpoint] = []
-    for number, measure in document.iter_measures():
-        for event in document.events(measure):
+    for part_id, part, number, measure in document.iter_part_measures():
+        offset = offsets.get(part_id, 0)
+        for event in document.events(measure, document.effective_divisions(measure, part)):
             if event.rest:
                 continue
             pitch = _midi(event.element)
             if pitch is None:
                 continue
+            local_num = int(event.staff) if str(event.staff).isdigit() else 1
+            global_staff = str(offset + local_num)
             for tie in event.element.findall("tie"):
                 kind = tie.get("type")
                 if kind not in ("start", "stop"):
                     continue
                 endpoints.append(
                     Endpoint(
-                        key=(event.staff, event.voice, pitch),
+                        key=(part_id, event.staff, event.voice, pitch),
                         position=(number, round(event.onset, 4)),
                         kind=kind,
-                        payload=(number, event.onset, pitch, event.staff),
+                        payload=(number, event.onset, pitch, global_staff),
                     )
                 )
     pairs: list[dict] = []
@@ -182,15 +186,19 @@ def _midi(note) -> int | None:
 
 def extract_chord_fragments(document: Document) -> list[dict]:
     """Chord members whose duration differs from the chord base (MuseScore would coerce them)."""
+    offsets = document.part_staff_offsets()
     fragments: list[dict] = []
-    for number, measure in document.iter_measures():
+    for part_id, part, number, measure in document.iter_part_measures():
+        offset = offsets.get(part_id, 0)
         groups: dict[tuple, list] = {}
-        for event in document.events(measure):
+        for event in document.events(measure, document.effective_divisions(measure, part)):
             if event.rest:
                 continue
             groups.setdefault((event.staff, event.voice, round(event.onset, 4)), []).append(event)
         for (staff, _voice, onset), events in groups.items():
             base_duration = max(event.duration for event in events)
+            local_num = int(staff) if str(staff).isdigit() else 1
+            global_staff = str(offset + local_num)
             for event in events:
                 if abs(event.duration - base_duration) < 1e-6:
                     continue
@@ -200,7 +208,7 @@ def extract_chord_fragments(document: Document) -> list[dict]:
                 fragments.append(
                     {
                         "measure": number,
-                        "staff": staff,
+                        "staff": global_staff,
                         "pitch": pitch,
                         "onset": onset,
                         "duration": event.duration,

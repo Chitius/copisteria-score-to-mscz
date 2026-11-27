@@ -20,6 +20,7 @@ class MergedPages:
     document: Document
     pages: list[str] = field(default_factory=list)
     measure_counts: list[int] = field(default_factory=list)
+    part_ids: list[str] = field(default_factory=list)
 
     def page_of_measure(self, measure_number: int) -> int:
         """1-based page for a global measure number (for page-level restoration passes)."""
@@ -31,6 +32,23 @@ class MergedPages:
         raise ValueError(f"measure {measure_number} is outside the merged score")
 
 
+def _page_part_entries(
+    page_root: ElementTree.Element, path: str | Path
+) -> list[tuple[str, ElementTree.Element]]:
+    parts = page_root.findall("part")
+    if not parts:
+        raise ValueError(f"{path}: page MusicXML has no <part>")
+    entries: list[tuple[str, ElementTree.Element]] = []
+    seen: set[str] = set()
+    for index, part in enumerate(parts, start=1):
+        part_id = part.get("id") or f"P{index}"
+        if part_id in seen:
+            raise ValueError(f"{path}: duplicate <part id={part_id!r}> in page MusicXML")
+        seen.add(part_id)
+        entries.append((part_id, part))
+    return entries
+
+
 def merge_pages(paths: list[str | Path]) -> MergedPages:
     if not paths:
         raise ValueError("merge_pages needs at least one page")
@@ -39,62 +57,76 @@ def merge_pages(paths: list[str | Path]) -> MergedPages:
     part_list = first.find("part-list")
     if part_list is None:
         raise ValueError("page MusicXML has no part-list")
-    # The merge keeps one <part> per page.  A page with more than one part would lose every part
-    # after the first *silently* -- measured on the Schubert page: the piano (526 notes) vanished
-    # and only the vocal line came out.  Refuse instead, and say what to do about it.
+
+    page_parts: list[list[tuple[str, ElementTree.Element]]] = []
+    expected_part_ids: list[str] | None = None
     for path, page_root in zip(paths, roots):
-        parts = page_root.findall("part")
-        if len(parts) > 1:
+        entries = _page_part_entries(page_root, path)
+        part_ids = [part_id for part_id, _part in entries]
+        if expected_part_ids is None:
+            expected_part_ids = part_ids
+        elif part_ids != expected_part_ids:
             raise ValueError(
-                f"{path}: page MusicXML has {len(parts)} parts; this loader merges one part per "
-                "page and would drop the rest silently. Split the page by part before loading "
-                "(or extend the loader to all parts)."
+                f"{path}: page parts {part_ids} do not match first page parts {expected_part_ids}"
             )
+        counts = {part_id: len(part.findall("measure")) for part_id, part in entries}
+        unique_counts = set(counts.values())
+        if len(unique_counts) > 1:
+            raise ValueError(
+                f"{path}: parts disagree on measure count ({counts}); cannot align page safely"
+            )
+        page_parts.append(entries)
+
+    assert expected_part_ids is not None
     divisions = _target_divisions(roots)
     root = ElementTree.Element("score-partwise", {"version": first.get("version") or "4.0"})
     root.append(ElementTree.fromstring(ElementTree.tostring(part_list)))
-    part = ElementTree.SubElement(root, "part", {"id": part_list.find("score-part").get("id") or "P1"})
+    merged_parts = {
+        part_id: ElementTree.SubElement(root, "part", {"id": part_id})
+        for part_id in expected_part_ids
+    }
 
     measure_counts: list[int] = []
-    number = 0
-    for page_root in roots:
-        page_part = page_root.find("part")
-        measures = [] if page_part is None else page_part.findall("measure")
-        active = divisions
-        for measure in measures:
-            number += 1
-            declared = _declared_divisions(measure)
-            if declared is not None:
-                active = declared
-            copy = ElementTree.fromstring(ElementTree.tostring(measure))
-            factor = divisions / active
-            _rescale_measure(copy, factor)
-            _set_divisions(copy, divisions)
-            copy.set("number", str(number))
-            part.append(copy)
-        measure_counts.append(len(measures))
-    if number == 0:
+    running_number = 0
+    for entries in page_parts:
+        page_measure_count = len(entries[0][1].findall("measure"))
+        for part_id, page_part in entries:
+            measures = page_part.findall("measure")
+            target_part = merged_parts[part_id]
+            active = divisions
+            for local_index, measure in enumerate(measures, start=1):
+                declared = _declared_divisions(measure)
+                if declared is not None:
+                    active = declared
+                copy = ElementTree.fromstring(ElementTree.tostring(measure))
+                factor = divisions / active
+                _rescale_measure(copy, factor)
+                _set_divisions(copy, divisions)
+                copy.set("number", str(running_number + local_index))
+                target_part.append(copy)
+        running_number += page_measure_count
+        measure_counts.append(page_measure_count)
+    if running_number == 0:
         raise ValueError("pages contain no measures")
     return MergedPages(
         document=Document(root),
         pages=[str(path) for path in paths],
         measure_counts=measure_counts,
+        part_ids=expected_part_ids,
     )
 
 
 def _target_divisions(roots: list[ElementTree.Element]) -> int:
     values: set[int] = set()
     for root in roots:
-        part = root.find("part")
-        if part is None:
-            continue
-        active = None
-        for measure in part.findall("measure"):
-            declared = _declared_divisions(measure)
-            if declared is not None:
-                active = declared
-            if active is not None:
-                values.add(active)
+        for part in root.findall("part"):
+            active = None
+            for measure in part.findall("measure"):
+                declared = _declared_divisions(measure)
+                if declared is not None:
+                    active = declared
+                if active is not None:
+                    values.add(active)
     if not values:
         return 4
     target = 1

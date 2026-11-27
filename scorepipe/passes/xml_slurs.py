@@ -24,38 +24,39 @@ class SanitizeSlurs:
             # re-adds forever (laputa m54).
             return PassResult()
         max_bars = int(ctx.options.get("max_slur_bars", 6))
-        endpoints: list[Endpoint] = []
-        for number, measure in doc.iter_measures():
-            for event in doc.events(measure):
-                for slur in event.element.findall("notations/slur"):
-                    kind = slur.get("type")
-                    if kind not in ("start", "stop"):
-                        continue
-                    endpoints.append(
-                        Endpoint(
-                            key=(event.staff, slur.get("number") or "1"),
-                            position=(number, round(event.onset, 4)),
-                            kind=kind,
-                            payload=(event.element, slur),
-                        )
-                    )
-        pairing = pair_endpoints(endpoints, max_span=max_bars)
         orphans = 0
-        for endpoint in pairing.orphans:
-            note, slur = endpoint.payload
-            _remove(note, slur)
-            orphans += 1
+        for _part_id, part in doc.iter_parts():
+            endpoints: list[Endpoint] = []
+            for number, measure in enumerate(doc.part_measures(part), start=1):
+                for event in doc.events(measure):
+                    for slur in event.element.findall("notations/slur"):
+                        kind = slur.get("type")
+                        if kind not in ("start", "stop"):
+                            continue
+                        endpoints.append(
+                            Endpoint(
+                                key=(event.staff, slur.get("number") or "1"),
+                                position=(number, round(event.onset, 4)),
+                                kind=kind,
+                                payload=(event.element, slur),
+                            )
+                        )
+            pairing = pair_endpoints(endpoints, max_span=max_bars)
+            for endpoint in pairing.orphans:
+                note, slur = endpoint.payload
+                if _remove(note, slur):
+                    orphans += 1
         return PassResult(changed=orphans)
 
 
-def _remove(note, slur) -> None:
-    notations = note.find("notations")
-    if notations is None:
-        return
-    if slur in list(notations):
-        notations.remove(slur)
-    if len(notations) == 0:
-        note.remove(notations)
+def _remove(note, slur) -> bool:
+    for notations in list(note.findall("notations")):
+        if slur in list(notations):
+            notations.remove(slur)
+            if len(notations) == 0:
+                note.remove(notations)
+            return True
+    return False
 
 
 SLUR_PASS = SanitizeSlurs()

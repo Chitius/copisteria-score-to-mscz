@@ -20,7 +20,7 @@ class DedupeTies:
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
         changed = 0
-        for _number, measure in doc.iter_measures():
+        for _part_id, _part, _number, measure in doc.iter_part_measures():
             for note in measure.iter("note"):
                 changed += _dedupe(note.findall("tie"), note)
                 notations = note.find("notations")
@@ -54,22 +54,23 @@ class DropRedundantTimeSignatures:
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
         changed = 0
-        current: tuple[float, float] | None = None
-        for _number, measure in doc.iter_measures():
-            signature = doc.time_signature(measure)
-            if signature is None:
-                continue
-            if signature == current:
-                for attributes in measure.findall("attributes"):
-                    time = attributes.find("time")
-                    if time is not None:
-                        attributes.remove(time)
-                        if len(attributes) == 0:
-                            measure.remove(attributes)
-                        changed += 1
-                        break
-                continue
-            current = signature
+        for _part_id, part in doc.iter_parts():
+            current: tuple[float, float] | None = None
+            for measure in doc.part_measures(part):
+                signature = doc.time_signature(measure)
+                if signature is None:
+                    continue
+                if signature == current:
+                    for attributes in measure.findall("attributes"):
+                        time = attributes.find("time")
+                        if time is not None:
+                            attributes.remove(time)
+                            if len(attributes) == 0:
+                                measure.remove(attributes)
+                            changed += 1
+                            break
+                    continue
+                current = signature
         return PassResult(changed=changed)
 
 
@@ -85,7 +86,7 @@ class UnhideRests:
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
         changed = 0
-        for _number, measure in doc.iter_measures():
+        for _part_id, _part, _number, measure in doc.iter_part_measures():
             for note in measure.iter("note"):
                 if note.find("rest") is None:
                     continue

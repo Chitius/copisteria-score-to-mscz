@@ -10,6 +10,7 @@ from __future__ import annotations
 from xml.etree import ElementTree
 
 from ..core.mscx import MsxcDocument
+from ..core.mscx_invariants import iter_measures_with_meter
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
 
 TYPE_FOR_BEATS = [
@@ -112,20 +113,11 @@ def _new_voice(doc, measure, fragment, note) -> None:
 
 
 def _measure_beats(doc, target) -> float:
-    """Follow TimeSig changes up to `target`; the mscx does not repeat the signature each bar."""
-    meter = 4.0
-    for staff in doc.root.iter("Staff"):
-        for measure in staff.findall("Measure"):
-            for time in measure.iter("TimeSig"):
-                try:
-                    meter = float(time.findtext("sigN") or 4) * 4.0 / float(
-                        time.findtext("sigD") or 4
-                    )
-                except ValueError:
-                    pass
-            if measure is target:
-                return meter
-    return meter
+    """Follow TimeSig changes (including top-staff inheritance) up to `target`."""
+    for _staff, _index, measure, meter in iter_measures_with_meter(doc):
+        if measure is target:
+            return float(meter * 4)
+    return 4.0
 
 
 def _set_type(element, beats: float) -> None:

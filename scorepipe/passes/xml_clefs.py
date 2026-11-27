@@ -47,21 +47,22 @@ class DropRedundantKeySignatures:
 
 
 def _drop_repeated(doc: Document, tag: str, identity) -> PassResult:
-    current: dict[str, tuple] = {}
     changed = 0
-    for _number, measure in doc.iter_measures():
-        for attributes in list(measure.findall("attributes")):
-            for element in list(attributes.findall(tag)):
-                # MusicXML puts the staff on the clef (<clef number="2">), not on <attributes>
-                staff = element.get("number") or attributes.findtext("staff") or "1"
-                signature = identity(element)
-                if signature == current.get(staff):
-                    attributes.remove(element)
-                    changed += 1
-                    if len(attributes) == 0:
-                        measure.remove(attributes)
-                    continue
-                current[staff] = signature
+    for _part_id, part in doc.iter_parts():
+        current: dict[str, tuple] = {}
+        for measure in doc.part_measures(part):
+            for attributes in list(measure.findall("attributes")):
+                for element in list(attributes.findall(tag)):
+                    # MusicXML puts the staff on the clef (<clef number="2">), not on <attributes>
+                    staff = element.get("number") or attributes.findtext("staff") or "1"
+                    signature = identity(element)
+                    if signature == current.get(staff):
+                        attributes.remove(element)
+                        changed += 1
+                        if len(attributes) == 0:
+                            measure.remove(attributes)
+                        continue
+                    current[staff] = signature
     return PassResult(changed=changed)
 
 

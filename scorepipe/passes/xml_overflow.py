@@ -17,42 +17,43 @@ class DropOverflowDuplicates:
     )
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
-        measures = doc.measures()
-        meter = (4.0, 4.0)
         changed = 0
-        for index, measure in enumerate(measures):
-            declared = doc.time_signature(measure)
-            if declared is not None:
-                meter = declared
-            bar = meter[0] * 4.0 / meter[1]
-            if index + 1 >= len(measures):
-                continue
-            next_measure = measures[index + 1]
-            following = _index_by_key(doc, next_measure)
-            for event in doc.events(measure):
-                if event.rest or event.onset < bar - 1e-6:
+        for _part_id, part in doc.iter_parts():
+            measures = doc.part_measures(part)
+            meter = (4.0, 4.0)
+            for index, measure in enumerate(measures):
+                declared = doc.time_signature(measure)
+                if declared is not None:
+                    meter = declared
+                bar = meter[0] * 4.0 / meter[1]
+                if index + 1 >= len(measures):
                     continue
-                pitch = _pitch(event.element)
-                if pitch is None:
-                    continue
-                target_onset = round(event.onset - bar, 4)
-                key = (event.staff, event.voice, target_onset, pitch)
-                if key in following:
-                    elements = [event.element]
-                    if event.element.find("chord") is None:
-                        children = list(measure)
-                        position = children.index(event.element) + 1
-                        while (
-                            position < len(children)
-                            and children[position].tag == "note"
-                            and children[position].find("chord") is not None
-                        ):
-                            elements.append(children[position])
-                            position += 1
-                    for element in elements:
-                        if element in list(measure):
-                            measure.remove(element)
-                            changed += 1
+                next_measure = measures[index + 1]
+                following = _index_by_key(doc, next_measure)
+                for event in doc.events(measure):
+                    if event.rest or event.onset < bar - 1e-6:
+                        continue
+                    pitch = _pitch(event.element)
+                    if pitch is None:
+                        continue
+                    target_onset = round(event.onset - bar, 4)
+                    key = (event.staff, event.voice, target_onset, pitch)
+                    if key in following:
+                        elements = [event.element]
+                        if event.element.find("chord") is None:
+                            children = list(measure)
+                            position = children.index(event.element) + 1
+                            while (
+                                position < len(children)
+                                and children[position].tag == "note"
+                                and children[position].find("chord") is not None
+                            ):
+                                elements.append(children[position])
+                                position += 1
+                        for element in elements:
+                            if element in list(measure):
+                                measure.remove(element)
+                                changed += 1
         return PassResult(changed=changed)
 
 

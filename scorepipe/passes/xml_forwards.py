@@ -23,10 +23,10 @@ class NormalizeForwardDurations:
     )
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
-        divisions = doc.divisions()
-        quantum = max(1, int(round(divisions / 4.0)))
         changed = 0
-        for measure in doc.measures():
+        for _part_id, part, _number, measure in doc.iter_part_measures():
+            divisions = doc.effective_divisions(measure, part)
+            quantum = max(1, int(round(divisions / 4.0)))
             children = list(measure)
             for index, child in enumerate(children[:-1]):
                 if child.tag != "forward" or children[index + 1].tag != "backup":
@@ -57,12 +57,20 @@ class NormalizeTupletRests:
     )
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
-        divisions = doc.divisions()
-        quantum = max(1, int(round(divisions / 4.0)))
         changed = 0
-        for measure in doc.measures():
+        for _part_id, part, _number, measure in doc.iter_part_measures():
+            divisions = doc.effective_divisions(measure, part)
+            quantum = max(1, int(round(divisions / 4.0)))
+            tuplet_voices = {
+                (note.findtext("staff") or "1", note.findtext("voice") or "1")
+                for note in measure.findall("note")
+                if note.find("rest") is None and note.find("time-modification") is not None
+            }
             for note in measure.findall("note"):
                 if note.find("rest") is None or note.find("time-modification") is None:
+                    continue
+                key = (note.findtext("staff") or "1", note.findtext("voice") or "1")
+                if key in tuplet_voices:
                     continue
                 duration = note.find("duration")
                 if duration is None or not (duration.text or "").strip().isdigit():

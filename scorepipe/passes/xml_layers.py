@@ -30,9 +30,9 @@ class RebuildVoiceLayers:
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
         changed = 0
-        for _number, measure in doc.iter_measures():
+        for _part_id, part, _number, measure in doc.iter_part_measures():
             if _needs_rebuild(doc, measure):
-                if _rebuild(doc, measure):
+                if _rebuild(doc, measure, part):
                     changed += 1
         return PassResult(changed=changed)
 
@@ -64,13 +64,13 @@ def _needs_rebuild(doc: Document, measure) -> bool:
     return False
 
 
-def _rebuild(doc: Document, measure) -> bool:
-    events = doc.events(measure)
+def _rebuild(doc: Document, measure, part=None) -> bool:
+    divisions = doc.effective_divisions(measure, part)
+    events = doc.events(measure, divisions)
     if not events or not any(not event.rest for event in events):
         return False
-    meter = doc.effective_time_signature(measure)
+    meter = doc.effective_time_signature(measure, part)
     bar = meter[0] * 4.0 / meter[1]
-    divisions = doc.divisions()
     onsets = direction_onsets(measure)
     leading = []
     for child in list(measure):

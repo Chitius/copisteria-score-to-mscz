@@ -1065,28 +1065,31 @@ def prepare_paginated_musicxml(
 ) -> Path:
     """Copy a repaired MusicXML and insert ``<print new-page="yes"/>`` at scan page boundaries."""
     root = ElementTree.parse(str(musicxml_path)).getroot()
-    part = root.find("part")
-    if part is None:
+    parts = root.findall("part")
+    if not parts:
         raise ValueError(f"{musicxml_path}: MusicXML has no <part>")
-    measures = part.findall("measure")
     expected = sum(page_counts)
-    if len(measures) != expected:
-        raise ValueError(
-            f"{musicxml_path}: expected {expected} measures for pagination, found {len(measures)}"
-        )
-    for measure in measures:
-        for print_node in measure.findall("print"):
-            print_node.attrib.pop("new-page", None)
-    running = 0
-    for count in page_counts[:-1]:
-        running += count
-        if 0 < running < len(measures):
-            target = measures[running]
-            print_node = target.find("print")
-            if print_node is None:
-                print_node = ElementTree.Element("print")
-                target.insert(0, print_node)
-            print_node.set("new-page", "yes")
+    for part in parts:
+        measures = part.findall("measure")
+        if len(measures) != expected:
+            part_id = part.get("id") or "P1"
+            raise ValueError(
+                f"{musicxml_path}: part {part_id} expected {expected} measures for pagination, "
+                f"found {len(measures)}"
+            )
+        for measure in measures:
+            for print_node in measure.findall("print"):
+                print_node.attrib.pop("new-page", None)
+        running = 0
+        for count in page_counts[:-1]:
+            running += count
+            if 0 < running < len(measures):
+                target = measures[running]
+                print_node = target.find("print")
+                if print_node is None:
+                    print_node = ElementTree.Element("print")
+                    target.insert(0, print_node)
+                print_node.set("new-page", "yes")
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     ElementTree.ElementTree(root).write(out_path, encoding="utf-8", xml_declaration=True)

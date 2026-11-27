@@ -74,26 +74,67 @@ if __name__ == "__main__":
 
 
 class MultiPartPageTest(unittest.TestCase):
-    def test_a_page_with_two_parts_is_refused_instead_of_losing_one(self):
-        page = PAGES / "page1.musicxml"
-        root_text = page.read_text(encoding="utf-8")
-        # duplicate the single part into a second part, as a two-staff piano page would arrive
-        import xml.etree.ElementTree as ElementTree
+    def _two_part_xml(self, *, p1_divs=4, p2_divs=8, p1_measures=2, p2_measures=2, part_ids=("P1", "P2")):
+        score_parts = "".join(
+            f'<score-part id="{pid}"><part-name>{pid}</part-name></score-part>' for pid in part_ids
+        )
+        parts_xml = []
+        for idx, pid in enumerate(part_ids):
+            divs = p1_divs if idx == 0 else p2_divs
+            count = p1_measures if idx == 0 else p2_measures
+            step = "C" if idx == 0 else "G"
+            bars = "".join(
+                f'<measure number="{m}"><attributes><divisions>{divs}</divisions>'
+                f"<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+                f"<note><pitch><step>{step}</step><octave>4</octave></pitch>"
+                f"<duration>{divs * 4}</duration><voice>1</voice></note></measure>"
+                for m in range(1, count + 1)
+            )
+            parts_xml.append(f'<part id="{pid}">{bars}</part>')
+        return (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            f'<score-partwise version="4.0"><part-list>{score_parts}</part-list>'
+            f'{"".join(parts_xml)}</score-partwise>'
+        )
 
-        root = ElementTree.fromstring(root_text)
-        part = root.find("part")
-        clone = ElementTree.fromstring(ElementTree.tostring(part))
-        clone.set("id", "P2")
-        root.append(clone)
-        score_part = root.find("part-list/score-part")
-        clone_list = ElementTree.fromstring(ElementTree.tostring(score_part))
-        clone_list.set("id", "P2")
-        root.find("part-list").append(clone_list)
+    def test_multi_part_pages_merge_all_parts_and_rescale_divisions(self):
         with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "two_parts.musicxml"
-            ElementTree.ElementTree(root).write(target, encoding="utf-8", xml_declaration=True)
+            work = Path(tmp)
+            p1 = work / "page1.musicxml"
+            p2 = work / "page2.musicxml"
+            p1.write_text(self._two_part_xml(p1_divs=4, p2_divs=6, p1_measures=2, p2_measures=2), encoding="utf-8")
+            p2.write_text(self._two_part_xml(p1_divs=8, p2_divs=12, p1_measures=1, p2_measures=1), encoding="utf-8")
+            merged = merge_pages([p1, p2])
 
+        self.assertEqual(merged.part_ids, ["P1", "P2"])
+        self.assertEqual(merged.measure_counts, [2, 1])
+        self.assertEqual(merged.document.divisions(), 24.0)
+        self.assertEqual([pid for pid, _ in merged.document.iter_parts()], ["P1", "P2"])
+        for pid in ("P1", "P2"):
+            numbers = [m.get("number") for m in merged.document.measures(pid)]
+            self.assertEqual(numbers, ["1", "2", "3"])
+            durations = [
+                event.duration
+                for _n, measure in merged.document.iter_measures(pid)
+                for event in merged.document.events(measure)
+            ]
+            self.assertEqual(durations, [4.0, 4.0, 4.0])
+
+    def test_mismatched_parts_across_pages_are_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            p1 = work / "page1.musicxml"
+            p2 = work / "page2.musicxml"
+            p1.write_text(self._two_part_xml(part_ids=("P1", "P2")), encoding="utf-8")
+            p2.write_text(self._two_part_xml(part_ids=("P1",)), encoding="utf-8")
+            with self.assertRaises(ValueError) as raised:
+                merge_pages([p1, p2])
+        self.assertIn("do not match", str(raised.exception))
+
+    def test_mismatched_measure_counts_between_parts_on_a_page_are_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "unequal.musicxml"
+            target.write_text(self._two_part_xml(p1_measures=2, p2_measures=1), encoding="utf-8")
             with self.assertRaises(ValueError) as raised:
                 merge_pages([target])
-        self.assertIn("2 parts", str(raised.exception))
-        self.assertIn("silently", str(raised.exception))
+        self.assertIn("disagree on measure count", str(raised.exception))

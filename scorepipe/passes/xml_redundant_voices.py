@@ -27,7 +27,7 @@ class DropRedundantVoices:
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
         changed = 0
-        for _number, measure in doc.iter_measures():
+        for _part_id, _part, _number, measure in doc.iter_part_measures():
             by_staff: dict[str, dict[str, list]] = {}
             all_by_staff: dict[str, dict[str, list]] = {}
             for event in doc.events(measure):
@@ -71,7 +71,7 @@ def _redundant(events: list, primary: list) -> bool:
     for event in events:
         pitch = _pitch(event.element)
         if pitch is None:
-            continue
+            return False
         covered = any(
             _pitch(other.element) == pitch
             and other.onset <= event.onset + 1e-6
@@ -85,13 +85,20 @@ def _redundant(events: list, primary: list) -> bool:
 
 def _pitch(note) -> str | None:
     pitch = note.find("pitch")
-    if pitch is None:
-        return None
-    return (
-        (pitch.findtext("step") or "")
-        + (pitch.findtext("alter") or "0")
-        + (pitch.findtext("octave") or "")
-    )
+    if pitch is not None:
+        return (
+            (pitch.findtext("step") or "")
+            + (pitch.findtext("alter") or "0")
+            + (pitch.findtext("octave") or "")
+        )
+    unpitched = note.find("unpitched")
+    if unpitched is not None:
+        return (
+            "U:"
+            + (unpitched.findtext("display-step") or "")
+            + (unpitched.findtext("display-octave") or "")
+        )
+    return None
 
 
 def _remove_voice(measure, events: list) -> bool:

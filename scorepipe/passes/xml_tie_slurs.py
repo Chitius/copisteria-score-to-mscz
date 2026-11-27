@@ -35,15 +35,16 @@ class ReconcileTieSlurs:
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
         changed = 0
-        changed += _drop_ties_between_graces(doc)
-        changed += _drop_slurs_under_ties(doc)
-        changed += _ties_with_other_pitches_to_slurs(doc, ctx)
-        changed += _tie_shaped_slurs_to_ties(doc)
-        changed += _drop_orphan_slurs(doc)
+        for part_id, part in doc.iter_parts():
+            changed += _drop_ties_between_graces(doc, part)
+            changed += _drop_slurs_under_ties(doc, part)
+            changed += _ties_with_other_pitches_to_slurs(doc, part_id, part, ctx)
+            changed += _tie_shaped_slurs_to_ties(doc, part)
+            changed += _drop_orphan_slurs(doc, part)
         return PassResult(changed=changed)
 
 
-def _drop_ties_between_graces(doc: Document) -> int:
+def _drop_ties_between_graces(doc: Document, part: ElementTree.Element) -> int:
     """Remove a tie whose two ends are grace notes.
 
     MuseScore cannot engrave a tied grace pair: on import it turns the second grace into a real
@@ -53,7 +54,7 @@ def _drop_ties_between_graces(doc: Document) -> int:
     ``Document.events`` skips notes without ``<duration>``, so graces are scanned directly.
     """
     removed = 0
-    for _number, measure in doc.iter_measures():
+    for measure in doc.part_measures(part):
         open_ties: dict[tuple, ElementTree.Element] = {}
         for note in measure.iter("note"):
             key = (
@@ -74,8 +75,8 @@ def _drop_ties_between_graces(doc: Document) -> int:
     return removed
 
 
-def _drop_orphan_slurs(doc: Document) -> int:
-    _events, _ties, slurs = _collect(doc)
+def _drop_orphan_slurs(doc: Document, part: ElementTree.Element) -> int:
+    _events, _ties, slurs = _collect(doc, part)
     removed = 0
     for endpoint in pair_endpoints(slurs).orphans:
         note = endpoint.payload[1].element
@@ -112,11 +113,11 @@ def _pitch(note) -> tuple | None:
     )
 
 
-def _collect(doc: Document):
+def _collect(doc: Document, part: ElementTree.Element):
     ties: list[Endpoint] = []
     slurs: list[Endpoint] = []
     events = []
-    for number, measure in doc.iter_measures():
+    for number, measure in enumerate(doc.part_measures(part), start=1):
         for event in doc.events(measure):
             if event.rest:
                 continue
@@ -154,8 +155,8 @@ def _collect(doc: Document):
     return events, ties, slurs
 
 
-def _drop_slurs_under_ties(doc: Document) -> int:
-    _events, ties, slurs = _collect(doc)
+def _drop_slurs_under_ties(doc: Document, part: ElementTree.Element) -> int:
+    _events, ties, slurs = _collect(doc, part)
     tie_pairs = pair_endpoints(ties).pairs
     slur_pairs = pair_endpoints(slurs).pairs
     removed = 0
@@ -201,8 +202,10 @@ def _tie_covers_slur(slur_start, slur_stop, tie_pairs) -> bool:
     return False
 
 
-def _ties_with_other_pitches_to_slurs(doc: Document, ctx: Context) -> int:
-    events, ties, _slurs = _collect(doc)
+def _ties_with_other_pitches_to_slurs(
+    doc: Document, part_id: str, part: ElementTree.Element, ctx: Context
+) -> int:
+    events, ties, _slurs = _collect(doc, part)
     marker = ctx.options.setdefault("tie_to_slur", set())
     changed = 0
     for start, stop in pair_endpoints(ties).pairs:
@@ -230,26 +233,26 @@ def _ties_with_other_pitches_to_slurs(doc: Document, ctx: Context) -> int:
         ]
         if not between:
             continue
-        number = _free_slur_number(doc, start_event.staff)
+        number = _free_slur_number(doc, part, start_event.staff)
         if number is None:
             continue
         _remove_tie(start_event.element, "start")
         _remove_tie(stop_event.element, "stop")
         _add_slur(start_event.element, "start", number)
         _add_slur(stop_event.element, "stop", number)
-        marker.add(_marker_key(start, start_event, pitch))
-        marker.add(_marker_key(stop, stop_event, pitch))
+        marker.add(_marker_key(part_id, start, start_event, pitch))
+        marker.add(_marker_key(part_id, stop, stop_event, pitch))
         changed += 1
     return changed
 
 
-def _marker_key(endpoint, event, pitch) -> tuple:
+def _marker_key(part_id: str, endpoint, event, pitch) -> tuple:
     number = endpoint.payload[0]
-    return (number, event.staff, round(event.onset, 4), "".join(pitch))
+    return (part_id, number, event.staff, round(event.onset, 4), "".join(pitch))
 
 
-def _tie_shaped_slurs_to_ties(doc: Document) -> int:
-    events, _ties, slurs = _collect(doc)
+def _tie_shaped_slurs_to_ties(doc: Document, part: ElementTree.Element) -> int:
+    events, _ties, slurs = _collect(doc, part)
     changed = 0
     for start, stop in pair_endpoints(slurs).pairs:
         start_event = start.payload[1]
@@ -286,13 +289,12 @@ def _tie_shaped_slurs_to_ties(doc: Document) -> int:
 
 
 def _remove_slur(note, slur) -> None:
-    notations = note.find("notations")
-    if notations is None:
-        return
-    if slur in list(notations):
-        notations.remove(slur)
-    if len(notations) == 0:
-        note.remove(notations)
+    for notations in list(note.findall("notations")):
+        if slur in list(notations):
+            notations.remove(slur)
+            if len(notations) == 0:
+                note.remove(notations)
+            return
 
 
 def _add_slur(note, kind: str, number: str) -> None:
@@ -333,10 +335,10 @@ def _add_tie(note, kind: str) -> None:
         ElementTree.SubElement(notations, "tied", {"type": kind})
 
 
-def _free_slur_number(doc: Document, staff: str) -> str | None:
+def _free_slur_number(doc: Document, part: ElementTree.Element, staff: str) -> str | None:
     used = {
         slur.get("number") or "1"
-        for _number, measure in doc.iter_measures()
+        for measure in doc.part_measures(part)
         for note in measure.iter("note")
         if (note.findtext("staff") or "1") == staff
         for slur in note.findall("notations/slur")

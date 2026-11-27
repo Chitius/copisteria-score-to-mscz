@@ -25,50 +25,65 @@ def _offsets(pages) -> list[int]:
     return offsets
 
 
+def _page_parts(root) -> list[tuple[str, ElementTree.Element]]:
+    return [
+        (part.get("id") or f"P{index}", part)
+        for index, part in enumerate(root.findall("part"), start=1)
+    ]
+
+
 def _page_events(root) -> list[tuple]:
-    """(measure_index, staff, voice, onset, duration, pitch, element) for one page."""
-    part = root.find("part")
-    if part is None:
-        return []
-    divisions = float(root.findtext(".//divisions") or 10080)
+    """(part_id, measure_index, staff, voice, onset, duration, pitch, element) for one page."""
+    fallback_divisions = float(root.findtext(".//divisions") or 10080)
     events = []
-    for measure_index, measure in enumerate(part.findall("measure"), start=1):
-        cursor = 0
-        previous = None
-        for item in measure:
-            if item.tag in ("backup", "forward"):
+    for part_id, part in _page_parts(root):
+        divisions = float(part.findtext(".//divisions") or fallback_divisions)
+        for measure_index, measure in enumerate(part.findall("measure"), start=1):
+            declared = measure.findtext("attributes/divisions")
+            if declared:
+                try:
+                    value = float(declared)
+                except ValueError:
+                    value = 0.0
+                if value > 0:
+                    divisions = value
+            cursor = 0
+            previous = None
+            for item in measure:
+                if item.tag in ("backup", "forward"):
+                    text = item.findtext("duration")
+                    if text is None:
+                        continue
+                    value = int(text)
+                    cursor += -value if item.tag == "backup" else value
+                    previous = None
+                    continue
+                if item.tag != "note":
+                    previous = None
+                    continue
                 text = item.findtext("duration")
                 if text is None:
+                    previous = None
                     continue
-                value = int(text)
-                cursor += -value if item.tag == "backup" else value
-                previous = None
-                continue
-            if item.tag != "note":
-                previous = None
-                continue
-            text = item.findtext("duration")
-            if text is None:
-                previous = None
-                continue
-            duration = int(text)
-            chord = item.find("chord") is not None
-            onset = previous if chord and previous is not None else cursor
-            if not chord:
-                cursor += duration
-            previous = onset
-            pitch = item.find("pitch")
-            events.append(
-                (
-                    measure_index,
-                    item.findtext("staff") or "1",
-                    item.findtext("voice") or "1",
-                    round(onset / divisions, 4),
-                    duration / divisions,
-                    _pitch_name(pitch),
-                    item,
+                duration = int(text)
+                chord = item.find("chord") is not None
+                onset = previous if chord and previous is not None else cursor
+                if not chord:
+                    cursor += duration
+                previous = onset
+                pitch = item.find("pitch")
+                events.append(
+                    (
+                        part_id,
+                        measure_index,
+                        item.findtext("staff") or "1",
+                        item.findtext("voice") or "1",
+                        round(onset / divisions, 4),
+                        duration / divisions,
+                        _pitch_name(pitch),
+                        item,
+                    )
                 )
-            )
     return events
 
 
@@ -84,7 +99,7 @@ def _pitch_name(pitch) -> str | None:
 
 def _merged_index(doc: Document) -> dict[tuple, ElementTree.Element]:
     index = {}
-    for number, measure in doc.iter_measures():
+    for part_id, _part, number, measure in doc.iter_part_measures():
         for event in doc.events(measure):
             if event.rest:
                 continue
@@ -92,7 +107,7 @@ def _merged_index(doc: Document) -> dict[tuple, ElementTree.Element]:
             name = _pitch_name(pitch)
             if name is None:
                 continue
-            index[(number, event.staff, round(event.onset, 4), name)] = event.element
+            index[(part_id, number, event.staff, round(event.onset, 4), name)] = event.element
     return index
 
 
@@ -124,13 +139,14 @@ class RestorePageTies(PageRestoreMixin):
         endpoints: list[Endpoint] = []
         for page_index, path in enumerate(model.pages):
             root = ElementTree.parse(str(path)).getroot()
-            for measure_index, staff, _voice, onset, duration, pitch, _element in _page_events(root):
+            events = _page_events(root)
+            for part_id, measure_index, staff, _voice, onset, duration, pitch, _element in events:
                 if pitch is not None:
                     global_measure = offsets[page_index] + measure_index
-                    page_chords.setdefault((global_measure, staff, round(onset, 4)), {}).setdefault(
-                        pitch, set()
-                    ).add(round(duration, 4))
-            for measure_index, staff, voice, onset, duration, pitch, element in _page_events(root):
+                    page_chords.setdefault(
+                        (part_id, global_measure, staff, round(onset, 4)), {}
+                    ).setdefault(pitch, set()).add(round(duration, 4))
+            for part_id, measure_index, staff, voice, onset, duration, pitch, element in events:
                 if pitch is None:
                     continue
                 global_measure = offsets[page_index] + measure_index
@@ -139,42 +155,46 @@ class RestorePageTies(PageRestoreMixin):
                         continue
                     endpoints.append(
                         Endpoint(
-                            key=(staff, voice, pitch),
+                            key=(part_id, staff, voice, pitch),
                             position=(global_measure, round(onset, 4)),
                             kind=tie,
-                            payload=(staff, global_measure, onset, round(duration, 4), pitch),
+                            payload=(part_id, staff, global_measure, onset, round(duration, 4), pitch),
                         )
                     )
         pairing = pair_endpoints(endpoints)
         restored = 0
         tie_to_slur = ctx.options.get("tie_to_slur") or set()
         for start_endpoint, stop_endpoint in pairing.pairs:
-            staff, start_measure, start_onset, start_duration, pitch = start_endpoint.payload
-            _staff, stop_measure, stop_onset, stop_duration, stop_pitch = stop_endpoint.payload
-            start_key = (start_measure, staff, round(start_onset, 4), pitch)
-            stop_key = (stop_measure, staff, round(stop_onset, 4), stop_pitch)
+            part_id, staff, start_measure, start_onset, start_duration, start_pitch = (
+                start_endpoint.payload
+            )
+            _stop_part, _staff, stop_measure, stop_onset, stop_duration, stop_pitch = (
+                stop_endpoint.payload
+            )
+            start_key = (part_id, start_measure, staff, round(start_onset, 4), start_pitch)
+            stop_key = (part_id, stop_measure, staff, round(stop_onset, 4), stop_pitch)
             if start_key in tie_to_slur and stop_key in tie_to_slur:
                 # this tie was deliberately converted to a slur by reconcile_tie_slurs
                 continue
-            start_note = index.get((start_measure, staff, start_onset, pitch))
-            stop_note = index.get((stop_measure, staff, stop_onset, stop_pitch))
+            start_note = index.get((part_id, start_measure, staff, start_onset, start_pitch))
+            stop_note = index.get((part_id, stop_measure, staff, stop_onset, stop_pitch))
             if start_note is None or stop_note is None:
                 continue
             # a tie between two printed chords applies to every member that has the same duration
             # at both ends; a different-duration voice at the same onset is not a chord member
-            start_set = page_chords.get((start_measure, staff, round(start_onset, 4))) or {}
-            stop_set = page_chords.get((stop_measure, staff, round(stop_onset, 4))) or {}
+            start_set = page_chords.get((part_id, start_measure, staff, round(start_onset, 4))) or {}
+            stop_set = page_chords.get((part_id, stop_measure, staff, round(stop_onset, 4))) or {}
             start_members = {
                 member for member, durations in start_set.items() if start_duration in durations
             }
             stop_members = {
                 member for member, durations in stop_set.items() if stop_duration in durations
             }
-            common = start_members & stop_members or {pitch}
+            common = start_members & stop_members or {start_pitch}
             applied = 0
             for member in sorted(common):
-                member_start = index.get((start_measure, staff, start_onset, member))
-                member_stop = index.get((stop_measure, staff, stop_onset, member))
+                member_start = index.get((part_id, start_measure, staff, start_onset, member))
+                member_stop = index.get((part_id, stop_measure, staff, stop_onset, member))
                 if member_start is None or member_stop is None:
                     continue
                 added_start = _add_tie(member_start, "start")
@@ -205,7 +225,7 @@ class RestorePageSlurs(PageRestoreMixin):
         endpoints: list[Endpoint] = []
         for page_index, path in enumerate(model.pages):
             root = ElementTree.parse(str(path)).getroot()
-            for measure_index, staff, _voice, onset, _duration, pitch, element in _page_events(root):
+            for part_id, measure_index, staff, _voice, onset, _duration, pitch, element in _page_events(root):
                 global_measure = offsets[page_index] + measure_index
                 for slur in element.findall("notations/slur"):
                     number = slur.get("number") or "1"
@@ -214,21 +234,21 @@ class RestorePageSlurs(PageRestoreMixin):
                         continue
                     endpoints.append(
                         Endpoint(
-                            key=(staff, number),
+                            key=(part_id, staff, number),
                             position=(global_measure, round(onset, 4)),
                             kind=kind,
-                            payload=(staff, _voice, global_measure, onset, pitch),
+                            payload=(part_id, staff, _voice, global_measure, onset, pitch),
                         )
                     )
         pairing = pair_endpoints(_musical_order(endpoints), max_span=MAX_SLUR_BARS, score=_slur_score)
         pairs: list[dict] = []
         for start, stop in pairing.pairs:
-            staff, _voice, start_measure, start_onset, start_pitch = start.payload
-            _staff, _stop_voice, stop_measure, stop_onset, stop_pitch = stop.payload
+            part_id, staff, _voice, start_measure, start_onset, start_pitch = start.payload
+            _stop_part, _staff, _stop_voice, stop_measure, stop_onset, stop_pitch = stop.payload
             if start_pitch is None or stop_pitch is None:
                 continue
-            start_note = index.get((start_measure, staff, start_onset, start_pitch))
-            stop_note = index.get((stop_measure, staff, stop_onset, stop_pitch))
+            start_note = index.get((part_id, start_measure, staff, start_onset, start_pitch))
+            stop_note = index.get((part_id, stop_measure, staff, stop_onset, stop_pitch))
             if start_note is None or stop_note is None:
                 continue
             # a page often records the same arc as both tie and slur; only when both endpoints
@@ -237,6 +257,7 @@ class RestorePageSlurs(PageRestoreMixin):
                 continue
             if _tied_span_covers(
                 index,
+                part_id,
                 start_measure,
                 staff,
                 start_onset,
@@ -250,6 +271,7 @@ class RestorePageSlurs(PageRestoreMixin):
                 continue
             pairs.append(
                 {
+                    "part_id": part_id,
                     "start": start_note,
                     "stop": stop_note,
                     "start_key": (start_measure, round(start_onset, 4)),
@@ -260,8 +282,8 @@ class RestorePageSlurs(PageRestoreMixin):
                     "stop_measure": stop_measure,
                 }
             )
-        # MuseScore resolves slur numbers document-wide, not per staff. Page numbers are only
-        # unique within a staff, so they must be reassigned globally; otherwise the treble slur 1
+        # MuseScore resolves slur numbers across staves within a part. Page numbers are only
+        # unique within a staff, so they must be reassigned per part; otherwise the treble slur 1
         # pairs with the bass stop 1 and jumps staves (laputa m29-m30).
         # Page OMR often splits one long phrase at a shared note; join those before numbering.
         pairs = _merge_adjacent_pairs(pairs)
@@ -293,54 +315,68 @@ class RestorePagePedals(PageRestoreMixin):
         if model is None:
             return PassResult()
         offsets = _offsets(model)
-        measures = doc.measures()
+        parts_by_id = dict(doc.iter_parts())
+        measures_by_part = {
+            part_id: doc.part_measures(part) for part_id, part in parts_by_id.items()
+        }
         desired = []
         for page_index, path in enumerate(model.pages):
             root = ElementTree.parse(str(path)).getroot()
-            divisions = float(root.findtext(".//divisions") or 10080)
-            part = root.find("part")
-            if part is None:
-                continue
-            for measure_index, measure in enumerate(part.findall("measure"), start=1):
-                cursor = 0
-                for item in measure:
-                    if item.tag in ("backup", "forward"):
-                        text = item.findtext("duration")
-                        if text is None:
+            fallback_divisions = float(root.findtext(".//divisions") or 10080)
+            for part_id, part in _page_parts(root):
+                divisions = float(part.findtext(".//divisions") or fallback_divisions)
+                for measure_index, measure in enumerate(part.findall("measure"), start=1):
+                    declared = measure.findtext("attributes/divisions")
+                    if declared:
+                        try:
+                            value = float(declared)
+                        except ValueError:
+                            value = 0.0
+                        if value > 0:
+                            divisions = value
+                    cursor = 0
+                    for item in measure:
+                        if item.tag in ("backup", "forward"):
+                            text = item.findtext("duration")
+                            if text is None:
+                                continue
+                            value = int(text)
+                            cursor += -value if item.tag == "backup" else value
                             continue
-                        value = int(text)
-                        cursor += -value if item.tag == "backup" else value
-                        continue
-                    if item.tag == "note":
-                        text = item.findtext("duration")
-                        if text is not None and item.find("chord") is None:
-                            cursor += int(text)
-                        continue
-                    if item.tag != "direction":
-                        continue
-                    pedal = item.find("direction-type/pedal")
-                    if pedal is None:
-                        continue
-                    offset = item.findtext("offset")
-                    onset = cursor + (int(offset) if offset else 0)
-                    desired.append(
-                        {
-                            "measure": offsets[page_index] + measure_index,
-                            "staff": item.findtext("staff") or "1",
-                            "onset": onset / divisions,
-                            "type": pedal.get("type"),
-                            "number": pedal.get("number") or "1",
-                            "placement": item.get("placement") or "below",
-                        }
-                    )
+                        if item.tag == "note":
+                            text = item.findtext("duration")
+                            if text is not None and item.find("chord") is None:
+                                cursor += int(text)
+                            continue
+                        if item.tag != "direction":
+                            continue
+                        pedal = item.find("direction-type/pedal")
+                        if pedal is None:
+                            continue
+                        offset = item.findtext("offset")
+                        onset = cursor + (int(offset) if offset else 0)
+                        desired.append(
+                            {
+                                "part_id": part_id,
+                                "measure": offsets[page_index] + measure_index,
+                                "staff": item.findtext("staff") or "1",
+                                "onset": onset / divisions,
+                                "type": pedal.get("type"),
+                                "number": pedal.get("number") or "1",
+                                "placement": item.get("placement") or "below",
+                            }
+                        )
         changed = 0
-        desired_by_measure: dict[int, list[dict]] = {}
+        desired_by_measure: dict[tuple[str, int], list[dict]] = {}
         for entry in desired:
-            desired_by_measure.setdefault(entry["measure"], []).append(entry)
-        for measure_number, entries in desired_by_measure.items():
-            if not 0 < measure_number <= len(measures):
+            desired_by_measure.setdefault((entry["part_id"], entry["measure"]), []).append(entry)
+        for (part_id, measure_number), entries in desired_by_measure.items():
+            measures = measures_by_part.get(part_id)
+            if not measures or not 0 < measure_number <= len(measures):
                 continue
+            part = parts_by_id[part_id]
             measure = measures[measure_number - 1]
+            divisions = doc.effective_divisions(measure, part)
             wanted = sorted(
                 (entry["type"], entry["staff"], round(entry["onset"], 4), entry["number"])
                 for entry in entries
@@ -349,7 +385,7 @@ class RestorePagePedals(PageRestoreMixin):
                 (
                     direction.find("direction-type/pedal").get("type"),
                     direction.findtext("staff") or "1",
-                    round(float(direction.findtext("offset") or 0) / doc.divisions(), 4),
+                    round(float(direction.findtext("offset") or 0) / divisions, 4),
                     direction.find("direction-type/pedal").get("number") or "1",
                 )
                 for direction in measure.findall("direction")
@@ -369,7 +405,7 @@ class RestorePagePedals(PageRestoreMixin):
                 )
                 if entry["onset"]:
                     ElementTree.SubElement(direction, "offset").text = str(
-                        int(round(entry["onset"] * doc.divisions()))
+                        int(round(entry["onset"] * divisions))
                     )
                 ElementTree.SubElement(direction, "staff").text = entry["staff"]
                 index = next(
@@ -402,13 +438,13 @@ class RestorePageArpeggios(PageRestoreMixin):
         page_marks: dict[tuple, tuple[ElementTree.Element, set[str]]] = {}
         for page_index, path in enumerate(model.pages):
             root = ElementTree.parse(str(path)).getroot()
-            for measure_index, staff, _voice, onset, _duration, pitch, element in _page_events(root):
+            for part_id, measure_index, staff, _voice, onset, _duration, pitch, element in _page_events(root):
                 marks = element.findall("notations/arpeggiate") + element.findall(
                     "notations/non-arpeggiate"
                 )
                 if not marks:
                     continue
-                key = (offsets[page_index] + measure_index, staff, round(onset, 4))
+                key = (part_id, offsets[page_index] + measure_index, staff, round(onset, 4))
                 entry = page_marks.get(key)
                 if entry is None:
                     page_marks[key] = (marks[0], {pitch} if pitch else set())
@@ -416,11 +452,11 @@ class RestorePageArpeggios(PageRestoreMixin):
                     entry[1].add(pitch)
 
         notes_at: dict[tuple, list] = {}
-        for number, measure in doc.iter_measures():
+        for part_id, _part, number, measure in doc.iter_part_measures():
             for event in doc.events(measure):
                 if event.rest:
                     continue
-                notes_at.setdefault((number, event.staff, round(event.onset, 4)), []).append(event)
+                notes_at.setdefault((part_id, number, event.staff, round(event.onset, 4)), []).append(event)
 
         restored = 0
         for key, (mark, marked_pitches) in page_marks.items():
@@ -488,12 +524,12 @@ class RestorePageArticulations(PageRestoreMixin):
         restored = 0
         for page_index, path in enumerate(model.pages):
             root = ElementTree.parse(str(path)).getroot()
-            for measure_index, staff, _voice, onset, _duration, pitch, element in _page_events(root):
+            for part_id, measure_index, staff, _voice, onset, _duration, pitch, element in _page_events(root):
                 global_measure = offsets[page_index] + measure_index
                 for mark in element.findall("notations/articulations/*"):
-                    note = index.get((global_measure, staff, onset, pitch)) if pitch else None
+                    note = index.get((part_id, global_measure, staff, onset, pitch)) if pitch else None
                     if note is None:
-                        note = onset_index.get((global_measure, staff, onset))
+                        note = onset_index.get((part_id, global_measure, staff, onset))
                     if note is None:
                         continue
                     if _add_articulation(note, mark):
@@ -516,54 +552,68 @@ class RestorePageWedges(PageRestoreMixin):
         if model is None:
             return PassResult()
         offsets = _offsets(model)
-        measures = doc.measures()
+        parts_by_id = dict(doc.iter_parts())
+        measures_by_part = {
+            part_id: doc.part_measures(part) for part_id, part in parts_by_id.items()
+        }
         desired: list[dict] = []
         for page_index, path in enumerate(model.pages):
             root = ElementTree.parse(str(path)).getroot()
-            divisions = float(root.findtext(".//divisions") or 10080)
-            part = root.find("part")
-            if part is None:
-                continue
-            for measure_index, measure in enumerate(part.findall("measure"), start=1):
-                cursor = 0
-                for item in measure:
-                    if item.tag in ("backup", "forward"):
-                        text = item.findtext("duration")
-                        if text is None:
+            fallback_divisions = float(root.findtext(".//divisions") or 10080)
+            for part_id, part in _page_parts(root):
+                divisions = float(part.findtext(".//divisions") or fallback_divisions)
+                for measure_index, measure in enumerate(part.findall("measure"), start=1):
+                    declared = measure.findtext("attributes/divisions")
+                    if declared:
+                        try:
+                            value = float(declared)
+                        except ValueError:
+                            value = 0.0
+                        if value > 0:
+                            divisions = value
+                    cursor = 0
+                    for item in measure:
+                        if item.tag in ("backup", "forward"):
+                            text = item.findtext("duration")
+                            if text is None:
+                                continue
+                            value = int(text)
+                            cursor += -value if item.tag == "backup" else value
                             continue
-                        value = int(text)
-                        cursor += -value if item.tag == "backup" else value
-                        continue
-                    if item.tag == "note":
-                        text = item.findtext("duration")
-                        if text is not None and item.find("chord") is None:
-                            cursor += int(text)
-                        continue
-                    if item.tag != "direction":
-                        continue
-                    wedge = item.find("direction-type/wedge")
-                    if wedge is None:
-                        continue
-                    offset = item.findtext("offset")
-                    onset = cursor + (int(offset) if offset else 0)
-                    desired.append(
-                        {
-                            "measure": offsets[page_index] + measure_index,
-                            "staff": item.findtext("staff") or "1",
-                            "onset": onset / divisions,
-                            "type": wedge.get("type"),
-                            "number": wedge.get("number") or "1",
-                            "placement": item.get("placement") or "below",
-                        }
-                    )
+                        if item.tag == "note":
+                            text = item.findtext("duration")
+                            if text is not None and item.find("chord") is None:
+                                cursor += int(text)
+                            continue
+                        if item.tag != "direction":
+                            continue
+                        wedge = item.find("direction-type/wedge")
+                        if wedge is None:
+                            continue
+                        offset = item.findtext("offset")
+                        onset = cursor + (int(offset) if offset else 0)
+                        desired.append(
+                            {
+                                "part_id": part_id,
+                                "measure": offsets[page_index] + measure_index,
+                                "staff": item.findtext("staff") or "1",
+                                "onset": onset / divisions,
+                                "type": wedge.get("type"),
+                                "number": wedge.get("number") or "1",
+                                "placement": item.get("placement") or "below",
+                            }
+                        )
         changed = 0
-        by_measure: dict[int, list[dict]] = {}
+        by_measure: dict[tuple[str, int], list[dict]] = {}
         for entry in desired:
-            by_measure.setdefault(entry["measure"], []).append(entry)
-        for measure_number, entries in by_measure.items():
-            if not 0 < measure_number <= len(measures):
+            by_measure.setdefault((entry["part_id"], entry["measure"]), []).append(entry)
+        for (part_id, measure_number), entries in by_measure.items():
+            measures = measures_by_part.get(part_id)
+            if not measures or not 0 < measure_number <= len(measures):
                 continue
+            part = parts_by_id[part_id]
             measure = measures[measure_number - 1]
+            divisions = doc.effective_divisions(measure, part)
             wanted = sorted(
                 (entry["type"], entry["staff"], round(entry["onset"], 4), entry["number"])
                 for entry in entries
@@ -572,7 +622,7 @@ class RestorePageWedges(PageRestoreMixin):
                 (
                     direction.find("direction-type/wedge").get("type"),
                     direction.findtext("staff") or "1",
-                    round(float(direction.findtext("offset") or 0) / doc.divisions(), 4),
+                    round(float(direction.findtext("offset") or 0) / divisions, 4),
                     direction.find("direction-type/wedge").get("number") or "1",
                 )
                 for direction in measure.findall("direction")
@@ -592,7 +642,7 @@ class RestorePageWedges(PageRestoreMixin):
                 )
                 if entry["onset"]:
                     ElementTree.SubElement(direction, "offset").text = str(
-                        int(round(entry["onset"] * doc.divisions()))
+                        int(round(entry["onset"] * divisions))
                     )
                 ElementTree.SubElement(direction, "staff").text = entry["staff"]
                 index = next(
@@ -606,11 +656,11 @@ class RestorePageWedges(PageRestoreMixin):
 
 def _merged_onset_index(doc: Document) -> dict[tuple, ElementTree.Element]:
     index = {}
-    for number, measure in doc.iter_measures():
+    for part_id, _part, number, measure in doc.iter_part_measures():
         for event in doc.events(measure):
             if event.rest:
                 continue
-            index.setdefault((number, event.staff, round(event.onset, 4)), event.element)
+            index.setdefault((part_id, number, event.staff, round(event.onset, 4)), event.element)
     return index
 
 
@@ -656,6 +706,7 @@ def _add_articulation(note, mark) -> bool:
 
 def _tied_span_covers(
     index,
+    part_id,
     start_measure,
     staff,
     start_onset,
@@ -669,11 +720,11 @@ def _tied_span_covers(
     """If one slur endpoint is a tie note and the other lands at the tie's other end, the slur
     describes the same span as the tie (its other endpoint may be another chord member)."""
     if _has_tie(start_note, "start"):
-        same_pitch_stop = index.get((stop_measure, staff, stop_onset, start_pitch))
+        same_pitch_stop = index.get((part_id, stop_measure, staff, stop_onset, start_pitch))
         if same_pitch_stop is not None and _has_tie(same_pitch_stop, "stop"):
             return True
     if _has_tie(stop_note, "stop"):
-        same_pitch_start = index.get((start_measure, staff, start_onset, stop_pitch))
+        same_pitch_start = index.get((part_id, start_measure, staff, start_onset, stop_pitch))
         if same_pitch_start is not None and _has_tie(same_pitch_start, "start"):
             return True
     return False
@@ -716,8 +767,8 @@ def _musical_order(endpoints: list[Endpoint]) -> list[Endpoint]:
 
 def _slur_score(start, stop) -> float:
     """Prefer a start with the same pitch, then the same voice, for a reused slur number."""
-    _staff, start_voice, _measure, _onset, start_pitch = start.payload
-    _staff, stop_voice, _measure, _onset, stop_pitch = stop.payload
+    _part, _staff, start_voice, _measure, _onset, start_pitch = start.payload
+    _part2, _staff2, stop_voice, _measure2, _onset2, stop_pitch = stop.payload
     score = 0.0
     if start_pitch is not None and start_pitch == stop_pitch:
         score += 100.0
@@ -761,6 +812,7 @@ def _merge_adjacent_pairs(pairs: list[dict]) -> list[dict]:
         last = pairs[chain[-1]]
         merged.append(
             {
+                "part_id": first["part_id"],
                 "start": first["start"],
                 "stop": last["stop"],
                 "start_key": first["start_key"],
@@ -775,9 +827,11 @@ def _merge_adjacent_pairs(pairs: list[dict]) -> list[dict]:
 
 
 def _assign_slur_numbers(pairs: list[dict]) -> dict:
-    """Global 1..16 numbering, reused as soon as a slur has ended (the old skill's scheme)."""
-    ordered = sorted(pairs, key=lambda pair: (pair["start_key"], pair["stop_measure"]))
-    active: dict[int, int] = {}
+    """Per-part 1..16 numbering, reused as soon as a slur has ended."""
+    ordered = sorted(
+        pairs, key=lambda pair: (pair["part_id"], pair["start_key"], pair["stop_measure"])
+    )
+    active_by_part: dict[str, dict[int, int]] = {}
     entries: list[tuple] = []
     signature: set[tuple] = set()
     seen: set[tuple] = set()
@@ -786,6 +840,8 @@ def _assign_slur_numbers(pairs: list[dict]) -> dict:
         if identity in seen:
             continue  # the same page slur recorded twice must not become two arcs
         seen.add(identity)
+        part_id = pair["part_id"]
+        active = active_by_part.setdefault(part_id, {})
         start_measure = pair["start_key"][0]
         for number in [key for key, end in active.items() if end < start_measure]:
             active.pop(number)
@@ -798,8 +854,12 @@ def _assign_slur_numbers(pairs: list[dict]) -> dict:
         entries.append((pair["stop"], "stop", number))
         start_measure, start_onset = pair["start_key"]
         stop_measure, stop_onset = pair["stop_key"]
-        signature.add((start_measure, pair["staff"], start_onset, pair["start_pitch"], "start", number))
-        signature.add((stop_measure, pair["staff"], stop_onset, pair["stop_pitch"], "stop", number))
+        signature.add(
+            (part_id, start_measure, pair["staff"], start_onset, pair["start_pitch"], "start", number)
+        )
+        signature.add(
+            (part_id, stop_measure, pair["staff"], stop_onset, pair["stop_pitch"], "stop", number)
+        )
     return {"entries": entries, "signature": frozenset(signature)}
 
 
@@ -812,7 +872,7 @@ def _slur_signature(doc: Document) -> frozenset[tuple]:
     voice changes.
     """
     signature: set[tuple] = set()
-    for number, measure in doc.iter_measures():
+    for part_id, _part, number, measure in doc.iter_part_measures():
         for event in doc.events(measure):
             if event.rest:
                 continue
@@ -822,6 +882,7 @@ def _slur_signature(doc: Document) -> frozenset[tuple]:
             for slur in event.element.findall("notations/slur"):
                 signature.add(
                     (
+                        part_id,
                         number,
                         event.staff,
                         round(event.onset, 4),
@@ -834,7 +895,7 @@ def _slur_signature(doc: Document) -> frozenset[tuple]:
 
 
 def _clear_slurs(doc: Document) -> None:
-    for _number, measure in doc.iter_measures():
+    for _part_id, _part, _number, measure in doc.iter_part_measures():
         for note in measure.iter("note"):
             notations = note.find("notations")
             if notations is None:

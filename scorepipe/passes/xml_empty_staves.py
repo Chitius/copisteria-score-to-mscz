@@ -24,37 +24,43 @@ class PadEmptyStaves:
     )
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
-        staves = {event.staff for _number, measure in doc.iter_measures() for event in doc.events(measure)}
-        if not staves:
-            return PassResult()
-        divisions = doc.divisions()
-        meter = (4.0, 4.0)
         added = 0
-        for _number, measure in doc.iter_measures():
-            if measure.get("implicit") == "yes":
-                continue  # an anacrusis is intentionally short; do not fill it with a measure rest
-            declared = doc.time_signature(measure)
-            if declared is not None:
-                meter = declared
-            bar = meter[0] * 4.0 / meter[1]
-            events = doc.events(measure)
-            present = {event.staff for event in events}
-            cursor = max((event.end for event in events), default=0.0)
-            for staff in sorted(staves - present):
-                if events:
-                    backup = ElementTree.Element("backup")
-                    ElementTree.SubElement(backup, "duration").text = str(
-                        int(round(cursor * divisions))
-                    )
-                    measure.append(backup)
-                rest = ElementTree.Element("note")
-                ElementTree.SubElement(rest, "rest", {"measure": "yes"})
-                ElementTree.SubElement(rest, "duration").text = str(int(round(bar * divisions)))
-                ElementTree.SubElement(rest, "voice").text = "1"
-                ElementTree.SubElement(rest, "type").text = "whole"
-                ElementTree.SubElement(rest, "staff").text = staff
-                measure.append(rest)
-                added += 1
+        for _part_id, part in doc.iter_parts():
+            measures = doc.part_measures(part)
+            staves = {
+                event.staff
+                for measure in measures
+                for event in doc.events(measure, doc.effective_divisions(measure, part))
+            }
+            if not staves:
+                continue
+            meter = (4.0, 4.0)
+            for measure in measures:
+                if measure.get("implicit") == "yes":
+                    continue  # an anacrusis is intentionally short; do not fill it with a measure rest
+                declared = doc.time_signature(measure)
+                if declared is not None:
+                    meter = declared
+                bar = meter[0] * 4.0 / meter[1]
+                divisions = doc.effective_divisions(measure, part)
+                events = doc.events(measure, divisions)
+                present = {event.staff for event in events}
+                cursor = max((event.end for event in events), default=0.0)
+                for staff in sorted(staves - present):
+                    if events:
+                        backup = ElementTree.Element("backup")
+                        ElementTree.SubElement(backup, "duration").text = str(
+                            int(round(cursor * divisions))
+                        )
+                        measure.append(backup)
+                    rest = ElementTree.Element("note")
+                    ElementTree.SubElement(rest, "rest", {"measure": "yes"})
+                    ElementTree.SubElement(rest, "duration").text = str(int(round(bar * divisions)))
+                    ElementTree.SubElement(rest, "voice").text = "1"
+                    ElementTree.SubElement(rest, "type").text = "whole"
+                    ElementTree.SubElement(rest, "staff").text = staff
+                    measure.append(rest)
+                    added += 1
         return PassResult(changed=added)
 
 

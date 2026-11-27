@@ -30,17 +30,19 @@ class MergeStaffVoices:
     def run(self, doc: Document, ctx: Context) -> PassResult:
         changed = 0
         done = ctx.options.setdefault("merge_staff_done", set())
-        for number, measure in doc.iter_measures():
-            if number in done:
+        for part_id, part, number, measure in doc.iter_part_measures():
+            key = (part_id, number)
+            if key in done:
                 continue
-            if _merge(doc, measure, allow_sustained=True):
+            if _merge(doc, measure, allow_sustained=True, part=part):
                 changed += 1
-                done.add(number)
+                done.add(key)
         return PassResult(changed=changed)
 
 
-def _merge(doc: Document, measure, allow_sustained: bool = True) -> bool:
-    events = doc.events(measure)
+def _merge(doc: Document, measure, allow_sustained: bool = True, part=None) -> bool:
+    divisions = doc.effective_divisions(measure, part)
+    events = doc.events(measure, divisions)
     if not events:
         return False
     by_staff: dict[str, list] = {}
@@ -54,11 +56,12 @@ def _merge(doc: Document, measure, allow_sustained: bool = True) -> bool:
     if not targets:
         return False
 
-    meter = doc.effective_time_signature(measure)
+    meter = doc.effective_time_signature(measure, part)
     bar = meter[0] * 4.0 / meter[1]
-    divisions = doc.divisions()
     rebuilt = False
     for staff, staff_events in targets.items():
+        if any(not event.rest and event.element.find("pitch") is None for event in staff_events):
+            continue
         notes = [event for event in staff_events if not event.rest and event.element.find("pitch") is not None]
         if not notes:
             continue
@@ -77,29 +80,34 @@ def _merge(doc: Document, measure, allow_sustained: bool = True) -> bool:
         active_onsets = sorted({round(event.onset, 4) for event in active})
         sequence: list[ElementTree.Element] = []
         cursor = 0.0
-        for onset in active_onsets:
-            if onset > cursor + 1e-6:
-                sequence.extend(_rests(onset - cursor, divisions, staff))
-            boundary = next((value for value in all_onsets if value > onset + 1e-6), bar)
-            duration = boundary - onset
-            pitches = []
-            for event in active:
-                if abs(event.onset - onset) > 1e-6:
-                    continue
-                pitch = _pitch(event.element)
-                if pitch and pitch not in [item[0] for item in pitches]:
-                    pitches.append((pitch, event))
-            for position, (pitch, event) in enumerate(pitches):
-                source = event.element if abs(event.duration - duration) < 1e-6 else None
-                sequence.append(
-                    _note(pitch, duration, divisions, staff, chord=position > 0, source=source)
-                )
-            cursor = onset + duration
-        if cursor < bar - 1e-6:
-            sequence.extend(_rests(bar - cursor, divisions, staff))
-        extras = _protected_blocks(
-            [event for event in notes if id(event.element) in protected], bar, divisions, staff
-        )
+        try:
+            for onset in active_onsets:
+                if onset > cursor + 1e-6:
+                    sequence.extend(_rests(onset - cursor, divisions, staff))
+                boundary = next((value for value in all_onsets if value > onset + 1e-6), bar)
+                duration = boundary - onset
+                pitches = []
+                for event in active:
+                    if abs(event.onset - onset) > 1e-6:
+                        continue
+                    pitch = _pitch(event.element)
+                    if pitch and pitch not in [item[0] for item in pitches]:
+                        pitches.append((pitch, event))
+                for position, (pitch, event) in enumerate(pitches):
+                    source = event.element if abs(event.duration - duration) < 1e-6 else None
+                    sequence.append(
+                        _note(pitch, duration, divisions, staff, chord=position > 0, source=source)
+                    )
+                cursor = onset + duration
+            if cursor < bar - 1e-6:
+                sequence.extend(_rests(bar - cursor, divisions, staff))
+            extras = _protected_blocks(
+                [event for event in notes if id(event.element) in protected], bar, divisions, staff
+            )
+        except ValueError:
+            # A proposed slot/gap cannot be represented as a plain binary MusicXML duration
+            # (e.g. a cross-voice triplet subdivision); leave the source voices intact.
+            continue
         _replace_staff(doc, measure, staff, sequence, extras)
         rebuilt = True
     return rebuilt

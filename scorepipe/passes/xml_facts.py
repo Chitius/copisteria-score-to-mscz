@@ -24,14 +24,19 @@ class ApplyMarksFacts:
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
         marks = (ctx.facts or {}).get("marks") or []
-        divisions = doc.divisions()
         changed = 0
         for mark in marks:
             number = int(mark.get("measure") or 0)
-            measures = doc.measures()
+            part_id = mark.get("part") or None
+            try:
+                part = doc.part_by_id(part_id)
+            except ValueError:
+                continue
+            measures = doc.part_measures(part)
             if not 0 < number <= len(measures):
                 continue
             measure = measures[number - 1]
+            divisions = doc.effective_divisions(measure, part)
             text = (mark.get("text") or "").strip()
             beat_ticks = float(mark.get("beat") or 0) * divisions
             placement = mark.get("placement") or "above"

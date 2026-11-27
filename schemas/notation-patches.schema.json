@@ -56,6 +56,7 @@
           "required": ["op", "measure", "staff", "clef", "line", "status"],
           "properties": {
             "op": {"const": "clef"},
+            "part": {"type": "string", "minLength": 1},
             "measure": {"type": "integer", "minimum": 1},
             "staff": {"type": "integer", "minimum": 1},
             "clef": {"enum": ["G", "F", "C"]},
@@ -78,6 +79,7 @@
           "required": ["op", "subtype", "staff", "start", "end"],
           "properties": {
             "op": {"const": "ottava"},
+            "part": {"type": "string", "minLength": 1},
             "mode": {"enum": ["add", "replace", "remove"]},
             "subtype": {"enum": ["8va", "8vb"]},
             "staff": {"type": "integer", "minimum": 1},
@@ -98,6 +100,7 @@
           ],
           "properties": {
             "op": {"const": "tuplet"},
+            "part": {"type": "string", "minLength": 1},
             "measure": {"type": "integer", "minimum": 1},
             "staff": {"type": "integer", "minimum": 1},
             "voice": {"type": "string", "minLength": 1},

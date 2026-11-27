@@ -20,7 +20,7 @@ class NormalizeVoiceNumbers:
 
     def run(self, doc: Document, ctx: Context) -> PassResult:
         changed_notes = 0
-        for _number, measure in doc.iter_measures():
+        for _part_id, _part, _number, measure in doc.iter_part_measures():
             by_staff: dict[str, dict[str, int]] = {}
             for event in doc.events(measure):
                 counts = by_staff.setdefault(event.staff, {})
