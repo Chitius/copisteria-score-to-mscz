@@ -10,6 +10,7 @@ from xml.etree import ElementTree
 
 from ..core.document import Document
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
+from .tempo_text import looks_like_tempo_text, normalize_tempo_text
 
 
 class ApplyMarksFacts:
@@ -37,12 +38,12 @@ class ApplyMarksFacts:
                 continue
             measure = measures[number - 1]
             divisions = doc.effective_divisions(measure, part)
-            text = (mark.get("text") or "").strip()
+            text = normalize_tempo_text((mark.get("text") or "").strip())
             beat_ticks = float(mark.get("beat") or 0) * divisions
             placement = mark.get("placement") or "above"
             rehearsal = (mark.get("rehearsal") or "").strip()
             metronome = mark.get("tempo") or mark.get("metronome")
-            tempo_text = bool(metronome and text and _looks_like_tempo_text(text))
+            tempo_text = bool(metronome and text and looks_like_tempo_text(text))
             if rehearsal and not _has_rehearsal(measure, rehearsal):
                 direction = _direction(placement)
                 direction_type = ElementTree.SubElement(direction, "direction-type")
@@ -73,11 +74,6 @@ class ApplyMarksFacts:
                 _insert(measure, direction)
                 changed += 1
         return PassResult(changed=changed)
-
-
-def _looks_like_tempo_text(text: str) -> bool:
-    lowered = text.lower()
-    return "=" in text or "♩" in text or "♪" in text or lowered.startswith(("q ", "q."))
 
 
 def _style_attributes(mark: dict) -> dict:

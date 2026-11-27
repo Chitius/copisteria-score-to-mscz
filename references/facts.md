@@ -57,7 +57,11 @@ edits to the score; an inject pass applies them mechanically.
 
 `measure` is 1-based; `beat` is 0-based in quarter-note beats within the measure. `placement` is
 `above` or `below`. Tempo-notation text such as `q = 72` is injected once with a `<sound tempo>`,
-not duplicated as a metronome glyph. For multi-`<part>` scores (experimental), `marks` accepts an
+not duplicated as a metronome glyph. The beat-unit shorthand is expanded to the printed glyph
+before the text is written (`q = 72` → `♩ = 72`, `q. = 72` → `♩. = 72`; also `e`, `h`, `w`),
+because MuseScore prints a `<words>` text verbatim and a delivery would otherwise show a literal
+`q`. Text that already carries the glyph is left alone, and a tempo word beside the number
+(`Allegro q = 72`) keeps its words. For multi-`<part>` scores (experimental), `marks` accepts an
 optional `"part"` ID (defaults to the first part) and `parts` injects per-part `<part-name>`,
 `<part-abbreviation>`, `<instrument-sound>`, and GM `<midi-program>` / `<midi-channel>` (using a
 preset `"instrument"` key from `schemas/facts.schema.json` or explicit `"sound"` /

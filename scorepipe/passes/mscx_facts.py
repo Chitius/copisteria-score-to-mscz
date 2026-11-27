@@ -6,6 +6,7 @@ from xml.etree import ElementTree
 
 from ..core.mscx import MsxcDocument
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
+from .tempo_text import looks_like_tempo_text, normalize_tempo_text
 
 METRONOME_SYMBOLS = {
     "whole": "metNoteWhole",
@@ -15,11 +16,6 @@ METRONOME_SYMBOLS = {
     "16th": "metNote16thUp",
     "32nd": "metNote32ndUp",
 }
-
-
-def _looks_like_tempo_text(text: str) -> bool:
-    lowered = text.lower()
-    return "=" in text or "♩" in text or "♪" in text or lowered.startswith(("q ", "q."))
 
 
 class ApplyTextFactsStyle:
@@ -88,15 +84,18 @@ class UpgradeTempoTexts:
             return PassResult()
         for fact in facts:
             tempo = fact.get("tempo")
-            text = (fact.get("text") or "").strip()
+            raw_text = (fact.get("text") or "").strip()
+            text = normalize_tempo_text(raw_text)
             if not tempo or not text:
                 continue
+            # either spelling matches: the shorthand ("q = 72") or the printed glyph ("♩ = 72")
+            accepted = {text, raw_text}
             number = int(fact.get("measure") or 0)
             measures = staves[0].findall("Measure")
             if not 0 < number <= len(measures):
                 continue
             measure = measures[number - 1]
-            if any(_tempo_text(node).strip() == text for node in measure.iter("Tempo")):
+            if any(_tempo_text(node).strip() in accepted for node in measure.iter("Tempo")):
                 continue
             # the metronome direction imported from MusicXML becomes its own Tempo with just the
             # glyph and a number; drop it, the real Tempo below carries the words and the glyph.
@@ -112,14 +111,14 @@ class UpgradeTempoTexts:
                 for node in list(voice):
                     if node.tag != "StaffText":
                         continue
-                    if (node.findtext("text") or "").strip() != text:
+                    if (node.findtext("text") or "").strip() not in accepted:
                         continue
                     element = ElementTree.Element("Tempo")
                     ElementTree.SubElement(element, "tempo").text = (
                         f"{float(tempo) / 60:.6f}".rstrip("0").rstrip(".")
                     )
                     text_element = ElementTree.SubElement(element, "text")
-                    if _looks_like_tempo_text(text):
+                    if looks_like_tempo_text(text):
                         text_element.text = text
                     else:
                         text_element.text = text + " "

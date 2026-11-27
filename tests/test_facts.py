@@ -90,11 +90,29 @@ class ApplyFactsTest(unittest.TestCase):
             }
         )
         run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, inject=INJECT_PASSES, verifiers=[])
-        words = next(w for w in doc.root.iter("words") if w.text == "q = 72")
+        words = next(w for w in doc.root.iter("words") if w.text == "♩ = 72")
         direction = next(d for d in doc.measures()[0].findall("direction") if d.find(".//words") is not None)
         self.assertIsNotNone(direction.find("sound"))
         self.assertEqual(direction.find("sound").get("tempo"), "72")
         self.assertEqual(list(doc.root.iter("metronome")), [])
+
+    def test_tempo_shorthand_is_expanded_to_the_printed_glyph(self):
+        doc = Document.load(FIXTURE)
+        ctx = Context(facts={"marks": [{"measure": 1, "text": "q. = 72", "tempo": 72}]})
+        run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, inject=INJECT_PASSES, verifiers=[])
+        self.assertEqual([w.text for w in doc.root.iter("words")], ["♩. = 72"])
+
+    def test_text_that_already_carries_the_glyph_is_untouched(self):
+        doc = Document.load(FIXTURE)
+        ctx = Context(facts={"marks": [{"measure": 1, "text": "♩ = 72", "tempo": 72}]})
+        run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, inject=INJECT_PASSES, verifiers=[])
+        self.assertEqual([w.text for w in doc.root.iter("words")], ["♩ = 72"])
+
+    def test_a_tempo_word_beside_the_number_keeps_its_text(self):
+        doc = Document.load(FIXTURE)
+        ctx = Context(facts={"marks": [{"measure": 1, "text": "Allegro q = 72", "tempo": 72}]})
+        run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, inject=INJECT_PASSES, verifiers=[])
+        self.assertEqual([w.text for w in doc.root.iter("words")], ["Allegro ♩ = 72"])
 
 
 if __name__ == "__main__":

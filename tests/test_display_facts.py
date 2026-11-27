@@ -133,12 +133,12 @@ class UpgradeTempoTest(unittest.TestCase):
         again = run_phase(doc, DISPLAY_PASSES, ctx, Phase.DISPLAY)
         self.assertEqual(again.changes, 0)
 
-    def test_tempo_notation_text_keeps_its_words_without_a_glyph(self):
+    def test_tempo_shorthand_text_becomes_the_printed_glyph(self):
         doc = MsxcDocument(ElementTree.fromstring(TEMPO_TEXT))
         run_phase(doc, DISPLAY_PASSES, Context(facts=TEMPO_FACTS), Phase.DISPLAY)
         tempo = doc.root.find(".//Tempo")
         self.assertIsNotNone(tempo)
-        self.assertEqual((tempo.findtext("text") or "").strip(), "q = 72")
+        self.assertEqual((tempo.findtext("text") or "").strip(), "♩ = 72")
         self.assertIsNone(tempo.find("text/sym"))
 
     def test_pickup_padding_rest_is_hidden_once(self):
