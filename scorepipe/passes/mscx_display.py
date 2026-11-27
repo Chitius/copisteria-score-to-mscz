@@ -344,45 +344,6 @@ class HidePickupLeadingRest:
         return PassResult(changed=changed)
 
 
-class DropFirstTimeSignature:
-    spec = PassSpec(
-        name="drop_first_time_signature",
-        phase=Phase.DISPLAY,
-        kind=Kind.MECHANICAL,
-        owns=("initial-time-signature",),
-        description="delete an initial courtesy 4/4 instead of leaving it invisible",
-        measure="initial 4/4 time signature when the score never changes metre",
-    )
-
-    DEFAULT_METER = (4, 4)
-
-    def run(self, doc: MsxcDocument, ctx: Context) -> PassResult:
-        staves = list(doc.root.iter("Staff"))
-        first_measures = [(staff, staff.find("Measure")) for staff in staves]
-        total = len(list(doc.root.iter("TimeSig")))
-        if total > len(staves):
-            return PassResult()  # keep an initial signature when the metre changes later
-        changed = 0
-        for _staff, measure in first_measures:
-            if measure is None:
-                continue
-            for voice in measure.findall("voice"):
-                for time_sig in list(voice.findall("TimeSig")):
-                    # Only 4/4 is MuseScore's default, so only 4/4 can be a courtesy that is safe
-                    # to delete.  Removing any other metre makes MuseScore fall back to 4/4 and
-                    # every 3/4 bar becomes an irregular 3-beat bar (measured on the Schubert
-                    # page: 33 mscx-measure-length violations from this pass alone).
-                    meter = (
-                        int(time_sig.findtext("sigN") or 4),
-                        int(time_sig.findtext("sigD") or 4),
-                    )
-                    if meter != self.DEFAULT_METER:
-                        continue
-                    voice.remove(time_sig)
-                    changed += 1
-        return PassResult(changed=changed)
-
-
 DISPLAY_PASSES = [
     DropTextVoiceRests(),
     UnhideRealRests(),
@@ -391,7 +352,6 @@ DISPLAY_PASSES = [
     DropSecondaryVoiceRests(),
     NormalizeRangeSpanners(),
     HidePickupLeadingRest(),
-    DropFirstTimeSignature(),
 ]
 
 def compact_secondary_padding(doc) -> int:

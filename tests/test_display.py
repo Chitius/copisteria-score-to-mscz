@@ -69,7 +69,6 @@ class DisplayPassesTest(unittest.TestCase):
         "drop_secondary_voice_rests",
         "normalize_range_spanners",
         "hide_pickup_leading_rest",
-        "drop_first_time_signature",
         "split_chord_fragments",
         "restore_mscx_ties",
         "dedupe_pedal_spanners",
@@ -288,29 +287,38 @@ class PaddingVoiceContentTest(unittest.TestCase):
         self.assertEqual(again.changes, 0)
 
 
-class FirstTimeSignatureTest(unittest.TestCase):
-    def _doc(self, beats: str) -> MsxcDocument:
+class InitialTimeSignatureTest(unittest.TestCase):
+    """The display phase must not touch the initial time signature.
+
+    MuseScore writes ``<visible>0</visible>`` for a MusicXML ``<time print-object="no">``, so an
+    unprinted metre is already hidden.  Deleting a *printed* 4/4 is the one thing that cannot be
+    recovered: Gurenge page 1 prints 4/4 and its first delivery had no time signature at all.
+    """
+
+    def _doc(self, beats: str, visible: bool = True) -> MsxcDocument:
+        hidden = "" if visible else "<visible>0</visible>"
         return MsxcDocument(
             ElementTree.fromstring(
                 "<museScore><Score><Staff id='1'><Measure><voice>"
-                f"<TimeSig><sigN>{beats}</sigN><sigD>4</sigD></TimeSig>"
+                f"<TimeSig>{hidden}<sigN>{beats}</sigN><sigD>4</sigD></TimeSig>"
                 "<Chord><durationType>measure</durationType><Note><pitch>60</pitch></Note></Chord>"
                 "</voice></Measure></Staff></Score></museScore>"
             )
         )
 
-    def test_a_courtesy_four_four_is_dropped(self):
-        from scorepipe.passes.mscx_display import DropFirstTimeSignature
-
+    def test_a_printed_four_four_survives_the_display_phase(self):
         doc = self._doc("4")
-        result = DropFirstTimeSignature().run(doc, Context())
-        self.assertEqual(result.changed, 1)
-        self.assertEqual([ts.findtext("sigN") for ts in doc.root.iter("TimeSig")], [])
+        run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        self.assertEqual([ts.findtext("sigN") for ts in doc.root.iter("TimeSig")], ["4"])
+
+    def test_a_hidden_initial_signature_stays_hidden(self):
+        doc = self._doc("4", visible=False)
+        run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
+        times = list(doc.root.iter("TimeSig"))
+        self.assertEqual([ts.findtext("sigN") for ts in times], ["4"])
+        self.assertEqual(times[0].findtext("visible"), "0")
 
     def test_a_three_four_signature_is_kept(self):
-        from scorepipe.passes.mscx_display import DropFirstTimeSignature
-
         doc = self._doc("3")
-        result = DropFirstTimeSignature().run(doc, Context())
-        self.assertEqual(result.changed, 0)
+        run_phase(doc, DISPLAY_PASSES, Context(), Phase.DISPLAY)
         self.assertEqual([ts.findtext("sigN") for ts in doc.root.iter("TimeSig")], ["3"])
