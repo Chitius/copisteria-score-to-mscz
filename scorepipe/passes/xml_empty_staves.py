@@ -45,13 +45,19 @@ class PadEmptyStaves:
                 divisions = doc.effective_divisions(measure, part)
                 events = doc.events(measure, divisions)
                 present = {event.staff for event in events}
-                cursor = max((event.end for event in events), default=0.0)
-                for staff in sorted(staves - present):
-                    if events:
+                missing = sorted(staves - present)
+                if not missing:
+                    continue
+                if not events:
+                    # copisteria writes an empty bar as a bare <forward>; replace it cleanly
+                    # with a measure rest so the rest starts at beat 0 instead of past the barline.
+                    for forward in list(measure.findall("forward")):
+                        measure.remove(forward)
+                for staff in missing:
+                    cursor_ticks = _measure_cursor_ticks(measure)
+                    if cursor_ticks > 0:
                         backup = ElementTree.Element("backup")
-                        ElementTree.SubElement(backup, "duration").text = str(
-                            int(round(cursor * divisions))
-                        )
+                        ElementTree.SubElement(backup, "duration").text = str(cursor_ticks)
                         measure.append(backup)
                     rest = ElementTree.Element("note")
                     ElementTree.SubElement(rest, "rest", {"measure": "yes"})
@@ -62,6 +68,24 @@ class PadEmptyStaves:
                     measure.append(rest)
                     added += 1
         return PassResult(changed=added)
+
+
+def _measure_cursor_ticks(measure: ElementTree.Element) -> int:
+    cursor = 0
+    for item in measure:
+        if item.tag == "backup":
+            text = item.findtext("duration")
+            if text:
+                cursor -= int(text)
+        elif item.tag == "forward":
+            text = item.findtext("duration")
+            if text:
+                cursor += int(text)
+        elif item.tag == "note" and item.find("chord") is None:
+            text = item.findtext("duration")
+            if text:
+                cursor += int(text)
+    return cursor
 
 
 PAD_EMPTY_STAVES = PadEmptyStaves()

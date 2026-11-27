@@ -65,6 +65,25 @@ class MultiPartPassesTest(unittest.TestCase):
         self.assertEqual(p1_staves, {"1"})
         self.assertEqual(p2_m2_staves, {"1", "2"})
 
+    def test_pad_empty_staves_replaces_bare_forward_without_oscillating(self):
+        # Empty bar emitted by copisteria with only <forward>; must become a beat-0 measure rest
+        # and converge cleanly with drop_overflow_rests.
+        doc = _doc(
+            '<part id="P1">'
+            '<measure number="1"><attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>'
+            '<note><pitch><step>C</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice></note></measure>'
+            '<measure number="2"><forward><duration>16</duration></forward></measure>'
+            "</part>",
+            part_ids=("P1",),
+        )
+        report = run_pipeline(
+            doc, Context(), structural=STRUCTURAL_PASSES, inject=INJECT_PASSES, verifiers=VERIFIERS
+        )
+        self.assertTrue(all(phase.stable for phase in report.phases))
+        self.assertEqual(report.verifier, [])
+        m2_events = doc.events(doc.measures("P1")[1])
+        self.assertEqual([(e.onset, e.duration, e.rest) for e in m2_events], [(0.0, 4.0, True)])
+
     def test_drop_trailing_duplicate_requires_all_parts_to_agree(self):
         # P1 repeats C5 shorter, but P2 has a different pitch in m2 -> MUST NOT drop.
         doc = _doc(
