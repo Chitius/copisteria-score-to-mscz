@@ -28,25 +28,79 @@ def _needs_cjk(text: str) -> bool:
     )
 
 
+#: Font candidates per script, most specific first.  Windows ships all of them; a file that is
+#: not installed simply falls through to the next candidate.  Ordering matters: Malgun Gothic is
+#: a Korean face and draws simplified-Chinese characters as ``.notdef`` boxes (measured on
+#: "红莲华", which the cover printed as three boxes), so the Chinese faces must come first for
+#: Han text.
+_LATIN_FONTS = ("DejaVuSans.ttf", "arial.ttf", "segoeui.ttf")
+_HAN_FONTS = ("msyh.ttc", "simsun.ttc", "msyhbd.ttc", "malgun.ttf", "YuGothR.ttc", "msgothic.ttc")
+_HANGUL_FONTS = ("malgun.ttf", "malgunbd.ttf", "msyh.ttc", "simsun.ttc", "YuGothR.ttc")
+_KANA_FONTS = ("YuGothR.ttc", "msgothic.ttc", "msyh.ttc", "malgun.ttf")
+
+_HAN_CHARS = ((0x3400, 0x4DBF), (0x4E00, 0x9FFF), (0xF900, 0xFAFF), (0x2E80, 0x2FFF))
+_HANGUL_CHARS = ((0x1100, 0x11FF), (0xAC00, 0xD7AF))
+_KANA_CHARS = ((0x3040, 0x30FF),)
+
+#: A private-use code point no text font maps: its bitmap is that font's ``.notdef`` box, which
+#: is how a loaded-but-glyphless candidate is detected.
+_NOTDEF_PROBE = "\ue000"
+
+
+def _in_ranges(text: str, ranges) -> bool:
+    return any(any(low <= ord(character) <= high for low, high in ranges) for character in text)
+
+
+def _cjk_font_names(text: str) -> list[str]:
+    """CJK candidates, ordered by the script the text actually uses."""
+    if _in_ranges(text, _HANGUL_CHARS):
+        primary = _HANGUL_FONTS
+    elif _in_ranges(text, _KANA_CHARS):
+        primary = _KANA_FONTS
+    else:
+        primary = _HAN_FONTS
+    names: list[str] = []
+    for name in primary + _HAN_FONTS + _HANGUL_FONTS + _KANA_FONTS:
+        if name not in names:
+            names.append(name)
+    return names
+
+
+def _covers(font, text: str) -> bool:
+    """False when the font draws its ``.notdef`` box for one of the non-Latin characters."""
+    try:
+        notdef = bytes(font.getmask(_NOTDEF_PROBE))
+    except Exception:  # a bitmap font without masks; nothing better to check
+        return True
+    for character in text:
+        if ord(character) < 0x2E80:
+            continue
+        try:
+            if bytes(font.getmask(character)) == notdef:
+                return False
+        except Exception:
+            return False
+    return True
+
+
 def _font(size: int, text: str | None = None):
     """A font that can actually render ``text`` (CJK/Hangul files otherwise print as boxes)."""
     from PIL import ImageFont
 
-    names = ["DejaVuSans.ttf", "arial.ttf", "segoeui.ttf"]
-    if text and _needs_cjk(text):
-        names = [
-            "malgun.ttf",  # Windows Korean
-            "malgunbd.ttf",
-            "msyh.ttc",  # Windows Chinese
-            "simsun.ttc",
-            "YuGothR.ttc",  # Windows Japanese
-            "msgothic.ttc",
-        ] + names
+    needs_cjk = bool(text) and _needs_cjk(text)
+    names = _cjk_font_names(text) if needs_cjk else []
+    names += [name for name in _LATIN_FONTS if name not in names]
+    fallback = None
     for name in names:
         try:
-            return ImageFont.truetype(name, size)
+            font = ImageFont.truetype(name, size)
         except OSError:
             continue
+        if not needs_cjk or _covers(font, text):
+            return font
+        fallback = fallback or font  # loadable but glyphless: last resort before the default
+    if fallback is not None:
+        return fallback
     return ImageFont.load_default()
 
 

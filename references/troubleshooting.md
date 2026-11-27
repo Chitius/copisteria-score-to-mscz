@@ -50,3 +50,10 @@ script calls `scorepipe.console.harden_stdout()` before it prints anything; if y
 call it too (`tests/test_console.py` enforces this). The encoding is left untouched on purpose, so
 Chinese paths stay readable on a Chinese console instead of turning into mojibake.
 
+## CJK filenames print as boxes in the proof-sheet cover
+
+`scorepipe.proof_sheet.compose._font` picks a CJK face from the script the text uses. Malgun Gothic
+is a Korean face: it loads fine but draws simplified Chinese as `.notdef` boxes, so it must not win
+for Han text. `_covers` renders each non-Latin character and compares it with the font's `.notdef`
+box, so a loaded-but-glyphless candidate is skipped.
+
