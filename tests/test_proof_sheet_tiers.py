@@ -37,6 +37,30 @@ class ContentTierTest(unittest.TestCase):
         self.assertEqual(_tier_score([3.0, 3.0]), 4.0)
 
 
+class LengthMeasuresTest(unittest.TestCase):
+    def test_tuplet_length_counts_as_a_length_finding(self):
+        """An overfull voice reports its bar *and* the short tuplet inside it (Gurenge m42)."""
+        from scorepipe.proof_sheet import length_measures
+
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "report.json"
+            report.write_text(
+                json.dumps(
+                    {
+                        "verifier": [
+                            {"code": "mscx-measure-length", "measure": 42},
+                            {"code": "mscx-tuplet-length", "measure": 42},
+                            {"code": "mscx-tuplet-length", "measure": 76},
+                            {"code": "duplicate-tie", "measure": 12},
+                            {"code": "mscx-measure-length", "measure": 200},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual(length_measures(report, 0, 130), [42, 76])
+
+
 class ScanReconcileTest(unittest.TestCase):
     def test_missed_final_barline_is_closed_at_the_staff_edge(self):
         # First Step page 1: six detected cells, the reader still places bar 6 past the last one.

@@ -8,6 +8,7 @@ from typing import Sequence
 from xml.etree import ElementTree
 
 from ..confidence import summarise
+from ..core.invariants import LENGTH_CODES
 from .models import CONTENT_HEADS
 
 
@@ -154,13 +155,13 @@ def _tier_score(values: Sequence[float]) -> float:
 
 
 def length_measures(report_path: Path | None, offset: int, page_measures: int) -> list[int]:
-    """Global measures with a measure-length violation that fall on this page."""
+    """Global measures with a length violation (overfull bar or its tuplet) on this page."""
     if report_path is None or not Path(report_path).is_file():
         return []
     data = json.loads(Path(report_path).read_text(encoding="utf-8"))
     found = set()
     for violation in data.get("verifier") or []:
-        if violation.get("code") not in ("measure-length", "mscx-measure-length"):
+        if violation.get("code") not in LENGTH_CODES:
             continue
         measure = violation.get("measure")
         if not isinstance(measure, int):

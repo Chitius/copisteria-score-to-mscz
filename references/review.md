@@ -43,9 +43,12 @@ The loop runs the forced-truncation copy **after** the reviewed one, and that co
 when it had to trim something: the root `score.mscz`/`score.pdf` become the truncated editable
 copy, `rendered/` is rasterised again from it, and the untruncated reviewed tree moves to
 `semantic/` (root MusicXML stays the untruncated semantic master). A reviewed failure is tolerated
-only when every finding is a measure-length complaint and the editable copy repairs it; any other
-verifier finding still blocks. This keeps the page comparison byte-identical to the file the user
-opens.
+only when every finding is a length complaint and the editable copy repairs it; any other verifier
+finding still blocks. "Length complaint" covers `measure-length` *and* `tuplet-length`: a tuplet
+that does not add up inside an overfull voice is the same OMR defect one level lower (Gurenge
+m42/m76), and the truncation pass retimes it. The tolerated codes are listed in the report's
+`findings` and in `reviewed_verifier_codes`. This keeps the page comparison byte-identical to the
+file the user opens.
 
 Explicit overrides for an interim review:
 

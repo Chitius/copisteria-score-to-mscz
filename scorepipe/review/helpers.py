@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from ..core.invariants import LENGTH_CODES
 from ..mscz_export import find_musescore
 
 
@@ -106,7 +107,7 @@ def _timing(report_path: Path) -> dict:
     violations = [
         {"measure": violation.get("measure"), "detail": violation.get("detail")}
         for violation in data.get("verifier") or []
-        if violation.get("code") in ("measure-length", "mscx-measure-length")
+        if violation.get("code") in LENGTH_CODES
     ]
     return {"count": len(violations), "violations": violations}
 
@@ -167,18 +168,32 @@ def _truncation_performed(operations: list[str]) -> bool:
 
 
 def _only_overfull_violations(report_path: Path) -> bool:
-    """True when every verifier finding is a measure-length complaint.
+    """True when every verifier finding is a length complaint (overfull bar or its tuplet).
 
     The reviewed (untruncated) tree is allowed to report an overfull voice: that is exactly the
-    condition the editable copy repairs.  Any other verifier finding still blocks.
+    condition the editable copy repairs.  A tuplet that does not add up inside that same voice is
+    part of the same defect, so it is tolerated with the measure-length codes -- but only while
+    the forced-truncation copy verifies clean, which the caller checks separately.  Any other
+    verifier finding still blocks.
     """
     if not report_path.is_file():
         return False
     data = json.loads(report_path.read_text(encoding="utf-8"))
     violations = data.get("verifier") or []
     return bool(violations) and all(
-        violation.get("code") in ("measure-length", "mscx-measure-length") for violation in violations
+        violation.get("code") in LENGTH_CODES for violation in violations
     )
+
+
+def _verifier_codes(report_path: Path) -> list[str]:
+    """Sorted, de-duplicated verifier codes of a scorepipe report (empty when unreadable)."""
+    if not report_path.is_file():
+        return []
+    try:
+        data = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return sorted({str(violation.get("code")) for violation in data.get("verifier") or []})
 
 
 def _verifier_count(report_path: Path) -> int:

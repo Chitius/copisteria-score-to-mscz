@@ -15,6 +15,18 @@ class Violation:
     detail: str
 
 
+#: Verifier codes whose finding is "this bar's written time does not match the metre".
+#:
+#: ``tuplet-length`` belongs here even though it is reported one level lower: an overfull voice
+#: whose tuplet does not add up is the same defect (measured on Gurenge m42/m76, where the
+#: one-voice overfull bar and the short tuplet inside it came from a single OMR misreading).
+#: Every consumer that groups length findings -- the tolerated-deviation gate, the timing
+#: report, and the ``≠`` mark on the proof sheet -- must use this one set.
+LENGTH_CODES = frozenset(
+    {"measure-length", "mscx-measure-length", "tuplet-length", "mscx-tuplet-length"}
+)
+
+
 def _prefix(doc: Document, part_id: str, detail: str) -> str:
     return f"{part_id} {detail}" if len(doc.parts()) > 1 else detail
 
