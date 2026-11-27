@@ -15,6 +15,7 @@ except ImportError:  # pragma: no cover - optional dependency
     Draft202012Validator = None
 
 from scorepipe.agent_facts import CREDIT_TYPES, GRADUAL_TYPES, validate_agent_facts
+from scorepipe.instruments import INSTRUMENT_KEYS
 from scorepipe.notation_patches import CLEF_SIGNS, OTTAAVA_SUBTYPES, validate_patches
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +43,9 @@ class JsonSchemaContractTest(unittest.TestCase):
         )
         self.assertEqual(
             set(props["marks"]["items"]["properties"]["gradual"]["enum"]), GRADUAL_TYPES
+        )
+        self.assertEqual(
+            set(props["parts"]["items"]["properties"]["instrument"]["enum"]), set(INSTRUMENT_KEYS)
         )
         self.assertIn("producer", props)
         self.assertIn("unresolved", props)
@@ -86,6 +90,18 @@ class JsonSchemaContractTest(unittest.TestCase):
                     "bbox": [50, 80, 120, 100],
                     "evidence": "rit. above m1",
                     "confidence": 0.95,
+                }
+            ],
+            "parts": [
+                {
+                    "part": "P1",
+                    "name": "Acoustic Guitar",
+                    "abbreviation": "Guit.",
+                    "instrument": "acoustic-guitar",
+                    "page": 1,
+                    "bbox": [20, 80, 90, 110],
+                    "evidence": "staff 1 label: Acoustic Guitar",
+                    "confidence": 0.98,
                 }
             ],
             "corrections": [

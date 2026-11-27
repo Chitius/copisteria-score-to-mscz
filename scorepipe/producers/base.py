@@ -9,5 +9,6 @@ from dataclasses import dataclass, field
 class FactSet:
     marks: list[dict] = field(default_factory=list)
     credits: list[dict] = field(default_factory=list)
+    parts: list[dict] = field(default_factory=list)
     words: list[dict] = field(default_factory=list)
     source: str = ""

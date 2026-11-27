@@ -276,6 +276,7 @@ def main(argv: list[str] | None = None) -> int:
     if credits:
         order = {"title": 0, "subtitle": 1, "composer": 2, "arranger": 3, "transcriber": 3, "lyricist": 4}
         credits.sort(key=lambda credit: order.get((credit.get("type") or "title").strip(), 5))
+    if args.facts or credits or facts_payload.get("marks") or facts_payload.get("parts"):
         facts_path = outdir / "facts.json"
         facts_path.write_text(
             json.dumps(facts_payload, ensure_ascii=False, indent=2), encoding="utf-8"

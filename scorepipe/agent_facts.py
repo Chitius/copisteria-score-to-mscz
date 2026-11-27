@@ -12,8 +12,11 @@ import json
 import re
 from pathlib import Path
 
+from .instruments import INSTRUMENT_KEYS
+
 CREDIT_TYPES = {"title", "subtitle", "composer", "arranger", "transcriber", "lyricist"}
 MARK_KEYS = ("text", "rehearsal", "tempo", "metronome")
+PART_VALUE_KEYS = ("name", "abbreviation", "instrument", "sound", "midi_program", "midi_channel")
 GRADUAL_TYPES = {"ritardando", "rallentando", "accelerando", "stringendo", "allargando"}
 _CREDIT_PREFIXES = {
     "composer": (r"original\s+artist\s*:\s*", r"composer\s*:\s*", r"music\s+by\s*:?\s*"),
@@ -70,7 +73,7 @@ def validate_agent_facts(
     producer = payload.get("producer")
     if producer is not None and not isinstance(producer, dict):
         problems.append("producer must be an object")
-    for field in ("credits", "marks", "unresolved", "corrections"):
+    for field in ("credits", "marks", "parts", "unresolved", "corrections"):
         value = payload.get(field)
         if value is not None and not isinstance(value, list):
             problems.append(f"{field} must be an array")
@@ -101,6 +104,25 @@ def validate_agent_facts(
         beat = mark.get("beat")
         if beat is not None and (not isinstance(beat, (int, float)) or beat < 0):
             problems.append(f"{prefix}: beat must be a non-negative number")
+
+    for index, entry in enumerate(payload.get("parts") or []):
+        prefix = f"parts[{index}]"
+        _common_evidence(entry, prefix, problems, page_count)
+        if not isinstance(entry, dict):
+            continue
+        if not isinstance(entry.get("part"), str) or not entry["part"].strip():
+            problems.append(f"{prefix}: part must be a non-empty string")
+        if not any(entry.get(key) is not None and entry.get(key) != "" for key in PART_VALUE_KEYS):
+            problems.append(f"{prefix}: empty part instrument fact")
+        inst = entry.get("instrument")
+        if inst is not None and (not isinstance(inst, str) or inst not in INSTRUMENT_KEYS):
+            problems.append(f"{prefix}: unknown instrument {inst!r}")
+        prog = entry.get("midi_program")
+        if prog is not None and (isinstance(prog, bool) or not isinstance(prog, int) or not 1 <= prog <= 128):
+            problems.append(f"{prefix}: midi_program must be an integer 1..128")
+        ch = entry.get("midi_channel")
+        if ch is not None and (isinstance(ch, bool) or not isinstance(ch, int) or not 1 <= ch <= 16):
+            problems.append(f"{prefix}: midi_channel must be an integer 1..16")
 
     for index, correction in enumerate(payload.get("corrections") or []):
         prefix = f"corrections[{index}]"
@@ -172,12 +194,14 @@ def merge_agent_facts(parts: list[dict]) -> dict:
         "producer": {"name": "agent-visual", "pages": []},
         "credits": [],
         "marks": [],
+        "parts": [],
         "unresolved": [],
         "corrections": [],
     }
     pages: set[int] = set()
     seen_credits: set[tuple] = set()
     seen_marks: set[tuple] = set()
+    seen_parts: set[str] = set()
     seen_corrections: set[tuple] = set()
     for part in parts:
         part = normalize_agent_facts(part)
@@ -203,6 +227,12 @@ def merge_agent_facts(parts: list[dict]) -> dict:
                 continue
             seen_marks.add(key)
             merged["marks"].append(mark)
+        for entry in part.get("parts") or []:
+            key = (entry.get("part") or "").strip()
+            if not key or key in seen_parts:
+                continue
+            seen_parts.add(key)
+            merged["parts"].append(entry)
         for correction in part.get("corrections") or []:
             key = (
                 correction.get("measure"),

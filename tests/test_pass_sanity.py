@@ -280,6 +280,41 @@ def facts_credits():
     return Context(facts={"credits": [{"type": "title", "text": "Innocent"}]}), simple()
 
 
+def facts_parts():
+    return (
+        Context(
+            facts={
+                "parts": [
+                    {
+                        "part": "P1",
+                        "name": "Acoustic Guitar",
+                        "abbreviation": "Guit.",
+                        "instrument": "acoustic-guitar",
+                    }
+                ]
+            }
+        ),
+        simple(),
+    )
+
+
+def percussion_drums():
+    body = (
+        "<note><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched>"
+        "<duration>8</duration><voice>1</voice><type>half</type></note>"
+        "<note><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched>"
+        "<duration>4</duration><voice>1</voice><type>quarter</type></note>"
+        "<note><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched>"
+        "<duration>4</duration><voice>1</voice><type>quarter</type></note>"
+    )
+    return build(
+        '<measure number="1"><attributes><divisions>4</divisions>'
+        "<time><beats>4</beats><beat-type>4</beat-type></time>"
+        "<clef><sign>percussion</sign></clef></attributes>"
+        f"{body}</measure>"
+    )
+
+
 STRUCTURAL = {pass_obj.spec.name: pass_obj for pass_obj in STRUCTURAL_PASSES}
 INJECT = {pass_obj.spec.name: pass_obj for pass_obj in INJECT_PASSES}
 
@@ -315,8 +350,10 @@ FACTORIES = {
     "restore_page_arpeggios": pages_notation,
     "restore_page_articulations": pages_notation,
     "restore_page_wedges": pages_notation,
+    "normalize_percussion": percussion_drums,
     "apply_marks_facts": facts_marks,
     "apply_credits_facts": facts_credits,
+    "apply_parts_facts": facts_parts,
 }
 
 # What each pass may change.  Everything not listed must be preserved; every pass must also be
@@ -380,8 +417,10 @@ CONTRACTS = {
     "restore_page_arpeggios": PassContract("restore_page_arpeggios"),
     "restore_page_articulations": PassContract("restore_page_articulations"),
     "restore_page_wedges": PassContract("restore_page_wedges"),
+    "normalize_percussion": PassContract("normalize_percussion"),
     "apply_marks_facts": PassContract("apply_marks_facts"),
     "apply_credits_facts": PassContract("apply_credits_facts"),
+    "apply_parts_facts": PassContract("apply_parts_facts"),
 }
 
 ALL_PASSES = {**STRUCTURAL, **INJECT}

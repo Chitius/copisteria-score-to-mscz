@@ -32,6 +32,7 @@ class JsonProducer:
         return FactSet(
             marks=data.get("marks") or [],
             credits=data.get("credits") or [],
+            parts=data.get("parts") or [],
             source=str(self.path),
         )
 
@@ -84,15 +85,23 @@ class CompositeProducer:
     def produce(self, input_path: Path) -> FactSet:
         marks: list[dict] = []
         credits: list[dict] = []
+        parts: list[dict] = []
         words: list[dict] = []
         sources: list[str] = []
         for producer in self.producers:
             result = producer.produce(input_path)
             marks.extend(result.marks)
             credits.extend(result.credits)
+            parts.extend(result.parts)
             words.extend(result.words)
             sources.append(result.source)
-        return FactSet(marks=marks, credits=credits, words=words, source=", ".join(sources))
+        return FactSet(
+            marks=marks,
+            credits=credits,
+            parts=parts,
+            words=words,
+            source=", ".join(sources),
+        )
 
 
 def resolve(path: str | Path | None, layout: dict | None = None) -> Producer | None:

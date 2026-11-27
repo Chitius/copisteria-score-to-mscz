@@ -37,7 +37,14 @@ def prepare_facts_and_gates(
 ) -> dict | None:
     """Validate/merge agent facts, check coverage & patch gates, and write ``facts.json``."""
     parts = _parts(facts_dir)
-    facts = {"credits": [], "marks": [], "corrections": [], "unresolved": [], "producer": {"pages": []}}
+    facts = {
+        "credits": [],
+        "marks": [],
+        "parts": [],
+        "corrections": [],
+        "unresolved": [],
+        "producer": {"pages": []},
+    }
     if parts:
         normalized = [normalize_agent_facts(load_agent_facts(path)) for path in parts]
         problems = []

@@ -5,12 +5,14 @@ import unittest
 from pathlib import Path
 from xml.etree import ElementTree
 
+from scorepipe.agent_facts import merge_agent_facts, validate_agent_facts
 from scorepipe.core.document import Document
 from scorepipe.core.invariants import VERIFIERS
 from scorepipe.core.mscx import MsxcDocument
 from scorepipe.core.mscx_invariants import MSCX_VERIFIERS
 from scorepipe.core.pass_base import Context
 from scorepipe.core.pipeline import run_pipeline
+from scorepipe.facts import validate_facts
 from scorepipe.loader import merge_pages
 from scorepipe.mscz_export import extract_chord_fragments, extract_ties
 from scorepipe.notation_patches import (
@@ -19,7 +21,13 @@ from scorepipe.notation_patches import (
     validate_patches,
     verify_patches,
 )
-from scorepipe.passes import INJECT_PASSES, STRUCTURAL_PASSES, TRUNCATE_OVERFULL_MSCX
+from scorepipe.passes import (
+    INJECT_PARTS,
+    INJECT_PASSES,
+    NORMALIZE_PERCUSSION,
+    STRUCTURAL_PASSES,
+    TRUNCATE_OVERFULL_MSCX,
+)
 from scorepipe.passes.xml_empty_staves import PAD_EMPTY_STAVES
 from scorepipe.passes.xml_pickup import MARK_PICKUP
 from scorepipe.passes.xml_redundant_voices import DROP_REDUNDANT_VOICES
@@ -317,6 +325,201 @@ class MultiPartPassesTest(unittest.TestCase):
         self.assertGreaterEqual(result.changed, 2)
         violations = [v for verifier in MSCX_VERIFIERS for v in verifier(mscx, Context())]
         self.assertEqual(violations, [])
+
+    def test_normalize_percussion_binds_gm_drumset_and_cymbal_noteheads(self):
+        doc = _doc(
+            '<part id="P1"><measure number="1">'
+            "<attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type></time>"
+            "<clef><sign>G</sign><line>2</line></clef></attributes>"
+            "<note><pitch><step>C</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><type>whole</type></note>"
+            "</measure></part>"
+            '<part id="P2"><measure number="1">'
+            "<attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type></time>"
+            "<clef><sign>percussion</sign></clef></attributes>"
+            "<note><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched>"
+            "<duration>4</duration><voice>1</voice><type>quarter</type></note>"
+            "<note><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched>"
+            "<duration>4</duration><voice>1</voice><type>quarter</type></note>"
+            "<note><unpitched><display-step>F</display-step><display-octave>5</display-octave></unpitched>"
+            "<duration>4</duration><voice>1</voice><type>quarter</type></note>"
+            "<note><unpitched><display-step>G</display-step><display-octave>5</display-octave></unpitched>"
+            "<duration>4</duration><voice>1</voice><type>quarter</type></note>"
+            "</measure></part>",
+            part_ids=("P1", "P2"),
+        )
+        first = NORMALIZE_PERCUSSION.run(doc, Context())
+        self.assertGreater(first.changed, 0)
+        # Idempotent on second run.
+        second = NORMALIZE_PERCUSSION.run(doc, Context())
+        self.assertEqual(second.changed, 0)
+
+        p1_score = doc.root.find("part-list/score-part[@id='P1']")
+        p2_score = doc.root.find("part-list/score-part[@id='P2']")
+        self.assertEqual(p1_score.findall("midi-instrument"), [])
+        midi_unpitched = {
+            m.get("id"): (m.findtext("midi-channel"), int(m.findtext("midi-unpitched")))
+            for m in p2_score.findall("midi-instrument")
+        }
+        # 1-based MusicXML midi-unpitched = GM MIDI note + 1:
+        # F4 Bass Drum (36->37), C5 Snare (38->39), G5 Hi-Hat (42->43), F5 Ride (51->52)
+        self.assertEqual(
+            midi_unpitched,
+            {
+                "P2-I37": ("10", 37),
+                "P2-I39": ("10", 39),
+                "P2-I43": ("10", 43),
+                "P2-I52": ("10", 52),
+            },
+        )
+        notes = list(doc.part_by_id("P2").iter("note"))
+        self.assertEqual([n.find("instrument").get("id") for n in notes], ["P2-I37", "P2-I39", "P2-I52", "P2-I43"])
+        self.assertEqual([n.findtext("notehead") for n in notes], [None, None, "x", "x"])
+
+    def test_normalize_percussion_ignores_pitched_grand_staff_with_spurious_percussion_clef(self):
+        # OMR occasionally misreads a piano bass clef on one page as a percussion clef.
+        # A 2-staff / predominantly pitched part must never be reclassified as a drumset.
+        doc = _doc(
+            '<part id="P1"><measure number="1">'
+            "<attributes><divisions>4</divisions><staves>2</staves>"
+            "<time><beats>4</beats><beat-type>4</beat-type></time>"
+            '<clef number="1"><sign>G</sign><line>2</line></clef>'
+            '<clef number="2"><sign>F</sign><line>4</line></clef></attributes>'
+            "<note><pitch><step>C</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><staff>1</staff></note>"
+            "<backup><duration>16</duration></backup>"
+            "<note><pitch><step>C</step><octave>3</octave></pitch><duration>16</duration><voice>5</voice><staff>2</staff></note>"
+            '</measure><measure number="2">'
+            '<attributes><clef number="2"><sign>percussion</sign></clef></attributes>'
+            "<note><pitch><step>D</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><staff>1</staff></note>"
+            "<backup><duration>16</duration></backup>"
+            "<note><unpitched><display-step>F</display-step><display-octave>4</display-octave></unpitched>"
+            "<duration>16</duration><voice>5</voice><staff>2</staff></note>"
+            "</measure></part>",
+            part_ids=("P1",),
+        )
+        res = NORMALIZE_PERCUSSION.run(doc, Context())
+        self.assertEqual(res.changed, 0)
+        p1_score = doc.root.find("part-list/score-part[@id='P1']")
+        self.assertEqual(p1_score.findall("midi-instrument"), [])
+
+    def test_apply_parts_facts_sets_instruments_and_preserves_drumset_bindings(self):
+        doc = _doc(
+            '<part id="P1"><measure number="1">'
+            "<attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type></time>"
+            "<clef><sign>G</sign><line>2</line></clef></attributes>"
+            "<note><pitch><step>E</step><octave>4</octave></pitch><duration>16</duration><voice>1</voice><type>whole</type></note>"
+            "</measure></part>"
+            '<part id="P2"><measure number="1">'
+            "<attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type></time>"
+            "<clef><sign>percussion</sign></clef></attributes>"
+            "<note><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched>"
+            "<duration>16</duration><voice>1</voice><type>whole</type></note>"
+            "</measure></part>",
+            part_ids=("P1", "P2"),
+        )
+        facts = {
+            "parts": [
+                {"part": "P1", "name": "原音吉他", "abbreviation": "Guit.", "instrument": "acoustic-guitar"},
+                {"part": "P2", "name": "架子鼓", "abbreviation": "D. Set", "instrument": "drumset"},
+            ]
+        }
+        report = run_pipeline(
+            doc,
+            Context(facts=facts),
+            structural=STRUCTURAL_PASSES,
+            inject=INJECT_PASSES,
+            verifiers=VERIFIERS,
+        )
+        self.assertEqual(report.verifier, [])
+        self.assertTrue(all(phase.stable for phase in report.phases))
+
+        p1 = doc.root.find("part-list/score-part[@id='P1']")
+        self.assertEqual(p1.findtext("part-name"), "原音吉他")
+        self.assertEqual(p1.findtext("part-abbreviation"), "Guit.")
+        self.assertEqual(p1.findtext("score-instrument/instrument-sound"), "pluck.guitar.acoustic")
+        self.assertEqual(p1.findtext("midi-instrument/midi-program"), "26")
+        self.assertEqual(p1.findtext("midi-instrument/midi-channel"), "1")
+
+        p2 = doc.root.find("part-list/score-part[@id='P2']")
+        self.assertEqual(p2.findtext("part-name"), "架子鼓")
+        self.assertEqual(p2.findtext("part-abbreviation"), "D. Set")
+        self.assertEqual(p2.findtext("midi-instrument/midi-channel"), "10")
+        self.assertEqual(p2.findtext("midi-instrument/midi-unpitched"), "39")
+
+        # Validate generated MusicXML against the W3C MusicXML 4.0 XSD when lxml is available.
+        try:
+            from lxml import etree
+        except ImportError:
+            etree = None
+        if etree is not None:
+            xsd = Path(__file__).parent / "fixtures" / "musicxml" / "sanity_schema.xsd"
+            schema = etree.XMLSchema(etree.parse(str(xsd)))
+            xml_doc = etree.fromstring(ElementTree.tostring(doc.root))
+            self.assertTrue(schema.validate(xml_doc), schema.error_log)
+
+    def test_parts_facts_validation_and_merge(self):
+        good = {
+            "producer": {"name": "agent-visual", "pages": [1]},
+            "parts": [
+                {
+                    "part": "P1",
+                    "name": "原音吉他",
+                    "abbreviation": "Guit.",
+                    "instrument": "acoustic-guitar",
+                    "page": 1,
+                    "bbox": [10, 20, 80, 50],
+                    "evidence": "staff 1 label",
+                }
+            ],
+        }
+        self.assertEqual(validate_agent_facts(good, page_count=1), [])
+        self.assertEqual(validate_facts(good), [])
+
+        bad = {
+            "parts": [
+                {
+                    "part": "P1",
+                    "instrument": "nonexistent-kazoo",
+                    "midi_program": 200,
+                    "midi_channel": 99,
+                    "page": 1,
+                    "bbox": [10, 20, 80, 50],
+                    "evidence": "staff 1",
+                }
+            ]
+        }
+        problems = validate_agent_facts(bad, page_count=1)
+        self.assertTrue(any("unknown instrument" in p for p in problems))
+        self.assertTrue(any("midi_program" in p for p in problems))
+        self.assertTrue(any("midi_channel" in p for p in problems))
+
+        merged = merge_agent_facts(
+            [
+                good,
+                {
+                    "producer": {"name": "agent-visual", "pages": [2]},
+                    "parts": [
+                        {
+                            "part": "P1",
+                            "name": "duplicate ignored",
+                            "instrument": "piano",
+                            "page": 2,
+                            "bbox": [10, 20, 80, 50],
+                            "evidence": "page 2",
+                        },
+                        {
+                            "part": "P2",
+                            "name": "架子鼓",
+                            "instrument": "drumset",
+                            "page": 2,
+                            "bbox": [10, 60, 80, 90],
+                            "evidence": "staff 2",
+                        },
+                    ],
+                },
+            ]
+        )
+        self.assertEqual([p["part"] for p in merged["parts"]], ["P1", "P2"])
+        self.assertEqual(merged["parts"][0]["name"], "原音吉他")
 
     def test_lieder_ground_truth_corpus_converges_preserving_sounding_notes(self):
         corpus = Path(__file__).parent / "corpus" / "lieder"

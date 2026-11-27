@@ -45,6 +45,8 @@ from .xml_layers import REBUILD_VOICE_LAYERS, RebuildVoiceLayers
 from .xml_measures import FILL_PASS, FillShortMeasures
 from .xml_merge import MERGE_ALIGNED_VOICES, MergeAlignedVoices
 from .xml_overflow import DROP_OVERFLOW_DUPLICATES, DropOverflowDuplicates
+from .xml_parts import INJECT_PARTS, ApplyPartsFacts
+from .xml_percussion import NORMALIZE_PERCUSSION, NormalizePercussion
 from .xml_pickup import MARK_PICKUP, MarkPickup
 from .xml_rebase import DROP_OVERFLOW_RESTS, REBASE_MEASURES, RebaseMeasures
 from .xml_redundant_voices import DROP_REDUNDANT_VOICES, DropRedundantVoices
@@ -87,11 +89,12 @@ STRUCTURAL_PASSES = (
         RECONCILE_TIE_SLURS,
         DROP_OVERFLOW_RESTS,
         RESTORE_BEAMS,
+        NORMALIZE_PERCUSSION,
     ]
     + ANALYSIS_PASSES
 )
 DISPLAY_PASSES = DISPLAY_PASSES + [FRAGMENTS, MSXC_TIES] + DISPLAY_DEDUPE_PASSES + DISPLAY_FACT_PASSES
-INJECT_PASSES = INJECT_PASSES + [INJECT_CREDITS]
+INJECT_PASSES = INJECT_PASSES + [INJECT_CREDITS, INJECT_PARTS]
 
 __all__ = [
     "STRUCTURAL_PASSES",
@@ -131,6 +134,10 @@ __all__ = [
     "SplitChordFragments",
     "ApplyMarksFacts",
     "ApplyCreditsFacts",
+    "ApplyPartsFacts",
+    "NormalizePercussion",
+    "INJECT_PARTS",
+    "NORMALIZE_PERCUSSION",
     "DropTextVoiceRests",
     "UnhideRealRests",
     "DropPaddingVoices",

@@ -86,7 +86,11 @@ def run_review(
         "rendered_pages": image_count,
         "covered_pages": gated["covered"],
         "missing_pages": gated["missing_pages"],
-        "facts": {"credits": len(facts.get("credits") or []), "marks": len(facts.get("marks") or [])},
+        "facts": {
+            "credits": len(facts.get("credits") or []),
+            "marks": len(facts.get("marks") or []),
+            "parts": len(facts.get("parts") or []),
+        },
         "facts_skipped": bool(args.skip_facts),
         "unresolved": gated["unresolved"],
         "corrections": gated["corrections"],

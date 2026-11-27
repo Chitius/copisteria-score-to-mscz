@@ -76,6 +76,84 @@
         ]
       }
     },
+    "parts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["part"],
+        "additionalProperties": true,
+        "properties": {
+          "part": {"type": "string", "minLength": 1},
+          "name": {"type": "string", "minLength": 1},
+          "abbreviation": {"type": "string", "minLength": 1},
+          "instrument": {
+            "type": "string",
+            "enum": [
+              "accordion",
+              "acoustic-bass",
+              "acoustic-guitar",
+              "alto",
+              "alto-sax",
+              "baritone",
+              "baritone-sax",
+              "bass-voice",
+              "bassoon",
+              "cello",
+              "choir",
+              "clarinet",
+              "contrabass",
+              "drumset",
+              "electric-bass",
+              "electric-guitar",
+              "electric-guitar-distortion",
+              "electric-guitar-overdrive",
+              "electric-piano",
+              "flute",
+              "harp",
+              "harpsichord",
+              "horn",
+              "mezzo-soprano",
+              "nylon-guitar",
+              "oboe",
+              "organ",
+              "percussion",
+              "piano",
+              "piccolo",
+              "soprano",
+              "soprano-sax",
+              "strings",
+              "synth-lead",
+              "synth-pad",
+              "tenor",
+              "tenor-sax",
+              "trombone",
+              "trumpet",
+              "tuba",
+              "viola",
+              "violin",
+              "voice"
+            ]
+          },
+          "sound": {"type": "string", "minLength": 1},
+          "midi_program": {"type": "integer", "minimum": 1, "maximum": 128},
+          "midi_channel": {"type": "integer", "minimum": 1, "maximum": 16},
+          "page": {"type": "integer", "minimum": 1},
+          "bbox": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+          "bbox_space": {"type": "string", "enum": ["pdf-points", "image-px"]},
+          "crop": {"type": "string"},
+          "evidence": {"type": "string", "minLength": 1},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        },
+        "anyOf": [
+          {"required": ["name"]},
+          {"required": ["abbreviation"]},
+          {"required": ["instrument"]},
+          {"required": ["sound"]},
+          {"required": ["midi_program"]},
+          {"required": ["midi_channel"]}
+        ]
+      }
+    },
     "corrections": {
       "type": "array",
       "items": {

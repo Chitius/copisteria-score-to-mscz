@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
         if Path(args.facts).suffix.lower() == ".pdf" and layout is None:
             print("facts: PDF text layer has no --layout, so no marks will be produced")
         produced = producer.produce(path)
-        facts = {"marks": produced.marks, "credits": produced.credits}
+        facts = {"marks": produced.marks, "credits": produced.credits, "parts": produced.parts}
     credits = facts.setdefault("credits", [])
     if args.title:
         credits.append({"type": "title", "text": args.title})
