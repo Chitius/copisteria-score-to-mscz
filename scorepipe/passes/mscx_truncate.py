@@ -41,7 +41,7 @@ class TruncateOverfullMscx:
                 measure.attrib.pop("len", None)
                 target = meter
             for voice in doc.voices(measure):
-                if not voice.findall("Chord"):
+                if not voice.findall("Chord") and not voice.findall("Rest"):
                     continue
                 before = voice_timeline(voice, target)
                 if before.end <= target:

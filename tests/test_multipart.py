@@ -7,6 +7,8 @@ from xml.etree import ElementTree
 
 from scorepipe.core.document import Document
 from scorepipe.core.invariants import VERIFIERS
+from scorepipe.core.mscx import MsxcDocument
+from scorepipe.core.mscx_invariants import MSCX_VERIFIERS
 from scorepipe.core.pass_base import Context
 from scorepipe.core.pipeline import run_pipeline
 from scorepipe.loader import merge_pages
@@ -17,7 +19,7 @@ from scorepipe.notation_patches import (
     validate_patches,
     verify_patches,
 )
-from scorepipe.passes import INJECT_PASSES, STRUCTURAL_PASSES
+from scorepipe.passes import INJECT_PASSES, STRUCTURAL_PASSES, TRUNCATE_OVERFULL_MSCX
 from scorepipe.passes.xml_empty_staves import PAD_EMPTY_STAVES
 from scorepipe.passes.xml_pickup import MARK_PICKUP
 from scorepipe.passes.xml_redundant_voices import DROP_REDUNDANT_VOICES
@@ -291,6 +293,30 @@ class MultiPartPassesTest(unittest.TestCase):
         problems = check_sounding_notes_preserved(snapshot(before_doc), snapshot(after_doc))
         self.assertEqual(len(problems), 1)
         self.assertIn("P2", problems[0])
+
+    def test_truncate_overfull_trims_trailing_rest_on_silent_staves(self):
+        # When one part in a multi-part score is overfull (len="17/16"), MuseScore stretches
+        # silent staves by appending a trailing <Rest> after <Rest measure/>. Truncation must
+        # trim those silent staves too once len="17/16" is removed.
+        mscx = MsxcDocument(
+            ElementTree.fromstring(
+                "<museScore version='4.40'><Score>"
+                "<Staff id='1'><Measure len='17/16'><voice>"
+                "<TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>"
+                "<Chord><durationType>whole</durationType><Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>"
+                "<Rest><durationType>16th</durationType></Rest>"
+                "</voice></Measure></Staff>"
+                "<Staff id='2'><Measure len='17/16'><voice>"
+                "<Rest><durationType>measure</durationType><duration>4/4</duration></Rest>"
+                "<Rest><durationType>16th</durationType></Rest>"
+                "</voice></Measure></Staff>"
+                "</Score></museScore>"
+            )
+        )
+        result = TRUNCATE_OVERFULL_MSCX.run(mscx, Context())
+        self.assertGreaterEqual(result.changed, 2)
+        violations = [v for verifier in MSCX_VERIFIERS for v in verifier(mscx, Context())]
+        self.assertEqual(violations, [])
 
     def test_lieder_ground_truth_corpus_converges_preserving_sounding_notes(self):
         corpus = Path(__file__).parent / "corpus" / "lieder"

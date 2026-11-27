@@ -154,6 +154,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--composer")
     parser.add_argument("--arranger")
     parser.add_argument("--no-mscz", action="store_true", help="stop after MusicXML")
+    parser.add_argument(
+        "--truncate-overfull",
+        action="store_true",
+        help="apply forced overfull-measure truncation to the .mscz display copy (default in review.py)",
+    )
     parser.add_argument("--no-pdf", action="store_true", help="do not render a review PDF")
     parser.add_argument("--max-rounds", type=int, default=32)
     parser.add_argument("--force", action="store_true", help="replace existing delivery artifacts")
@@ -280,6 +285,8 @@ def main(argv: list[str] | None = None) -> int:
     mscz = None if args.no_mscz else outdir / "score.mscz"
     if mscz is not None:
         score_command.extend(["--mscz-out", str(mscz)])
+        if args.truncate_overfull:
+            score_command.append("--truncate-overfull")
         if musescore:
             score_command.extend(["--musescore", str(musescore)])
     pipeline_exit, _ = _run(score_command, cwd=Path(__file__).resolve().parents[1], tolerate=True)
