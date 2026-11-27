@@ -14,13 +14,13 @@ import sys
 import time
 from pathlib import Path
 
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(errors="replace")
-    sys.stderr.reconfigure(errors="replace")
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+from scorepipe.console import harden_stdout  # noqa: E402
+
+harden_stdout()
 
 try:
     from scorepipe.copisteria import parse_page_range as _parse_page_range

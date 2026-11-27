@@ -26,6 +26,10 @@ SCRIPTS = Path(__file__).resolve().parent
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+from scorepipe.console import harden_stdout  # noqa: E402
+
+harden_stdout()
+
 from scorepipe.mscz_export import find_musescore  # noqa: E402
 from scorepipe.review import (  # noqa: E402
     ReviewHooks,

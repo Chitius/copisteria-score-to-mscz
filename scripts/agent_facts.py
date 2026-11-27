@@ -25,6 +25,9 @@ from scorepipe.agent_facts import (  # noqa: E402
     normalize_agent_facts,
     validate_agent_facts,
 )
+from scorepipe.console import harden_stdout  # noqa: E402
+
+harden_stdout()
 
 
 def _pdf_pages(pdf: Path) -> int | None:

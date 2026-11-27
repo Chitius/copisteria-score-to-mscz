@@ -40,3 +40,13 @@ This is how the 前前前世 10-page file was isolated to m16/m84 (`forward`) an
 A file can import but still have display measure-length warnings. Those are separate structural
 issues; do not call the score delivered just because MuseScore opens it. Run the full verifier and
 inspect the rendered pages.
+
+## `UnicodeEncodeError` from an operator script
+
+On a Windows console whose code page is GBK (936), printing a character outside that code page
+raises `UnicodeEncodeError` and aborts the script mid-table. `preflight.py` hit this because its
+probe decodes subprocess output with `errors="replace"`, which can produce U+FFFD. Every operator
+script calls `scorepipe.console.harden_stdout()` before it prints anything; if you add a script,
+call it too (`tests/test_console.py` enforces this). The encoding is left untouched on purpose, so
+Chinese paths stay readable on a Chinese console instead of turning into mojibake.
+

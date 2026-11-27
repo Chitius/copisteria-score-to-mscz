@@ -17,12 +17,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scorepipe.core.document import Document  # noqa: E402
+from scorepipe.console import harden_stdout  # noqa: E402
 from scorepipe.notation_patches import (  # noqa: E402
     apply_patches,
     load_patches,
     score_map,
     validate_patches,
 )
+
+harden_stdout()
 
 
 def make_map(doc: Document) -> dict:

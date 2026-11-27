@@ -18,6 +18,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+try:  # the probe must still run when the pipeline package itself is missing or broken
+    from scorepipe.console import harden_stdout
+except Exception:  # pragma: no cover - reported by the scorepipe import check
+    harden_stdout = None
+
+if harden_stdout is not None:
+    harden_stdout()
+
 try:  # the probe must still run when the pipeline package itself is broken
     from scorepipe.discovery import find_musescore as _discover_musescore
 except Exception:  # pragma: no cover - reported by the scorepipe import check

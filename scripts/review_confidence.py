@@ -28,6 +28,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scorepipe import confidence  # noqa: E402
+from scorepipe.console import harden_stdout  # noqa: E402
+
+harden_stdout()
 
 
 def main() -> int:
