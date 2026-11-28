@@ -50,6 +50,7 @@ class CopisteriaAdapterTest(unittest.TestCase):
             with (
                 patch.object(copisteria, "pdf_page_count", return_value=2),
                 patch.object(copisteria, "pdf_page_rotations", return_value={1: 0, 2: 90}),
+                patch.object(copisteria, "pdf_page_sizes", return_value={}),
                 patch.object(copisteria, "_run_pdfimages", return_value=[]),
                 patch.object(copisteria, "_run_pdftoppm", side_effect=fake_pdftoppm),
             ):
@@ -61,6 +62,88 @@ class CopisteriaAdapterTest(unittest.TestCase):
                 self.assertEqual(first.size, (40, 20))
                 self.assertEqual(second.mode, "L")
                 self.assertEqual(second.size, (20, 40))
+
+    def test_page_render_dpi_keeps_a4_and_caps_oversized_pages(self):
+        # A4 at 300 dpi is the target; a 5x-A4 page (2976x4209 pt) must not rasterise to 217 MP.
+        self.assertEqual(copisteria.page_render_dpi(595.28, 841.89), 300)
+        self.assertEqual(copisteria.page_render_dpi(2976, 4209), 72)
+        self.assertLessEqual(copisteria.page_render_dpi(11904, 16836), 18)
+        self.assertEqual(copisteria.page_render_dpi(0, 0), 300)
+        for width, height in ((2976, 4209), (11904, 16836), (595.28, 841.89)):
+            dpi = copisteria.page_render_dpi(width, height)
+            self.assertLessEqual(
+                (width / 72 * dpi) * (height / 72 * dpi), copisteria.MAX_PAGE_PIXELS
+            )
+
+    def test_extract_pdf_pages_renders_oversized_page_with_pdftoppm(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pdf = root / "Big.pdf"
+            pdf.write_bytes(b"%PDF-1.4")
+            out = root / "pages"
+            seen = {}
+
+            def forbidden_pdfimages(*_args, **_kwargs):
+                raise AssertionError("an oversized page must not go through pdfimages")
+
+            def fake_pdftoppm(_pdf, number, prefix, dpi):
+                seen["dpi"] = dpi
+                target = prefix.parent / f"{prefix.name}-{number}.png"
+                Image.new("RGB", (30, 40), (255, 255, 255)).save(target)
+                return [target]
+
+            with (
+                patch.object(copisteria, "pdf_page_count", return_value=1),
+                patch.object(copisteria, "pdf_page_rotations", return_value={1: 0}),
+                patch.object(copisteria, "pdf_page_sizes", return_value={1: (2976.0, 4209.0)}),
+                patch.object(copisteria, "_run_pdfimages", side_effect=forbidden_pdfimages),
+                patch.object(copisteria, "_run_pdftoppm", side_effect=fake_pdftoppm),
+            ):
+                paths = copisteria.extract_pdf_pages(pdf, out)
+
+            self.assertEqual(seen["dpi"], 72)
+            self.assertEqual([p.name for p in paths], ["Big_p01.png"])
+
+    def test_extract_pdf_pages_falls_back_when_embedded_scan_is_a_decompression_bomb(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pdf = root / "Bomb.pdf"
+            pdf.write_bytes(b"%PDF-1.4")
+            out = root / "pages"
+            real_open = Image.open
+            calls = {"pdftoppm": 0}
+
+            def fake_pdfimages(_pdf, _number, prefix):
+                target = prefix.parent / f"{prefix.name}-000.png"
+                Image.new("RGB", (8, 8), (255, 255, 255)).save(target)
+                return [target]
+
+            def fake_open(path, *args, **kwargs):
+                if Path(path).name.endswith("-000.png"):
+                    raise Image.DecompressionBombError("too many pixels")
+                return real_open(path, *args, **kwargs)
+
+            def fake_pdftoppm(_pdf, number, prefix, dpi):
+                calls["pdftoppm"] += 1
+                target = prefix.parent / f"{prefix.name}-{number}.png"
+                Image.new("RGB", (30, 40), (255, 255, 255)).save(target)
+                return [target]
+
+            with (
+                patch.object(copisteria, "pdf_page_count", return_value=1),
+                patch.object(copisteria, "pdf_page_rotations", return_value={1: 0}),
+                patch.object(copisteria, "pdf_page_sizes", return_value={1: (595.28, 841.89)}),
+                patch.object(copisteria, "_run_pdfimages", side_effect=fake_pdfimages),
+                patch.object(copisteria, "_run_pdftoppm", side_effect=fake_pdftoppm),
+                patch("PIL.Image.open", side_effect=fake_open),
+            ):
+                paths = copisteria.extract_pdf_pages(pdf, out)
+
+            self.assertEqual(calls["pdftoppm"], 1)
+            self.assertEqual([p.name for p in paths], ["Bomb_p01.png"])
+            with Image.open(paths[0]) as saved:
+                self.assertEqual(saved.mode, "L")
+                self.assertEqual(saved.size, (30, 40))
 
     def test_run_copisteria_invokes_upstream_pipeline_in_repo_cwd(self):
         with tempfile.TemporaryDirectory() as tmp:

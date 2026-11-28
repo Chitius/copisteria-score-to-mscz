@@ -5,6 +5,10 @@ repository only depends on upstream ``kobimusic/copisteria``, poppler, and Pillo
 
 1. Extract each PDF page into ``<work>/pages/<stem>_pNN.png`` (using ``pdfimages`` when a page
    holds a single embedded scan, otherwise ``pdftoppm`` at 300 dpi, applying PDF ``/Rotate``).
+   A page whose physical size would rasterise past :data:`MAX_LONG_SIDE` /
+   :data:`MAX_PAGE_PIXELS` is rendered at a capped dpi instead: some exports are a 5x-A4 page
+   (2976x4209 pt) whose embedded scan is 217 MP, which Pillow refuses to open and which the
+   OMR reader does not need.
 2. Run ``python -m copisteria.pipeline`` over those PNGs with ``cwd=<copisteria_repo>`` so
    per-page ``.musicxml``, ``.reading.json`` and ``.html`` land in ``<work>/copisteria/`` and
    cached ``.dets_*.json`` detections stay beside the page images in ``<work>/pages/``.
@@ -13,12 +17,18 @@ repository only depends on upstream ``kobimusic/copisteria``, poppler, and Pillo
 from __future__ import annotations
 
 import hashlib
+import math
 import re
 import shutil
 import subprocess
 from pathlib import Path
 
 RENDER_DPI = 300
+#: Long-side ceiling for an extracted page: 4200 px is A4 at ~360 dpi, so an A4 page keeps the
+#: requested dpi and an oversized page is rendered smaller instead of exploding into pixels.
+MAX_LONG_SIDE = 4200
+#: Hard pixel ceiling for the raster handed to Pillow/OpenCV (A4 at 300 dpi is 8.7 MP).
+MAX_PAGE_PIXELS = 40_000_000
 
 
 def pdf_page_count(pdf: Path) -> int:
@@ -57,6 +67,45 @@ def pdf_page_rotations(pdf: Path, first: int, last: int) -> dict[int, int]:
         int(number): int(angle) % 360
         for number, angle in re.findall(r"^Page\s+(\d+)\s+rot:\s+(-?\d+)", completed.stdout, re.MULTILINE)
     }
+
+
+def pdf_page_sizes(pdf: Path, first: int, last: int) -> dict[int, tuple[float, float]]:
+    """Page width/height in PDF points; empty when ``pdfinfo`` is missing or fails."""
+    binary = shutil.which("pdfinfo")
+    if not binary:
+        return {}
+    completed = subprocess.run(
+        [binary, "-f", str(first), "-l", str(last), str(pdf)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if completed.returncode != 0:
+        return {}
+    return {
+        int(number): (float(width), float(height))
+        for number, width, height in re.findall(
+            r"^Page\s+(\d+)\s+size:\s+([\d.]+)\s+x\s+([\d.]+)\s+pts",
+            completed.stdout,
+            re.MULTILINE,
+        )
+    }
+
+
+def page_render_dpi(width: float, height: float, requested: int = RENDER_DPI) -> int:
+    """Raster dpi for one page, capped so an oversized page stays a sane raster.
+
+    ``width``/``height`` are PDF points.  A 5x-A4 page (2976x4209 pt) would need ~217 MP at
+    300 dpi: Pillow refuses to open that (``DecompressionBombError``) and the OMR reader gains
+    nothing from it.  The same page at 72 dpi is 12.5 MP and reads like A4 at 360 dpi, which is
+    the density the detector expects.  A normal A4 page keeps the requested 300 dpi.
+    """
+    if width <= 0 or height <= 0:
+        return requested
+    by_side = math.ceil(72 * MAX_LONG_SIDE / max(width, height))
+    by_pixels = math.floor(72 * math.sqrt(MAX_PAGE_PIXELS / (width * height)))
+    return max(1, min(requested, by_side, by_pixels))
 
 
 def parse_page_range(page_range: str | None, total_pages: int) -> tuple[int, int]:
@@ -149,6 +198,36 @@ def _run_pdftoppm(pdf: Path, number: int, prefix: Path, dpi: int) -> list[Path]:
     return parts
 
 
+def _extract_page_parts(
+    pdf: Path, number: int, prefix: Path, dpi: int, page_dpi: int
+) -> list[Path]:
+    """Raw raster pieces for one page: the embedded scan, or ``pdftoppm`` when that is unusable.
+
+    ``page_dpi < dpi`` means the page is physically oversized, so its embedded scan would be
+    enormous too; render it directly at the capped dpi.  A page the size of A4 still goes through
+    ``pdfimages`` (native scan, no resampling), but a scan that still trips Pillow's decompression
+    guard falls back to ``pdftoppm`` at ``page_dpi`` instead of crashing the run.
+    """
+    from PIL import Image
+
+    if page_dpi < dpi:
+        return _run_pdftoppm(pdf, number, prefix, page_dpi)
+    parts = _run_pdfimages(pdf, number, prefix)
+    if not parts:
+        return _run_pdftoppm(pdf, number, prefix, page_dpi)
+    try:
+        with Image.open(parts[0]) as probe:
+            pixels = probe.width * probe.height
+            probe.verify()
+    except (Image.DecompressionBombError, OSError):
+        pixels = None
+    if pixels is None or pixels > MAX_PAGE_PIXELS:
+        for part in parts:
+            part.unlink(missing_ok=True)
+        return _run_pdftoppm(pdf, number, prefix, page_dpi)
+    return parts
+
+
 def extract_pdf_pages(
     pdf: str | Path,
     out_dir: str | Path,
@@ -166,6 +245,7 @@ def extract_pdf_pages(
     total = pdf_page_count(pdf_path)
     first, last = parse_page_range(page_range, total)
     rotations = pdf_page_rotations(pdf_path, first, last)
+    sizes = pdf_page_sizes(pdf_path, first, last)
     prefix_stem = safe_page_stem(pdf_path)
     width = max(2, len(str(last)))
 
@@ -175,10 +255,10 @@ def extract_pdf_pages(
         stem = f"{prefix_stem}_p{number:0{width}d}" + (f"_r{turn}" if turn else "")
         target = target_dir / f"{stem}.png"
         if not target.is_file():
+            page_width, page_height = sizes.get(number, (0.0, 0.0))
+            page_dpi = page_render_dpi(page_width, page_height, dpi)
             temp_prefix = target_dir / f".{stem}"
-            parts = _run_pdfimages(pdf_path, number, temp_prefix) or _run_pdftoppm(
-                pdf_path, number, temp_prefix, dpi
-            )
+            parts = _extract_page_parts(pdf_path, number, temp_prefix, dpi, page_dpi)
             try:
                 with Image.open(parts[0]) as image:
                     grey = image.convert("L")
