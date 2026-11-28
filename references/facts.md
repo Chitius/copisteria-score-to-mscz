@@ -153,11 +153,19 @@ python scripts/convert.py score.pdf --pages path/to/omr-pages \
 - `facts-corrections.json` — a separate pitch/rhythm correction review;
 - `facts-report.json` — covered pages, missing pages, unresolved claims and counts.
 
-Pitch corrections are **never injected automatically**. A correction has `from`, `to`, page,
+Pitch/octave/duration corrections are **never injected automatically**. A correction has `from`, `to`, page,
 bbox and evidence; it starts as `"status": "proposed"`. Review it with a human before applying
-anything. There is no automatic correction applier: after a human accepts a correction, edit the
-note in MuseScore (or a dedicated edit workflow) and re-render; `--allow-corrections` only records
-an explicit override and never changes the pitch.
+anything. Once accepted, apply it in a controlled step at unique note anchors and re-render:
+
+```bash
+python scripts/notation_patches.py accept --corrections review/facts/facts-corrections.json \
+  --musicxml out/score/score.musicxml --indices 0 --reviewer "reviewer-name" \
+  -o review/facts/facts-corrections.accepted.json
+python scripts/notation_patches.py apply --input out/score/score.musicxml \
+  --corrections review/facts/facts-corrections.accepted.json -o out/score/score.corrected.musicxml
+```
+
+`--allow-corrections` in `review.py` only records an explicit override and never changes the pitch.
 
 ### 4. Page coverage
 
@@ -184,7 +192,7 @@ A visible pitch/rhythm anomaly belongs in a separate `corrections` array, never 
 ```
 
 `merge` writes `facts-corrections.json`. It is a review queue: it is not injected into the score
-automatically, and `status` must be `proposed` until a human accepts or rejects it.
+automatically, and `status` must remain `proposed` until a human accepts or rejects it (via `scripts/notation_patches.py accept --corrections ...`).
 
 Re-render after injection. A fact is not finished until the credit/mark appears in the expected
 place. Keep unresolved claims in the report; do not turn them into guessed facts.

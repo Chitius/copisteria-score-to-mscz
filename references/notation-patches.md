@@ -1,4 +1,4 @@
-# Notation patches (prototype)
+# Notation patches
 
 Facts describe metadata. Long-tail score symbols are better handled by a **constrained notation
 patch** than by one facts channel per symbol.
@@ -7,7 +7,7 @@ The agent proposes an operation at musical anchors; the compiler writes standard
 MuseScore builds the real object. The agent never writes mscx ids or location fractions. The JSON
 shape is in `schemas/notation-patches.schema.json`.
 
-## Current operation: ottava
+## Ottava (`8va` / `8vb`)
 
 `8va` / `8vb` is compiled to MusicXML `<octave-shift>` directions; MuseScore turns them into an
 Ottava spanner.
@@ -30,8 +30,9 @@ Ottava spanner.
 }
 ```
 
-`start`/`end` are 1-based measure numbers and 0-based quarter-note beats. Both anchors must exist
-and `end` must be after `start`. `page` and `bbox`/`crop` are required evidence fields.
+`start`/`end` are 1-based measure numbers and 0-based quarter-note beats. Both anchors must exist;
+`end` must be at or after `start` (same-beat `start == end` is supported for single-chord `8va`/`8vb`
+marks). `page` and `bbox`/`crop` are required evidence fields.
 
 ## Modes
 
@@ -139,11 +140,19 @@ python -m scorepipe.cli path/to/pages -o out/score/score.musicxml --mscz-out out
   --patches review/patches.accepted.json --report out/report.json
 ```
 
+## Pedal, wedge (hairpin), and dynamic patches
+
+- **`pedal`**: writes MusicXML `<pedal>` directions between `start` and `end` (with optional `changes` anchors, `line` boolean, `placement`, and `mode`: `add`/`replace`/`remove`).
+- **`wedge`**: writes MusicXML `<wedge>` crescendo/diminuendo hairpins (`subtype`: `crescendo` | `diminuendo`, optional `niente` boolean, `placement`, and `mode`).
+- **`dynamic`**: writes a MusicXML `<dynamics>` mark at `measure`, `beat`, and `staff` (`mark` in standard dynamic symbols such as `pp`..`ff`, `mp`, `mf`, `sfz`, `fp`, etc., with optional `placement` and `mode`).
+
+All three support optional `part` targeting (defaulting to the first part) and require `page` + `bbox`/`crop` + `evidence`.
+
 ## 8va range safety
 
 The range is the risky part. The patch has one `staff` field; the compiler enforces:
 
-- end is strictly after start;
+- end is at or after start (same-beat single-chord ottava is allowed; end before start is rejected);
 - measures exist;
 - the octave-shift start/stop directions share the expected number and size;
 - evidence and a bbox/crop are present in the schema.
@@ -159,5 +168,4 @@ Pixel coordinates are evidence only; the applied range comes from musical anchor
 
 ## Scope
 
-The supported operations are `ottava` and the constrained same-voice `tuplet` correction above. Other
-symbols and cross-voice/missing-note rhythm repair still need their own compilers and render regressions.
+The supported patch operations are `ottava` (including single-chord same-beat), `clef`, constrained same-voice `tuplet`, `pedal`, `wedge`, and `dynamic`. Controlled pitch/octave/duration `corrections` share the same `scripts/notation_patches.py accept/apply` CLI via `--corrections`. Cross-voice or missing-note rhythm repair still requires dedicated compilers and render regressions.

@@ -60,6 +60,8 @@ Explicit overrides for an interim review:
 Overrides do not remove the items from the report. A `ready: true` report still lists what was
 overridden; do not present it as a fully reviewed delivery.
 
+To explicitly accept a specific human-verified verifier finding (such as a source-inherent incomplete bar) without hiding it, pass `--accept-verifier <measure:code>[,...]` together with `--accept-reason "<rationale>"`. Accepted findings are recorded in `review-report.json` under `accepted_findings`. If the final measure ends early across all voices, pass `--pad-last-measure` when padding the final bar is appropriate.
+
 ## Report
 
 ```text
