@@ -137,7 +137,7 @@ python -m scorepipe.cli "out/score/work/copisteria" -o "out/score/score.musicxml
 ## facts、patch 与 AI 助手
 
 - **facts**：注入标题、作曲、速度、排练号以及多声部乐器元数据（`parts`：声部名、简称、乐器预设或 GM 音色）等明确事实；每项都应带页码和证据。准备与校验流程见 [`references/facts.md`](references/facts.md)。
-- **notation patch**：用音符锚点补入证据充分的 `ottava`（8va/8vb，含单和弦同拍）、`tuplet`、`clef`、`pedal`、`wedge`（hairpin）与 `dynamic` 修正（支持按 `part` 定位），也支持对人工接受的音高/八度/时值 `corrections` 做受控应用；范围不确定时保留为未决，不自动扩张。见 [`references/notation-patches.md`](references/notation-patches.md)。
+- **notation patch**：用音符锚点补入证据充分的 `ottava`（8va/8vb，含单和弦同拍）、`tuplet`、`clef`、`pedal`、`wedge`（hairpin）、`dynamic`、`repeat`、`volta`、`fermata`、`navigation`（`segno`/`coda`）、`ornament`（颤音/波音/回音/单音震音）、`glissando`、`arpeggio`（含跨谱表琶音）与 `parentheses`（括号音符/变音记号）修正（支持按 `part` 定位），也支持对人工接受的音高/八度/时值 `corrections` 做受控应用；范围不确定时保留为未决，不自动扩张。见 [`references/notation-patches.md`](references/notation-patches.md)。
 - **AI 助手**：本仓库同时提供 [`SKILL.md`](SKILL.md)，约束助手完成环境检查、逐页 OMR、证据收集、复核和交付。助手可以提出修正，但不能自行把提案当作已接受结果。
 
 ## 适用范围与限制
@@ -145,7 +145,7 @@ python -m scorepipe.cli "out/score/work/copisteria" -o "out/score/score.musicxml
 - 面向**印刷五线谱**，稳定主力场景为**单 `<part>` 乐谱**（双谱表钢琴谱与单行旋律）。
 - **多 `<part>` 乐谱（实验性）**：已实验性支持声乐 + 钢琴艺术歌曲、小型室内乐与乐队总谱的整谱合并、逐声部修复/截断、单谱表架子鼓 GM 鼓键与镲片 `x` 符头自动映射，以及通过 `facts.json` 注入各声部乐器音色；但跨页声部对齐、复杂打击乐连音与中文乐器标签等场景仍处于实验阶段，需结合 `review-sheets.pdf` 人工复核。手写谱、简谱、六线谱不属于已验证场景。
 - OMR 仍可能产生八度、加线、声部、休止符和密集和弦错误。结构校验通过不代表音高正确，**人工核对不可省略**。
-- OMR 仍可能漏掉踏板、hairpin、可选音符括号等记号；其中踏板（`pedal`）、hairpin（`wedge`）与力度（`dynamic`）可通过受限 notation patch 补入，其余未覆盖记号应明确记录，不靠猜测补齐。
+- OMR 仍可能漏掉踏板、hairpin、反复跳房子、延长记号、装饰音/震音、跨谱表琶音或可选音符括号等记号；上述记号均可通过受限 notation patch 补入，其余未覆盖记号应明确记录，不靠猜测补齐。
 - 8va/8vb 需要证据充分且经接受的 patch；无法确定覆盖范围时保持未决。
 - PDF 文字层可能错位或乱码，标题、作曲和速度应以页面证据为准。
 - 一次处理一份乐谱；没有内建批处理。扫描倾斜、透视或分辨率过低会显著影响识别质量。

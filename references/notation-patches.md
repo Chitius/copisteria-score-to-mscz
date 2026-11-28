@@ -146,7 +146,21 @@ python -m scorepipe.cli path/to/pages -o out/score/score.musicxml --mscz-out out
 - **`wedge`**: writes MusicXML `<wedge>` crescendo/diminuendo hairpins (`subtype`: `crescendo` | `diminuendo`, optional `niente` boolean, `placement`, and `mode`).
 - **`dynamic`**: writes a MusicXML `<dynamics>` mark at `measure`, `beat`, and `staff` (`mark` in standard dynamic symbols such as `pp`..`ff`, `mp`, `mf`, `sfz`, `fp`, etc., with optional `placement` and `mode`).
 
-All three support optional `part` targeting (defaulting to the first part) and require `page` + `bbox`/`crop` + `evidence`.
+## Repeats, voltas, fermatas, and navigation
+
+- **`repeat`**: writes forward (`location="left"`) or backward (`location="right"`) repeat barlines at `measure` (`direction`: `forward` | `backward`, optional `times` >= 2 on backward repeats, `mode`: `add`/`replace`/`remove`).
+- **`volta`**: writes ending brackets (`start_measure`, `end_measure`, `number` such as `"1"` or `"1, 2"`, optional `stop_type`: `stop` | `discontinue`, optional `text`, `mode`: `add`/`replace`/`remove`). Merges cleanly with `<repeat>` on the same barline.
+- **`fermata`**: attaches `<fermata>` to the note or rest at `measure`, `beat`, `staff` (optional `voice`, `type`: `upright` | `inverted`, `shape`: `normal` | `angled` | `square`, `mode`: `add`/`replace`/`remove`).
+- **`navigation`**: writes `<segno/>` or `<coda/>` direction marks at `measure`, `beat`, `staff` (`mark`: `segno` | `coda`, optional `placement`: `above` | `below`, `mode`: `add`/`replace`/`remove`).
+
+## Ornaments, glissandos, arpeggios, and parentheses
+
+- **`ornament`**: attaches `<ornaments>` (`kind`: `trill` | `mordent` | `inverted-mordent` | `turn` | `inverted-turn` | `delayed-turn` | `tremolo`; `tremolo` emits single-note tremolo with optional `slashes` 1–5) at `measure`, `beat`, `staff` (optional `voice`, `placement`, `mode`).
+- **`glissando`**: attaches paired `<glissando>` `start`/`stop` spanners between `start` and `end` anchors on `staff` (optional `voice`, `line_type`: `wavy` | `solid` | `dashed` | `dotted`, optional `text`, `mode`).
+- **`arpeggio`**: attaches `<arpeggiate>` or `<non-arpeggiate>` at `measure`, `beat`, targeting either `staff` or a `staves` array (e.g. `[1, 2]` for a grand-staff cross-staff arpeggio sharing one `number`; optional `voice`, `kind`: `arpeggiate` | `non-arpeggiate`, `direction`: `none` | `up` | `down`, `mode`).
+- **`parentheses`**: sets `parentheses="yes"` on the note matching `measure`, `beat`, `staff`, and `pitch` (optional `voice`, `target`: `notehead` | `accidental` | `both`, `mode`: `add` | `remove`).
+
+All of these support optional `part` targeting (defaulting to the first part) and require `page` + `bbox`/`crop` + `evidence`.
 
 ## 8va range safety
 
@@ -168,4 +182,4 @@ Pixel coordinates are evidence only; the applied range comes from musical anchor
 
 ## Scope
 
-The supported patch operations are `ottava` (including single-chord same-beat), `clef`, constrained same-voice `tuplet`, `pedal`, `wedge`, and `dynamic`. Controlled pitch/octave/duration `corrections` share the same `scripts/notation_patches.py accept/apply` CLI via `--corrections`. Cross-voice or missing-note rhythm repair still requires dedicated compilers and render regressions.
+The supported patch operations are `ottava` (including single-chord same-beat), `clef`, constrained same-voice `tuplet`, `pedal`, `wedge`, `dynamic`, `repeat`, `volta`, `fermata`, `navigation`, `ornament`, `glissando`, `arpeggio`, and `parentheses`. Controlled pitch/octave/duration `corrections` share the same `scripts/notation_patches.py accept/apply` CLI via `--corrections`. Cross-voice or missing-note rhythm repair still requires dedicated compilers and render regressions.
