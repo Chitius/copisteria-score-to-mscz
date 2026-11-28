@@ -105,6 +105,7 @@ def run_review(
         "facts_skipped": bool(args.skip_facts),
         "unresolved": gated["unresolved"],
         "corrections": gated["corrections"],
+        "corrections_summary": gated["corrections_summary"],
         "patch_count": len((gated["patch_payload"] or {}).get("patches") or []),
         "mechanical": mechanical,
         "blockers": blockers,

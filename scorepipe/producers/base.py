@@ -11,4 +11,5 @@ class FactSet:
     credits: list[dict] = field(default_factory=list)
     parts: list[dict] = field(default_factory=list)
     words: list[dict] = field(default_factory=list)
+    corrections: list[dict] = field(default_factory=list)
     source: str = ""

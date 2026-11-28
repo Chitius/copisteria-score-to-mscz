@@ -33,6 +33,7 @@ class JsonProducer:
             marks=data.get("marks") or [],
             credits=data.get("credits") or [],
             parts=data.get("parts") or [],
+            corrections=data.get("corrections") or [],
             source=str(self.path),
         )
 
@@ -87,6 +88,7 @@ class CompositeProducer:
         credits: list[dict] = []
         parts: list[dict] = []
         words: list[dict] = []
+        corrections: list[dict] = []
         sources: list[str] = []
         for producer in self.producers:
             result = producer.produce(input_path)
@@ -94,12 +96,14 @@ class CompositeProducer:
             credits.extend(result.credits)
             parts.extend(result.parts)
             words.extend(result.words)
+            corrections.extend(result.corrections)
             sources.append(result.source)
         return FactSet(
             marks=marks,
             credits=credits,
             parts=parts,
             words=words,
+            corrections=corrections,
             source=", ".join(sources),
         )
 

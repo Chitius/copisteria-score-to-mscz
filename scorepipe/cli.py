@@ -14,6 +14,7 @@ from .core.mscx_invariants import MSCX_VERIFIERS
 from .core.pass_base import Context, Phase
 from .core.pipeline import RunReport, run_display, run_pipeline
 from .core.registry import validate_all
+from .corrections import apply_corrections, validate_corrections, verify_corrections
 from .facts import validate_facts
 from .loader import load_pages, merge_pages
 from .mscz_export import export_and_display
@@ -88,6 +89,7 @@ def main(argv: list[str] | None = None) -> int:
         return _run_mscz(path, args)
 
     facts = {}
+    accepted_corrections: list[dict] = []
     layout = None
     if args.layout:
         layout = json.loads(Path(args.layout).read_text(encoding="utf-8-sig"))
@@ -97,6 +99,9 @@ def main(argv: list[str] | None = None) -> int:
             print("facts: PDF text layer has no --layout, so no marks will be produced")
         produced = producer.produce(path)
         facts = {"marks": produced.marks, "credits": produced.credits, "parts": produced.parts}
+        accepted_corrections = [
+            item for item in (produced.corrections or []) if item.get("status") == "accepted"
+        ]
     credits = facts.setdefault("credits", [])
     if args.title:
         credits.append({"type": "title", "text": args.title})
@@ -120,6 +125,14 @@ def main(argv: list[str] | None = None) -> int:
         pages = merged
     else:
         doc = Document.load(path)
+    if accepted_corrections:
+        correction_problems = validate_corrections(
+            accepted_corrections, doc, require_acceptance=True
+        )
+        if correction_problems:
+            for problem in correction_problems:
+                print(f"corrections: {problem}")
+            return 1
     tuplets_payload = None
     ottava_payload = None
     clefs_payload = None
@@ -139,6 +152,9 @@ def main(argv: list[str] | None = None) -> int:
         clefs_payload = {
             "patches": [patch for patch in patches_payload.get("patches") or [] if patch.get("op") == "clef"]
         }
+    if accepted_corrections:
+        changed = apply_corrections(doc, accepted_corrections)
+        print(f"corrections: {changed} note(s) updated")
     if clefs_payload and clefs_payload["patches"]:
         # before the structural fixpoint: the placed clef must go through the redundant-clef pass
         changed = apply_patches(doc, clefs_payload)
@@ -179,6 +195,15 @@ def main(argv: list[str] | None = None) -> int:
             patch_failed = True
             report.analysis.append(
                 {"phase": "patches", "pass": "verify_patches", "notes": patch_problems}
+            )
+    if accepted_corrections:
+        correction_problems = verify_corrections(doc, accepted_corrections)
+        for problem in correction_problems:
+            print(f"corrections: {problem}")
+        if correction_problems:
+            patch_failed = True
+            report.analysis.append(
+                {"phase": "corrections", "pass": "verify_corrections", "notes": correction_problems}
             )
     if args.output and not args.check:
         doc.save(args.output)

@@ -139,6 +139,8 @@ def validate_agent_facts(
             problems.append(f"{prefix}: to must be a non-empty pitch")
         if old and new and old.strip().upper() == new.strip().upper():
             problems.append(f"{prefix}: from and to are identical")
+        if correction.get("kind") not in (None, "pitch", "octave", "duration"):
+            problems.append(f"{prefix}: kind must be pitch/octave/duration")
         if correction.get("status") not in (None, "proposed", "accepted", "rejected"):
             problems.append(f"{prefix}: status must be proposed/accepted/rejected")
 

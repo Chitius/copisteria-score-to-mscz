@@ -12,6 +12,7 @@ from ..agent_facts import (
     validate_agent_facts,
 )
 from ..core.invariants import LENGTH_CODES
+from ..corrections import validate_corrections
 from ..notation_patches import load_patches, validate_patches
 from .helpers import (
     ReviewHooks,
@@ -110,11 +111,28 @@ def prepare_facts_and_gates(
             overrides.append(f"{len(unresolved)} unresolved claim(s)")
         else:
             blockers.append(f"{len(unresolved)} unresolved claim(s)")
-    if corrections:
+    proposed_corrections = [
+        item for item in corrections if item.get("status") in (None, "proposed")
+    ]
+    accepted_corrections = [item for item in corrections if item.get("status") == "accepted"]
+    rejected_corrections = [item for item in corrections if item.get("status") == "rejected"]
+    if proposed_corrections:
         if args.allow_corrections:
-            overrides.append(f"{len(corrections)} proposed correction(s)")
+            overrides.append(f"{len(proposed_corrections)} proposed correction(s)")
         else:
-            blockers.append(f"{len(corrections)} proposed correction(s)")
+            blockers.append(f"{len(proposed_corrections)} proposed correction(s)")
+    if accepted_corrections:
+        correction_problems = validate_corrections(
+            accepted_corrections, merged.document, require_acceptance=True
+        )
+        if correction_problems:
+            blockers.extend(f"correction: {problem}" for problem in correction_problems)
+        else:
+            findings.append(
+                f"{len(accepted_corrections)} accepted correction(s) queued for controlled apply"
+            )
+    if rejected_corrections:
+        findings.append(f"{len(rejected_corrections)} rejected correction(s) skipped")
     if args.no_mechanical:
         artifacts_missing.append("mechanical baseline")
         if not args.allow_incomplete_delivery:
@@ -146,6 +164,11 @@ def prepare_facts_and_gates(
         "missing_pages": missing_pages,
         "unresolved": unresolved,
         "corrections": corrections,
+        "corrections_summary": {
+            "proposed": len(proposed_corrections),
+            "accepted": len(accepted_corrections),
+            "rejected": len(rejected_corrections),
+        },
         "blockers": blockers,
         "overrides": overrides,
         "findings": findings,
