@@ -24,8 +24,9 @@ class FillShortMeasures:
         kind=Kind.MECHANICAL,
         owns=("rest-padding",),
         description=(
-            "append a rest when a voice stops before the barline (pickup/last bar excluded) and "
-            "trim a padding rest that starts before the note it follows in the same voice"
+            "append a rest when a voice stops before the barline (pickup excluded; a short final "
+            "bar only when every voice is short) and trim a padding rest that starts before the "
+            "note it follows in the same voice"
         ),
         measure="voices ending before the barline; padding rests overlapping their own voice",
     )
@@ -45,12 +46,18 @@ class FillShortMeasures:
                 changed += _trim_overlapping_padding_rests(doc, measure, divisions)
                 if measure.get("implicit") == "yes":
                     continue  # an anacrusis is short by design
-                if not pad_last and index == len(measures) - 1:
-                    continue
                 ends: dict[tuple[str, str], float] = {}
                 for event in doc.events(measure, divisions):
                     key = (event.staff, event.voice)
                     ends[key] = max(ends.get(key, 0.0), event.end)
+                if not pad_last and index == len(measures) - 1:
+                    # A final bar that *every* voice leaves short is a deliberate ending and must
+                    # stay as printed.  A final bar where another voice already fills the metre is
+                    # just an incomplete voice: MuseScore silently pads it with a rest, so write
+                    # that rest here too -- otherwise the semantic master keeps a verifier finding
+                    # that no reader can see in the render.
+                    if not any(end >= bar - 1e-6 for end in ends.values()):
+                        continue
                 for (staff, voice), end in sorted(ends.items()):
                     if end >= bar - 1e-6:
                         continue

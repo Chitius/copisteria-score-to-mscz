@@ -50,6 +50,51 @@ class FillBackupTest(unittest.TestCase):
         self.assertEqual(staff_two[0].duration, 4.0)
         self.assertEqual(measure_lengths(doc, Context()), [])
 
+    def test_last_measure_short_voice_is_padded_when_another_voice_fills_the_bar(self):
+        # A 4/4 final bar: staff 1 has a whole note, staff 2 stops after a half note.  MuseScore's
+        # importer pads staff 2 with a half rest, so the pipeline must write that rest as well;
+        # otherwise the semantic master keeps a verifier finding nobody can see in the render.
+        body = (
+            note("C", 5, 16)
+            + "<backup><duration>16</duration></backup>"
+            + note("E", 3, 8, staff=2, voice="5")
+        )
+        measures = (
+            '<measure number="1"><attributes><divisions>4</divisions>'
+            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+            + body
+            + "</measure>"
+        )
+        doc = Document(ElementTree.fromstring(PART.format(measures=measures)))
+        run_pipeline(doc, Context(), structural=STRUCTURAL_PASSES, verifiers=[])
+        measure = doc.measures()[0]
+        rests = [item for item in measure.findall("note") if item.find("rest") is not None]
+        self.assertEqual(len(rests), 1)
+        self.assertEqual(rests[0].findtext("duration"), "8")
+        self.assertEqual(rests[0].findtext("voice"), "5")
+        self.assertEqual(rests[0].findtext("staff"), "2")
+        self.assertEqual(measure_lengths(doc, Context()), [])
+
+    def test_last_measure_where_every_voice_is_short_keeps_its_printed_length(self):
+        # A deliberate short ending (every voice stops together) must not be padded: the pass only
+        # fills a final bar when another voice already proves the bar is a full metre long.
+        measures = (
+            '<measure number="1"><attributes><divisions>4</divisions>'
+            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+            + note("C", 5, 16)
+            + "</measure>"
+            + '<measure number="2">'
+            + note("E", 4, 8)
+            + "</measure>"
+        )
+        doc = Document(ElementTree.fromstring(PART.format(measures=measures)))
+        run_pipeline(doc, Context(), structural=STRUCTURAL_PASSES, verifiers=[])
+        measure = doc.measures()[1]
+        self.assertEqual([item for item in measure.findall("note") if item.find("rest") is not None], [])
+        violations = measure_lengths(doc, Context())
+        self.assertEqual(len(violations), 1)
+        self.assertEqual(violations[0].measure, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
