@@ -11,11 +11,14 @@ from ..agent_facts import (
     normalize_agent_facts,
     validate_agent_facts,
 )
+from ..core.invariants import LENGTH_CODES
 from ..notation_patches import load_patches, validate_patches
 from .helpers import (
     ReviewHooks,
-    _only_overfull_violations,
+    _format_accepted_finding,
     _parts,
+    _partition_violations,
+    _report_violations,
     _timing,
     _timing_report,
     _truncation_notes,
@@ -235,7 +238,9 @@ def run_reviewed_pipeline(
     report: dict,
     root: Path,
     hooks: ReviewHooks,
-) -> tuple[int, bool]:
+    accepted_specs: set[tuple[int, str]] | None = None,
+    accept_reason: str | None = None,
+) -> tuple[int, bool, bool]:
     """Run the reviewed scorepipe pipeline and render the reviewed score to PDF/PNG."""
     musicxml = outdir / "score.musicxml"
     report_json = outdir / "report.json"
@@ -253,6 +258,8 @@ def run_reviewed_pipeline(
         "--facts",
         str(facts_path),
     ]
+    if getattr(args, "pad_last_measure", False):
+        command.append("--pad-last-measure")
     if args.patches:
         command.extend(["--patches", str(Path(args.patches).resolve())])
     if args.compare_golden:
@@ -263,7 +270,21 @@ def run_reviewed_pipeline(
         if musescore:
             command.extend(["--musescore", str(musescore)])
     reviewed_exit = hooks.run(command, root)
-    reviewed_only_overfull = _only_overfull_violations(report_json)
+    reviewed_violations = _report_violations(report_json)
+    reviewed_accepted, reviewed_remaining = _partition_violations(
+        reviewed_violations, accepted_specs or set()
+    )
+    reviewed_all_accepted = (
+        reviewed_exit == 1 and bool(reviewed_violations) and not reviewed_remaining
+    )
+    reviewed_only_overfull = bool(reviewed_remaining) and all(
+        violation.get("code") in LENGTH_CODES for violation in reviewed_remaining
+    )
+    if reviewed_accepted:
+        report["reviewed_accepted_findings"] = [
+            _format_accepted_finding(violation, stage="reviewed", reason=accept_reason)
+            for violation in reviewed_accepted
+        ]
     # ``pipeline_exit`` describes the run that produced the root artifacts.  When the editable
     # copy ships, promote_forced_truncation overwrites it with the forced exit, so the reviewed
     # (semantic) exit is kept separately instead of being lost.
@@ -298,7 +319,7 @@ def run_reviewed_pipeline(
             except RuntimeError as exc:
                 report["render_error"] = str(exc)
                 report["ready"] = False
-    return reviewed_exit, reviewed_only_overfull
+    return reviewed_exit, reviewed_only_overfull, reviewed_all_accepted
 
 
 def run_forced_truncation(
@@ -313,6 +334,8 @@ def run_forced_truncation(
     report: dict,
     root: Path,
     hooks: ReviewHooks,
+    accepted_specs: set[tuple[int, str]] | None = None,
+    accept_reason: str | None = None,
 ) -> dict | None:
     """Build the forced-truncation editable tree and promote it to root when it trims notes."""
     if args.no_forced_truncation:
@@ -356,6 +379,8 @@ def run_forced_truncation(
         str(facts_path),
         "--truncate-overfull",
     ]
+    if getattr(args, "pad_last_measure", False):
+        forced_command.append("--pad-last-measure")
     if args.patches:
         forced_command.extend(["--patches", str(Path(args.patches).resolve())])
     forced_command.extend(["--mscz-out", str(forced_mscz)])
@@ -378,11 +403,19 @@ def run_forced_truncation(
                 hooks.render_pages(forced_pdf, forced_dir / "rendered")
             except RuntimeError as exc:
                 forced_render_error = str(exc)
+    forced_violations = _report_violations(forced_report)
+    forced_accepted, forced_remaining = _partition_violations(
+        forced_violations, accepted_specs or set()
+    )
+    forced_verifier_count = _verifier_count(forced_report)
+    forced_clean = (forced_exit == 0 and forced_verifier_count == 0) or (
+        forced_exit == 1 and bool(forced_violations) and not forced_remaining
+    )
     forced = {
         "semantic_authority": False,
         "status": (
             "failed"
-            if forced_exit != 0
+            if not forced_clean
             else "unresolved"
             if unresolved
             else "applied"
@@ -402,11 +435,14 @@ def run_forced_truncation(
         "unresolved": unresolved,
         "irregular_durations": irregular,
         "spanner_risks": spanner_risks,
-        "verifier_count": _verifier_count(forced_report),
+        "verifier_count": forced_verifier_count,
+        "accepted_findings": [
+            _format_accepted_finding(violation, stage="forced", reason=accept_reason)
+            for violation in forced_accepted
+        ],
     }
     forced["ready"] = (
-        forced_exit == 0
-        and forced["verifier_count"] == 0
+        forced_clean
         and not unresolved
         and forced_mscz.is_file()
         and (forced_render_exit is None or forced_render_exit == 0)

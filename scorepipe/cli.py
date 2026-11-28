@@ -51,6 +51,11 @@ def main(argv: list[str] | None = None) -> int:
         help="allow one bounded structural outer round for new measure-length violations",
     )
     parser.add_argument(
+        "--pad-last-measure",
+        action="store_true",
+        help="also pad a short final measure when all voices end early",
+    )
+    parser.add_argument(
         "--truncate-overfull",
         action="store_true",
         help="trim overfull voices for an editable .mscz; may delete/shorten notes and rests; requires --mscz-out",
@@ -146,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
         pages=pages,
         options={
             "truncate_overfull": args.truncate_overfull,
+            "pad_last_measure": args.pad_last_measure,
             "repairable": {"measure-length"} if args.repair_measure_length else set(),
         },
     )

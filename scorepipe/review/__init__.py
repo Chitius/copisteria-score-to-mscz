@@ -18,7 +18,8 @@ from .helpers import (
     _truncation_performed as _truncation_performed,
     _verifier_count as _verifier_count,
     _write as _write,
+    parse_accepted_verifier_specs as parse_accepted_verifier_specs,
 )
 from .runner import run_review
 
-__all__ = ["ReviewHooks", "run_review"]
+__all__ = ["ReviewHooks", "parse_accepted_verifier_specs", "run_review"]

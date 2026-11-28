@@ -548,5 +548,174 @@ class ReviewLengthToleranceTest(_TempWorkMixin, unittest.TestCase):
         self.assertEqual(delivery["reviewed_pipeline_exit"], 1)
 
 
+class ReviewAcceptVerifierTest(_TempWorkMixin, unittest.TestCase):
+    def _run_case(
+        self,
+        *,
+        reviewed_verifier: list[dict],
+        forced_verifier: list[dict] | None = None,
+        forced_notes: list[str] | None = None,
+        extra_args: list[str] | None = None,
+    ):
+        work = self._work("accept_verifier")
+        pages = work / "pages"
+        pages.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(FIXTURE, pages / "page1.musicxml")
+        facts = work / "facts"
+        facts.mkdir(parents=True, exist_ok=True)
+        (facts / "agent-page1.json").write_text(
+            json.dumps({"producer": {"name": "agent-visual", "pages": [1]}}),
+            encoding="utf-8",
+        )
+        source = work / "source.pdf"
+        source.write_bytes(b"draft")
+        outdir = work / "out"
+        calls = []
+
+        def fake_run(command, cwd):
+            calls.append(command)
+            if any("review_sheet.py" in part for part in command):
+                return 0
+            if "scorepipe.cli" in command:
+                musicxml = Path(command[command.index("-o") + 1])
+                musicxml.parent.mkdir(parents=True, exist_ok=True)
+                musicxml.write_text("musicxml", encoding="utf-8")
+                report_path = Path(command[command.index("--report") + 1])
+                if "--truncate-overfull" in command:
+                    ver = forced_verifier if forced_verifier is not None else []
+                    trace = (
+                        [{"pass": "truncate_overfull_mscx", "notes": forced_notes}]
+                        if forced_notes
+                        else []
+                    )
+                    report_path.write_text(
+                        json.dumps({"verifier": ver, "trace": trace}),
+                        encoding="utf-8",
+                    )
+                    Path(command[command.index("--mscz-out") + 1]).write_bytes(b"mscz")
+                    return 1 if ver else 0
+                if "mechanical" in str(musicxml):
+                    report_path.write_text(json.dumps({"verifier": []}), encoding="utf-8")
+                    if "--mscz-out" in command:
+                        Path(command[command.index("--mscz-out") + 1]).write_bytes(b"mscz")
+                    return 0
+                report_path.write_text(
+                    json.dumps({"verifier": reviewed_verifier}), encoding="utf-8"
+                )
+                if "--mscz-out" in command:
+                    Path(command[command.index("--mscz-out") + 1]).write_bytes(b"mscz")
+                return 1 if reviewed_verifier else 0
+            Path(command[command.index("-o") + 1]).write_bytes(b"pdf")
+            return 0
+
+        with (
+            patch.object(review_script, "_pdf_pages", return_value=1),
+            patch.object(review_script, "_render_pages", return_value=1),
+            patch.object(review_script, "find_musescore", return_value="musescore"),
+            patch.object(review_script, "_run", side_effect=fake_run),
+        ):
+            code = review_script.main(
+                [
+                    str(source),
+                    "--pages",
+                    str(pages),
+                    "--facts-dir",
+                    str(facts),
+                    "--outdir",
+                    str(outdir),
+                    "--musescore",
+                    "musescore",
+                    *(extra_args or []),
+                ]
+            )
+        report = json.loads((outdir / "review-report.json").read_text(encoding="utf-8"))
+        delivery = json.loads((outdir / "delivery.json").read_text(encoding="utf-8"))
+        return code, report, delivery, calls
+
+    def test_accepted_known_finding_allows_ready_and_is_recorded(self):
+        finding = {
+            "code": "measure-length",
+            "measure": 130,
+            "detail": "voice 1 ends at 3.0 beats, expected 4.0",
+        }
+        code, report, delivery, _calls = self._run_case(
+            reviewed_verifier=[finding],
+            forced_verifier=[finding],
+            extra_args=[
+                "--accept-verifier",
+                "m130:measure-length",
+                "--accept-reason",
+                "printed bass G#4 lacks a dot; MuseScore pads a rest",
+            ],
+        )
+        self.assertEqual(code, 0)
+        self.assertTrue(report["ready"], report["blockers"])
+        self.assertTrue(delivery["ready"])
+        self.assertEqual(report["accepted_verifier_specs"], ["130:measure-length"])
+        self.assertEqual(delivery["accepted_verifier_specs"], ["130:measure-length"])
+        self.assertEqual(len(report["accepted_findings"]), 2)
+        self.assertEqual({item["stage"] for item in report["accepted_findings"]}, {"reviewed", "forced"})
+        self.assertEqual(
+            report["accepted_findings"][0]["reason"],
+            "printed bass G#4 lacks a dot; MuseScore pads a rest",
+        )
+        self.assertTrue(any("m130:measure-length" in text for text in report["findings"]))
+
+    def test_accepting_one_finding_does_not_hide_unaccepted_findings(self):
+        code, report, _delivery, _calls = self._run_case(
+            reviewed_verifier=[
+                {"code": "measure-length", "measure": 130, "detail": "short voice"},
+                {"code": "duplicate-tie", "measure": 12, "detail": "2x tie start"},
+            ],
+            extra_args=["--accept-verifier", "130:measure-length"],
+        )
+        self.assertNotEqual(code, 0)
+        self.assertFalse(report["ready"])
+        self.assertIn("reviewed pipeline exited 1", report["blockers"])
+
+    def test_accepted_finding_coexists_with_forced_truncation_tolerance(self):
+        m130 = {"code": "measure-length", "measure": 130, "detail": "short voice"}
+        m42 = {"code": "mscx-measure-length", "measure": 42, "detail": "voice 4.25 beats"}
+        code, report, delivery, _calls = self._run_case(
+            reviewed_verifier=[m130, m42],
+            forced_verifier=[m130],
+            forced_notes=["m42 staff 1: 4.25->4 beats; remove 0.25"],
+            extra_args=["--accept-verifier", "130:measure-length"],
+        )
+        self.assertEqual(code, 0)
+        self.assertTrue(report["ready"], report["blockers"])
+        self.assertTrue(delivery["ready"])
+        self.assertEqual(len(report["accepted_findings"]), 2)
+        self.assertTrue(any("length complaints" in text for text in report["findings"]))
+
+    def test_pad_last_measure_forwards_to_reviewed_and_forced_cli(self):
+        code, report, _delivery, calls = self._run_case(
+            reviewed_verifier=[],
+            extra_args=["--pad-last-measure"],
+        )
+        self.assertEqual(code, 0)
+        self.assertTrue(report["ready"])
+        cli_calls = [cmd for cmd in calls if "scorepipe.cli" in cmd]
+        reviewed_and_forced = [cmd for cmd in cli_calls if "--facts" in cmd]
+        self.assertEqual(len(reviewed_and_forced), 2)
+        for cmd in reviewed_and_forced:
+            self.assertIn("--pad-last-measure", cmd)
+
+    def test_invalid_accept_verifier_syntax_fails_argument_parsing(self):
+        with self.assertRaises(SystemExit) as raised:
+            review_script.main(
+                [
+                    "dummy.pdf",
+                    "--pages",
+                    "pages",
+                    "--outdir",
+                    "out",
+                    "--accept-verifier",
+                    "130",
+                ]
+            )
+        self.assertNotEqual(raised.exception.code, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

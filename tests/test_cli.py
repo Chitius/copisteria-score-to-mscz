@@ -155,6 +155,31 @@ class CliTest(unittest.TestCase):
             main([str(Path(__file__).parent / "fixtures" / "tiny.musicxml"), "--truncate-overfull"])
         self.assertNotEqual(raised.exception.code, 0)
 
+    def test_pad_last_measure_flag_pads_short_final_bar(self):
+        work = self._work()
+        source = work / "short_end.musicxml"
+        source.write_text(
+            """
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><staff>1</staff></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>8</duration><voice>1</voice><staff>1</staff></note>
+    </measure>
+  </part>
+</score-partwise>
+""".strip(),
+            encoding="utf-8",
+        )
+        default_out = work / "default.musicxml"
+        padded_out = work / "padded.musicxml"
+        self.assertEqual(main([str(source), "-o", str(default_out)]), 1)
+        self.assertEqual(main([str(source), "-o", str(padded_out), "--pad-last-measure"]), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

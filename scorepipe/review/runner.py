@@ -7,7 +7,13 @@ from pathlib import Path
 
 from ..loader import load_pages
 from ..notation_patches import score_map
-from .helpers import ReviewHooks, _timing_report, _truncation_performed, _write
+from .helpers import (
+    ReviewHooks,
+    _timing_report,
+    _truncation_performed,
+    _write,
+    parse_accepted_verifier_specs,
+)
 from .stages import (
     prepare_facts_and_gates,
     run_forced_truncation,
@@ -28,6 +34,9 @@ def run_review(
 ) -> int:
     """Execute the full delivery review loop and write ``review-report.json`` + ``delivery.json``."""
     hooks = hooks or ReviewHooks()
+    accepted_specs = parse_accepted_verifier_specs(getattr(args, "accept_verifier", None))
+    accepted_spec_set = set(accepted_specs)
+    accept_reason = getattr(args, "accept_reason", None)
     pdf = Path(args.pdf).resolve()
     page_dir = Path(args.pages).resolve()
     outdir = Path(args.outdir).resolve()
@@ -80,6 +89,8 @@ def run_review(
         "semantic_authority": True,
         "overrides": overrides,
         "findings": findings,
+        "accepted_verifier_specs": [f"{measure}:{code}" for measure, code in accepted_specs],
+        "accepted_findings": [],
         "artifacts_missing": artifacts_missing,
         "source_pdf": {"path": str(pdf), "sha256": pdf_sha256},
         "page_count": page_count,
@@ -114,7 +125,7 @@ def run_review(
             print(f"finding: {finding}")
         return 2
 
-    reviewed_exit, reviewed_only_overfull = run_reviewed_pipeline(
+    reviewed_exit, reviewed_only_overfull, reviewed_all_accepted = run_reviewed_pipeline(
         args,
         outdir=outdir,
         page_dir=page_dir,
@@ -125,6 +136,8 @@ def run_review(
         report=report,
         root=root,
         hooks=hooks,
+        accepted_specs=accepted_spec_set,
+        accept_reason=accept_reason,
     )
 
     if not args.no_confidence:
@@ -142,7 +155,30 @@ def run_review(
         report=report,
         root=root,
         hooks=hooks,
+        accepted_specs=accepted_spec_set,
+        accept_reason=accept_reason,
     )
+
+    accepted_findings = list(report.pop("reviewed_accepted_findings", None) or [])
+    if forced and forced.get("accepted_findings"):
+        accepted_findings.extend(forced["accepted_findings"])
+    report["accepted_findings"] = accepted_findings
+    if accepted_findings:
+        labels = sorted({f"m{item['measure']}:{item['code']}" for item in accepted_findings})
+        report["findings"].append(
+            f"accepted {len(accepted_findings)} known verifier finding(s): {', '.join(labels)}"
+        )
+    if accepted_specs:
+        matched_specs = {(item.get("measure"), item.get("code")) for item in accepted_findings}
+        unmatched = [
+            f"{measure}:{code}"
+            for measure, code in accepted_specs
+            if (measure, code) not in matched_specs
+        ]
+        if unmatched:
+            report["findings"].append(
+                "accepted verifier selector(s) matched no findings: " + ", ".join(unmatched)
+            )
 
     if reviewed_exit != 0:
         tolerated = (
@@ -151,7 +187,9 @@ def run_review(
             and _truncation_performed(forced.get("operations") or [])
             and reviewed_only_overfull
         )
-        if tolerated:
+        if reviewed_all_accepted:
+            report["ready"] = not report["blockers"]
+        elif tolerated:
             codes = ", ".join(report.get("reviewed_verifier_codes") or []) or "length findings"
             report["findings"].append(
                 "reviewed (untruncated) tree reported length complaints only "
@@ -195,11 +233,16 @@ def run_review(
             "sheets": report.get("sheets"),
             "mechanical": mechanical,
             "forced_truncation": forced,
+            "accepted_verifier_specs": report.get("accepted_verifier_specs") or [],
+            "accepted_findings": report.get("accepted_findings") or [],
             "blockers": report.get("blockers") or [],
             "findings": report.get("findings") or [],
         },
     )
     print(f"review ready: {report['ready']}")
+    for item in accepted_findings:
+        suffix = f" ({item['reason']})" if item.get("reason") else ""
+        print(f"accepted finding [{item['stage']}]: m{item['measure']} {item['code']}{suffix}")
     if report["ready"]:
         print("delivery (open these):")
         for label, key in (

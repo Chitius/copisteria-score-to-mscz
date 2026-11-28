@@ -41,6 +41,7 @@ from scorepipe.review import (  # noqa: E402
     _run as _run,
     _timing as _timing,
     _timing_report as _timing_report,
+    parse_accepted_verifier_specs,
     run_review,
 )
 
@@ -68,6 +69,25 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--compare-golden", help="compare the reviewed MusicXML with a golden file")
     parser.add_argument("--allow-unresolved", action="store_true")
     parser.add_argument("--allow-corrections", action="store_true")
+    parser.add_argument(
+        "--accept-verifier",
+        action="append",
+        default=[],
+        metavar="MEASURE:CODE[,...]",
+        help=(
+            "accept known human-verified verifier finding(s) (for example 130:measure-length); "
+            "explicitly recorded in review-report.json accepted_findings"
+        ),
+    )
+    parser.add_argument(
+        "--accept-reason",
+        help="human rationale recorded alongside --accept-verifier in accepted_findings",
+    )
+    parser.add_argument(
+        "--pad-last-measure",
+        action="store_true",
+        help="also pad a short final measure when all voices end early",
+    )
     parser.add_argument("--no-mscz", action="store_true")
     parser.add_argument("--no-pdf", action="store_true")
     parser.add_argument("--no-mechanical", action="store_true", help="skip the no-agent-proposal baseline")
@@ -106,6 +126,10 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    try:
+        parse_accepted_verifier_specs(args.accept_verifier)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     if args.env and not Path(args.env).is_file():
         parser.error(f"env file not found: {args.env}")

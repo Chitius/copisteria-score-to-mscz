@@ -167,6 +167,95 @@ def _truncation_performed(operations: list[str]) -> bool:
     return False
 
 
+def parse_accepted_verifier_specs(raw_specs: list[str] | tuple[str, ...] | None) -> list[tuple[int, str]]:
+    """Parse ``<measure>:<code>[,<measure>:<code>…]`` entries into ``(measure, code)`` pairs."""
+    if not raw_specs:
+        return []
+    parsed: list[tuple[int, str]] = []
+    seen: set[tuple[int, str]] = set()
+    for raw in raw_specs:
+        if raw is None:
+            continue
+        for token in str(raw).split(","):
+            entry = token.strip()
+            if not entry or ":" not in entry:
+                raise ValueError(
+                    f"invalid --accept-verifier entry {token!r}; expected <measure>:<code>"
+                )
+            measure_part, code_part = entry.split(":", 1)
+            measure_text = measure_part.strip()
+            if measure_text[:1].lower() == "m":
+                measure_text = measure_text[1:]
+            try:
+                measure = int(measure_text)
+            except ValueError as exc:
+                raise ValueError(
+                    f"invalid measure in --accept-verifier entry {token!r}"
+                ) from exc
+            if measure < 1:
+                raise ValueError(
+                    f"measure must be >= 1 in --accept-verifier entry {token!r}"
+                )
+            code = code_part.strip()
+            if not code:
+                raise ValueError(
+                    f"missing verifier code in --accept-verifier entry {token!r}"
+                )
+            key = (measure, code)
+            if key not in seen:
+                seen.add(key)
+                parsed.append(key)
+    return parsed
+
+
+def _report_violations(report_path: Path) -> list[dict] | None:
+    """Return the ``verifier`` list of a scorepipe report, or ``None`` if unreadable."""
+    if not report_path.is_file():
+        return None
+    try:
+        data = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    violations = data.get("verifier")
+    if violations is None:
+        return []
+    return list(violations) if isinstance(violations, list) else None
+
+
+def _partition_violations(
+    violations: list[dict] | None, accepted_specs: set[tuple[int, str]]
+) -> tuple[list[dict], list[dict]]:
+    """Split verifier findings into ``(accepted, remaining)`` using ``(measure, code)`` pairs."""
+    if not violations:
+        return [], []
+    if not accepted_specs:
+        return [], list(violations)
+    accepted: list[dict] = []
+    remaining: list[dict] = []
+    for violation in violations:
+        key = (violation.get("measure"), violation.get("code"))
+        if key in accepted_specs:
+            accepted.append(violation)
+        else:
+            remaining.append(violation)
+    return accepted, remaining
+
+
+def _format_accepted_finding(
+    violation: dict, *, stage: str, reason: str | None = None
+) -> dict:
+    entry = {
+        "stage": stage,
+        "measure": violation.get("measure"),
+        "code": violation.get("code"),
+        "spec": f"{violation.get('measure')}:{violation.get('code')}",
+        "detail": violation.get("detail"),
+    }
+    if reason:
+        entry["reason"] = reason
+    return entry
+
+
 def _only_overfull_violations(report_path: Path) -> bool:
     """True when every verifier finding is a length complaint (overfull bar or its tuplet).
 
