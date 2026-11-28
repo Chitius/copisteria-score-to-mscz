@@ -65,52 +65,68 @@ def _merge(doc: Document, measure, allow_sustained: bool = True, part=None) -> b
         notes = [event for event in staff_events if not event.rest and event.element.find("pitch") is not None]
         if not notes:
             continue
-        if _has_tuplets(staff_events):
-            # Rebuilding a tuplet line with plain durations loses <time-modification> and turns
-            # 16th-triplets into quarters (Lindenbaum m1). Leave the source voices alone until the
-            # merge can preserve tuplet ratios.
-            continue
-        all_onsets = sorted({round(event.onset, 4) for event in staff_events})
+        all_onsets = _unique_onsets(staff_events)
         if all_onsets[0] < -1e-6 or all_onsets[-1] >= bar - 1e-6:
             continue
         protected = _protected_notes(notes, all_onsets, bar, allow_sustained)
         active = [event for event in notes if id(event.element) not in protected]
         if not active:
             continue
-        active_onsets = sorted({round(event.onset, 4) for event in active})
+        active_onsets = _unique_onsets(active)
         sequence: list[ElementTree.Element] = []
         cursor = 0.0
         try:
             for onset in active_onsets:
                 if onset > cursor + 1e-6:
-                    sequence.extend(_rests(onset - cursor, divisions, staff))
+                    sequence.extend(_rests_for_gap(cursor, onset, divisions, staff, staff_events))
                 boundary = next((value for value in all_onsets if value > onset + 1e-6), bar)
                 duration = boundary - onset
                 pitches = []
                 for event in active:
                     if abs(event.onset - onset) > 1e-6:
                         continue
+                    if _is_tuplet_note(event.element) and abs(event.duration - duration) > 1e-6:
+                        raise ValueError("cannot retime a tuplet note")
                     pitch = _pitch(event.element)
                     if pitch and pitch not in [item[0] for item in pitches]:
                         pitches.append((pitch, event))
+                pitches.sort(
+                    key=lambda item: (
+                        item[1].element.find("notations/tuplet") is None,
+                        item[1].element.find("time-modification") is None,
+                    )
+                )
+                primary_has_tuplet = bool(
+                    pitches and _is_tuplet_note(pitches[0][1].element)
+                )
                 for position, (pitch, event) in enumerate(pitches):
+                    if primary_has_tuplet and abs(event.duration - duration) > 1e-6:
+                        raise ValueError("cannot merge mismatched duration into a tuplet chord")
                     source = event.element if abs(event.duration - duration) < 1e-6 else None
                     sequence.append(
                         _note(pitch, duration, divisions, staff, chord=position > 0, source=source)
                     )
                 cursor = onset + duration
             if cursor < bar - 1e-6:
-                sequence.extend(_rests(bar - cursor, divisions, staff))
+                sequence.extend(_rests_for_gap(cursor, bar, divisions, staff, staff_events))
             extras = _protected_blocks(
                 [event for event in notes if id(event.element) in protected], bar, divisions, staff
             )
         except ValueError:
-            # A proposed slot/gap cannot be represented as a plain binary MusicXML duration
-            # (e.g. a cross-voice triplet subdivision); leave the source voices intact.
+            # A proposed slot/gap cannot be represented cleanly (e.g. a non-binary rest or a
+            # tuplet note whose duration would change); leave the source voices intact.
             continue
         _replace_staff(doc, measure, staff, sequence, extras)
         rebuilt = True
     return rebuilt
+
+
+def _unique_onsets(events) -> list[float]:
+    values: list[float] = []
+    for onset in sorted(event.onset for event in events):
+        if not values or abs(onset - values[-1]) > 1e-6:
+            values.append(onset)
+    return values
 
 
 def _protected_notes(notes, all_onsets: list[float], bar: float, allow_sustained: bool = True) -> set[int]:
@@ -140,13 +156,11 @@ def _protected_notes(notes, all_onsets: list[float], bar: float, allow_sustained
     return protected
 
 
-def _has_tuplets(events) -> bool:
-    for event in events:
-        if event.element.find("time-modification") is not None:
-            return True
-        if event.element.find("notations/tuplet") is not None:
-            return True
-    return False
+def _is_tuplet_note(element) -> bool:
+    return (
+        element.find("time-modification") is not None
+        or element.find("notations/tuplet") is not None
+    )
 
 
 def _would_shrink_notated_note(event, proposed: float) -> bool:
@@ -174,6 +188,15 @@ def _notated_duration(note_element) -> float | None:
     dots = len(note_element.findall("dot"))
     if dots:
         base *= 2.0 - 0.5**dots
+    modification = note_element.find("time-modification")
+    if modification is not None:
+        try:
+            actual = int(modification.findtext("actual-notes") or 0)
+            normal = int(modification.findtext("normal-notes") or 0)
+        except ValueError:
+            return None
+        if actual > 0 and normal > 0:
+            base *= normal / actual
     return base
 
 
@@ -350,6 +373,13 @@ def _note(
             element.insert(0, ElementTree.Element("chord"))
         elif not chord and chord_tag is not None:
             element.remove(chord_tag)
+        if chord:
+            notations = element.find("notations")
+            if notations is not None:
+                for tuplet in list(notations.findall("tuplet")):
+                    notations.remove(tuplet)
+                if len(notations) == 0:
+                    element.remove(notations)
         duration_element = element.find("duration")
         if duration_element is not None:
             duration_element.text = str(int(round(duration * divisions)))
@@ -379,6 +409,67 @@ def _note(
         ElementTree.SubElement(element, "dot")
     ElementTree.SubElement(element, "staff").text = staff
     return element
+
+
+def _rests_for_gap(
+    start: float,
+    end: float,
+    divisions: float,
+    staff: str,
+    staff_events: list,
+    *,
+    voice: str = "1",
+) -> list[ElementTree.Element]:
+    try:
+        return _rests(end - start, divisions, staff, voice=voice)
+    except ValueError:
+        preserved = _matching_tuplet_rests(start, end, staff, staff_events, voice=voice)
+        if preserved is not None:
+            return preserved
+        raise
+
+
+def _matching_tuplet_rests(
+    start: float,
+    end: float,
+    staff: str,
+    staff_events: list,
+    *,
+    voice: str = "1",
+) -> list[ElementTree.Element] | None:
+    """Reuse contiguous tuplet rests from ``staff_events`` that tile ``[start, end]``."""
+    rest_events = sorted(
+        (
+            event
+            for event in staff_events
+            if event.rest
+            and _is_tuplet_note(event.element)
+            and event.onset >= start - 1e-6
+            and event.end <= end + 1e-6
+        ),
+        key=lambda event: event.onset,
+    )
+    if not rest_events:
+        return None
+    cursor = start
+    copied: list[ElementTree.Element] = []
+    for event in rest_events:
+        if abs(event.onset - cursor) > 1e-6:
+            continue
+        clone = ElementTree.fromstring(ElementTree.tostring(event.element))
+        voice_el = clone.find("voice")
+        if voice_el is None:
+            voice_el = ElementTree.SubElement(clone, "voice")
+        voice_el.text = voice
+        staff_el = clone.find("staff")
+        if staff_el is None:
+            staff_el = ElementTree.SubElement(clone, "staff")
+        staff_el.text = staff
+        copied.append(clone)
+        cursor = event.end
+        if abs(cursor - end) <= 1e-6:
+            return copied
+    return None
 
 
 def _rests(

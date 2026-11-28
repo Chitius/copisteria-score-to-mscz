@@ -345,6 +345,96 @@ class MergeStaffVoicesTest(unittest.TestCase):
             ["direction-type", "offset", "staff"],
         )
 
+    def test_tuplet_voices_merge_preserving_time_modification_and_brackets(self):
+        # 4/4 bar at divisions=12:
+        # beat 1: voice 1 has 3 eighth-triplets (dur=4 each, 3:2) + rest(36);
+        #         voice 2 has matching harmony on beat 1 triplets + beats 2-4 dotted-half.
+        def trip(step: str, octave: int, *, voice: str, tuplet: str | None = None) -> str:
+            notations = f"<notations><tuplet type=\"{tuplet}\"/></notations>" if tuplet else ""
+            return (
+                f"<note><pitch><step>{step}</step><octave>{octave}</octave></pitch>"
+                f"<duration>4</duration><voice>{voice}</voice><type>eighth</type>"
+                "<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes>"
+                "</time-modification>"
+                f"{notations}</note>"
+            )
+
+        v1 = (
+            trip("C", 5, voice="1", tuplet="start")
+            + trip("D", 5, voice="1")
+            + trip("E", 5, voice="1", tuplet="stop")
+            + '<note><rest/><duration>36</duration><voice>1</voice><type>half</type><dot/></note>'
+        )
+        v2 = (
+            trip("A", 4, voice="2", tuplet="start")
+            + trip("B", 4, voice="2")
+            + trip("C", 5, voice="2", tuplet="stop")
+            + '<note><pitch><step>G</step><octave>4</octave></pitch>'
+            '<duration>36</duration><voice>2</voice><type>half</type><dot/></note>'
+        )
+        body = (
+            '<measure number="1"><attributes><divisions>12</divisions>'
+            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+            + v1
+            + "<backup><duration>48</duration></backup>"
+            + v2
+            + "</measure>"
+        )
+        doc = Document(ElementTree.fromstring(PART.format(measures=body)))
+        result = MERGE_STAFF_VOICES.run(doc, Context())
+        self.assertEqual(result.changed, 1)
+        events = doc.events(doc.measures()[0], 12.0)
+        self.assertEqual({event.voice for event in events}, {"1"})
+        chords = [e for e in events if e.chord]
+        primaries = [e for e in events if not e.chord and not e.rest]
+        self.assertEqual(len(chords), 3)
+        # All 6 triplet notes retain time-modification, and only primary notes keep tuplet brackets
+        for chord_ev in chords:
+            self.assertIsNotNone(chord_ev.element.find("time-modification"))
+            self.assertIsNone(chord_ev.element.find("notations/tuplet"))
+        self.assertEqual(
+            [e.element.find("notations/tuplet").get("type") for e in primaries if e.element.find("notations/tuplet") is not None],
+            ["start", "stop"],
+        )
+        self.assertEqual(measure_lengths(doc, Context()), [])
+
+    def test_sustained_note_over_tuplet_is_protected_and_tuplet_rest_kept(self):
+        # divisions=12, 4/4:
+        # voice 1: C5(4, 3:2, start) + rest(4, 3:2) + E5(4, 3:2, stop) + half+quarter rest(36)
+        # voice 2: sustained C3 whole note(48)
+        v1 = (
+            '<note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration>'
+            '<voice>1</voice><type>eighth</type>'
+            '<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>'
+            '<notations><tuplet type="start"/></notations></note>'
+            '<note><rest/><duration>4</duration><voice>1</voice><type>eighth</type>'
+            '<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification></note>'
+            '<note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration>'
+            '<voice>1</voice><type>eighth</type>'
+            '<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>'
+            '<notations><tuplet type="stop"/></notations></note>'
+            '<note><rest/><duration>36</duration><voice>1</voice><type>half</type><dot/></note>'
+        )
+        v2 = (
+            '<note><pitch><step>C</step><octave>3</octave></pitch>'
+            '<duration>48</duration><voice>2</voice><type>whole</type></note>'
+        )
+        body = (
+            '<measure number="1"><attributes><divisions>12</divisions>'
+            "<time><beats>4</beats><beat-type>4</beat-type></time></attributes>"
+            + v1
+            + "<backup><duration>48</duration></backup>"
+            + v2
+            + "</measure>"
+        )
+        doc = Document(ElementTree.fromstring(PART.format(measures=body)))
+        result = MERGE_STAFF_VOICES.run(doc, Context())
+        self.assertEqual(result.changed, 1)
+        self.assertEqual(measure_lengths(doc, Context()), [])
+        rests = [e for e in doc.events(doc.measures()[0], 12.0) if e.rest]
+        self.assertEqual(len(rests), 2)
+        self.assertIsNotNone(rests[0].element.find("time-modification"))
+
 
 if __name__ == "__main__":
     unittest.main()
