@@ -48,12 +48,11 @@ class RestoreBeamsTest(unittest.TestCase):
         doc = build(body)
         RestoreBeams().run(doc, Context())
         beams = [note.findall("beam") for note in doc.measures()[0].iter("note")]
-        self.assertIsNone(beams[0][0] if beams[0] else None)
-        self.assertEqual(beams[1][0].text, "begin")
-        self.assertEqual(beams[4][0].text, "end")
-        self.assertFalse(beams[5])
-        self.assertEqual(beams[6][0].text, "begin")
-        self.assertEqual(beams[-1][0].text, "end")
+        self.assertEqual(
+            [beam[0].text if beam else None for beam in beams],
+            [None, "begin", "continue", "continue", "end", None, "begin", "end"],
+        )
+        self.assertEqual(RestoreBeams().run(doc, Context()).changed, 0)
 
     def test_a_rest_breaks_the_beam_group(self):
         body = note("C") + note("D") + note("E") + note("", rest=True) + note("F") + note("G") + note("A")
@@ -169,6 +168,127 @@ class RestoreBeamsTest(unittest.TestCase):
                 for note in notes
             ]
             self.assertEqual(values, ["begin", "continue", "continue", "end"])
+
+    def test_compound_meters_group_three_eighths_per_beat(self):
+        for beats, groups in ((3, 1), (6, 2), (9, 3), (12, 4)):
+            body = "".join(note("C") for _ in range(beats))
+            xml = f"""<score-partwise version="4.0">
+              <part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>
+              <part id="P1"><measure number="1">
+                <attributes><divisions>4</divisions><time><beats>{beats}</beats><beat-type>8</beat-type></time></attributes>
+                {body}
+              </measure></part></score-partwise>"""
+            doc = Document(ElementTree.fromstring(xml))
+            RestoreBeams().run(doc, Context())
+            beams = [n.findtext("beam") for n in doc.measures()[0].iter("note")]
+            self.assertEqual(beams, ["begin", "continue", "end"] * groups)
+            self.assertEqual(RestoreBeams().run(doc, Context()).changed, 0)
+
+    def test_compound_meter_hooks_are_consistent_across_beats(self):
+        # Beat 1 and beat 2 of 6/8 have the exact same dotted-eighth + 16th + eighth rhythm:
+        # both 16ths must get a backward hook pointing to the dotted eighth, not flip at beat 2.
+        beat_xml = (
+            '<note><pitch><step>C</step><octave>5</octave></pitch><duration>3</duration>'
+            '<voice>1</voice><type>eighth</type><dot/></note>'
+            '<note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration>'
+            '<voice>1</voice><type>16th</type></note>'
+            '<note><pitch><step>E</step><octave>5</octave></pitch><duration>2</duration>'
+            '<voice>1</voice><type>eighth</type></note>'
+        )
+        xml = f"""<score-partwise version="4.0">
+          <part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>
+          <part id="P1"><measure number="1">
+            <attributes><divisions>4</divisions><time><beats>6</beats><beat-type>8</beat-type></time></attributes>
+            {beat_xml}{beat_xml}
+          </measure></part></score-partwise>"""
+        doc = Document(ElementTree.fromstring(xml))
+        RestoreBeams().run(doc, Context())
+        notes = list(doc.measures()[0].iter("note"))
+        levels = [{b.get("number"): b.text for b in n.findall("beam")} for n in notes]
+        expected_beat = [
+            {"1": "begin"},
+            {"1": "continue", "2": "backward hook"},
+            {"1": "end"},
+        ]
+        self.assertEqual(levels, expected_beat * 2)
+
+    def test_asymmetric_meters_group_and_respect_source_split(self):
+        five_eight = "".join(note("C") for _ in range(5))
+        xml_default = f"""<score-partwise version="4.0">
+          <part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>
+          <part id="P1"><measure number="1">
+            <attributes><divisions>4</divisions><time><beats>5</beats><beat-type>8</beat-type></time></attributes>
+            {five_eight}
+          </measure></part></score-partwise>"""
+        doc = Document(ElementTree.fromstring(xml_default))
+        RestoreBeams().run(doc, Context())
+        self.assertEqual(
+            [n.findtext("beam") for n in doc.measures()[0].iter("note")],
+            ["begin", "continue", "end", "begin", "end"],
+        )
+
+        # Source marks 2+3 split on notes 0..1
+        five_eight_23 = (
+            note("C", beams=[("1", "begin")])
+            + note("D", beams=[("1", "end")])
+            + note("E")
+            + note("F")
+            + note("G")
+        )
+        xml_23 = f"""<score-partwise version="4.0">
+          <part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>
+          <part id="P1"><measure number="1">
+            <attributes><divisions>4</divisions><time><beats>5</beats><beat-type>8</beat-type></time></attributes>
+            {five_eight_23}
+          </measure></part></score-partwise>"""
+        doc23 = Document(ElementTree.fromstring(xml_23))
+        RestoreBeams().run(doc23, Context())
+        self.assertEqual(
+            [n.findtext("beam") for n in doc23.measures()[0].iter("note")],
+            ["begin", "end", "begin", "continue", "end"],
+        )
+
+        seven_eight = "".join(note("C") for _ in range(7))
+        xml_78 = f"""<score-partwise version="4.0">
+          <part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>
+          <part id="P1"><measure number="1">
+            <attributes><divisions>4</divisions><time><beats>7</beats><beat-type>8</beat-type></time></attributes>
+            {seven_eight}
+          </measure></part></score-partwise>"""
+        doc78 = Document(ElementTree.fromstring(xml_78))
+        RestoreBeams().run(doc78, Context())
+        self.assertEqual(
+            [n.findtext("beam") for n in doc78.measures()[0].iter("note")],
+            ["begin", "end", "begin", "end", "begin", "continue", "end"],
+        )
+
+    def test_implicit_pickup_aligns_beam_grid_to_bar_end(self):
+        # 3-eighth pickup in 4/4 fills beats [2.5..4.0) => [1] + [2] beamed together
+        xml = """<score-partwise version="4.0">
+          <part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>
+          <part id="P1"><measure number="1" implicit="yes">
+            <attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+            """ + note("C") + note("D") + note("E") + """
+          </measure></part></score-partwise>"""
+        doc = Document(ElementTree.fromstring(xml))
+        RestoreBeams().run(doc, Context())
+        self.assertEqual(
+            [n.findtext("beam") for n in doc.measures()[0].iter("note")],
+            [None, "begin", "end"],
+        )
+
+    def test_dangling_beam_on_isolated_single_note_is_cleared(self):
+        body = (
+            note("C", beams=[("1", "begin")])
+            + note("", rest=True)
+            + note("D")
+            + note("E")
+        )
+        doc = build(body)
+        RestoreBeams().run(doc, Context())
+        notes = [n for n in doc.measures()[0].iter("note") if n.find("rest") is None]
+        self.assertEqual([n.findtext("beam") for n in notes], [None, "begin", "end"])
+        self.assertEqual(RestoreBeams().run(doc, Context()).changed, 0)
 
 
 if __name__ == "__main__":

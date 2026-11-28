@@ -43,6 +43,7 @@ def _restore_measure(measure, divisions: float, meter: tuple[float, float]) -> i
     by_voice: dict[tuple, list[dict]] = defaultdict(list)
     cursor = 0
     previous_start = None
+    measure_end = 0.0
     for item in measure:
         if item.tag in ("backup", "forward"):
             text = item.findtext("duration")
@@ -50,6 +51,7 @@ def _restore_measure(measure, divisions: float, meter: tuple[float, float]) -> i
                 continue
             value = int(text)
             cursor += -value if item.tag == "backup" else value
+            measure_end = max(measure_end, cursor / divisions)
             previous_start = None
             continue
         if item.tag != "note":
@@ -63,6 +65,10 @@ def _restore_measure(measure, divisions: float, meter: tuple[float, float]) -> i
         is_chord = item.find("chord") is not None
         start = previous_start if is_chord and previous_start is not None else cursor / divisions
         if not is_chord:
+            modification = item.find("time-modification")
+            actual = _int_text(modification, "actual-notes")
+            normal = _int_text(modification, "normal-notes")
+            tuplet_scale = (normal / actual) if actual and normal and actual > 0 else 1.0
             by_voice[(item.findtext("staff") or "1", item.findtext("voice") or "1")].append(
                 {
                     "element": item,
@@ -70,10 +76,17 @@ def _restore_measure(measure, divisions: float, meter: tuple[float, float]) -> i
                     "end": start + duration,
                     "rest": item.find("rest") is not None,
                     "level": _LEVELS.get(item.findtext("type")),
+                    "tuplet_scale": tuplet_scale,
                 }
             )
             cursor += int(text)
+            measure_end = max(measure_end, cursor / divisions)
         previous_start = start
+
+    bar_length = meter[0] * 4.0 / meter[1]
+    phase_offset = 0.0
+    if measure.get("implicit") == "yes" and 0.0 < measure_end < bar_length - 1e-6:
+        phase_offset = bar_length - measure_end
 
     changed = 0
     for records in by_voice.values():
@@ -94,16 +107,50 @@ def _restore_measure(measure, divisions: float, meter: tuple[float, float]) -> i
 
         for run in runs:
             if len(run) < 2:
+                if len(run) == 1:
+                    changed += _clear_beams(run[0]["element"])
                 continue
-            for source_chunk in _split_source_groups(run):
-                for chunk in _split_by_beat(source_chunk, _beat_length(meter)):
+            grouper = BeamGrouper(
+                meter,
+                phase_offset=phase_offset,
+                source_splits=_source_boundary_onsets(run, phase_offset),
+            )
+            for source_chunk, explicit_pair in _split_source_groups(run):
+                if explicit_pair and grouper.preserve_explicit_group(source_chunk):
+                    beat_chunks = [(source_chunk, source_chunk[0]["start"])]
+                else:
+                    beat_chunks = grouper.split_by_beat(source_chunk)
+                for chunk, beat_origin in beat_chunks:
                     for target in _split_isolated_eighths(chunk):
                         if len(target) >= 2:
-                            changed += _complete_run(target, divisions)
+                            changed += _complete_run(target, divisions, beat_origin)
+                        elif len(target) == 1:
+                            changed += _clear_beams(target[0]["element"])
     return changed
 
 
-def _split_source_groups(run: list[dict]) -> list[list[dict]]:
+def _int_text(element, path: str) -> int | None:
+    if element is None:
+        return None
+    text = element.findtext(path)
+    try:
+        return int(text) if text is not None else None
+    except ValueError:
+        return None
+
+
+def _source_boundary_onsets(run: list[dict], phase_offset: float) -> set[float]:
+    """Return shifted start onsets of clean level-1 source beam pairs (for asymmetric meters)."""
+    pairs_by_level = _source_pairs(run)
+    boundaries: set[float] = set()
+    for start, end in pairs_by_level.get(1) or []:
+        if end - start + 1 >= 2:
+            boundaries.add(round(run[start]["start"] + phase_offset, 4))
+            boundaries.add(round(run[end]["end"] + phase_offset, 4))
+    return boundaries
+
+
+def _split_source_groups(run: list[dict]) -> list[tuple[list[dict], bool]]:
     """Treat complete source begin/end groups as boundaries for uniform eighth runs.
 
     Runs containing sixteenths instead follow the beat grid as a whole. Their source
@@ -111,28 +158,32 @@ def _split_source_groups(run: list[dict]) -> list[list[dict]]:
     boundaries leaves an isolated note inside an otherwise ordinary beat.
     """
     if any(record["level"] > 1 for record in run):
-        return [run]
-    boundaries: set[int] = set()
+        return [(run, False)]
     pairs_by_level = _source_pairs(run)
-    primary = 1 if pairs_by_level else None
-    for start, end in (pairs_by_level.get(primary) or []) if primary is not None else []:
-        if end - start + 1 >= 2:
-            boundaries.add(start)
-            boundaries.add(end + 1)
-    if not boundaries:
-        return [run]
-    chunks: list[list[dict]] = []
-    chunk: list[dict] = []
-    for index, record in enumerate(run):
-        if index in boundaries and chunk:
-            chunks.append(chunk)
-            chunk = []
-        chunk.append(record)
-        if index + 1 in boundaries:
-            chunks.append(chunk)
-            chunk = []
-    if chunk:
-        chunks.append(chunk)
+    pair_ranges = [
+        (start, end)
+        for start, end in (pairs_by_level.get(1) or [])
+        if end - start + 1 >= 2
+    ]
+    if not pair_ranges:
+        return [(run, False)]
+    pair_by_start = {start: end for start, end in pair_ranges}
+    chunks: list[tuple[list[dict], bool]] = []
+    index = 0
+    plain: list[dict] = []
+    while index < len(run):
+        end = pair_by_start.get(index)
+        if end is not None:
+            if plain:
+                chunks.append((plain, False))
+                plain = []
+            chunks.append((run[index : end + 1], True))
+            index = end + 1
+        else:
+            plain.append(run[index])
+            index += 1
+    if plain:
+        chunks.append((plain, False))
     return chunks
 
 
@@ -178,28 +229,146 @@ def _source_pairs(run: list[dict]) -> dict[int, list[tuple[int, int]]]:
             else:
                 broken = True
                 break
+        if start is not None:
+            broken = True
         if not broken and level_pairs:
             pairs[level] = level_pairs
     return pairs
 
 
+def _meter_beat_spans(
+    meter: tuple[float, float], source_splits: set[float] | None = None
+) -> list[tuple[float, float]]:
+    """Return ``(start, end)`` beat spans in quarter-note beats for one bar of ``meter``."""
+    beats, beat_type = meter
+    unit = 4.0 / beat_type
+    bar = beats * unit
+    if beat_type in (8, 16) and beats % 3 == 0:
+        beat = unit * 3.0
+        count = max(1, int(round(beats / 3)))
+        return [(index * beat, (index + 1) * beat) for index in range(count)]
+    if beat_type in (8, 16) and beats >= 5:
+        patterns = _asymmetric_patterns(int(round(beats)))
+        chosen = patterns[0]
+        if source_splits:
+            for candidate in patterns:
+                edges = []
+                acc = 0.0
+                for group in candidate[:-1]:
+                    acc += group * unit
+                    edges.append(round(acc, 4))
+                if any(edge in source_splits for edge in edges):
+                    chosen = candidate
+                    break
+        spans: list[tuple[float, float]] = []
+        cursor = 0.0
+        for group in chosen:
+            width = group * unit
+            spans.append((cursor, cursor + width))
+            cursor += width
+        return spans
+    if beat_type in (8, 16) and beats == 2:
+        return [(0.0, bar)]
+    if beat_type in (8, 16) and beats == 4:
+        return [(0.0, 2.0 * unit), (2.0 * unit, 4.0 * unit)]
+    count = max(1, int(round(beats)))
+    return [(index * unit, (index + 1) * unit) for index in range(count)]
+
+
+def _asymmetric_patterns(beats: int) -> list[list[int]]:
+    known = {
+        5: [[3, 2], [2, 3]],
+        7: [[2, 2, 3], [3, 2, 2], [2, 3, 2]],
+        8: [[3, 3, 2], [3, 2, 3], [2, 3, 3]],
+        10: [[3, 3, 2, 2], [2, 2, 3, 3]],
+        11: [[3, 3, 3, 2], [2, 3, 3, 3]],
+    }
+    if beats in known:
+        return known[beats]
+    pattern: list[int] = []
+    remaining = beats
+    while remaining > 4:
+        pattern.append(3)
+        remaining -= 3
+    if remaining == 4:
+        pattern.extend([2, 2])
+    elif remaining > 0:
+        pattern.append(remaining)
+    return [pattern]
+
+
+class BeamGrouper:
+    """Group beam runs against compound/asymmetric beat spans and explicit syncopated pairs."""
+
+    def __init__(
+        self,
+        meter: tuple[float, float],
+        *,
+        phase_offset: float = 0.0,
+        source_splits: set[float] | None = None,
+    ) -> None:
+        self.meter = meter
+        self.phase_offset = phase_offset
+        self.spans = _meter_beat_spans(meter, source_splits)
+        self.bar = self.spans[-1][1]
+        self.step_fallback = self.spans[-1][1] - self.spans[-1][0]
+
+    def beat_slot(self, onset: float) -> tuple[int, float]:
+        """Return ``(slot_index, unshifted_slot_origin)`` for ``onset``."""
+        shifted = onset + self.phase_offset
+        for index, (start, end) in enumerate(self.spans):
+            if shifted + 1e-6 < end:
+                return index, start - self.phase_offset
+        extra_index = int((shifted - self.bar + 1e-6) // self.step_fallback)
+        origin = self.bar + extra_index * self.step_fallback - self.phase_offset
+        return len(self.spans) + extra_index, origin
+
+    def preserve_explicit_group(self, chunk: list[dict]) -> bool:
+        """True when a clean level-1 source group should stay intact across beat boundaries."""
+        if len(chunk) < 2:
+            return False
+        span = chunk[-1]["end"] - chunk[0]["start"]
+        beats, beat_type = self.meter
+        if beat_type in (8, 16):
+            # Compound / asymmetric meters: preserve only if inside one beat (not across 3+3).
+            first_slot, _ = self.beat_slot(chunk[0]["start"])
+            last_slot, _ = self.beat_slot(chunk[-1]["start"])
+            return first_slot == last_slot
+        # Simple meters: preserve explicit 2..4-eighth groups (<= 2 quarter beats, e.g. syncopated
+        # across-beat phrasing or half-bar 4-eighth beaming) while splitting full-bar runs.
+        return len(chunk) <= 4 and span <= 2.0 + 1e-6 and span < beats * (4.0 / beat_type) - 1e-6
+
+    def split_by_beat(self, run: list[dict]) -> list[tuple[list[dict], float]]:
+        """Split a beam run at the active metre's notated beat boundaries."""
+        if not run:
+            return []
+        chunks: list[tuple[list[dict], float]] = []
+        chunk: list[dict] = []
+        current_slot = None
+        current_origin = 0.0
+        for record in run:
+            slot, origin = self.beat_slot(record["start"])
+            if chunk and slot != current_slot:
+                chunks.append((chunk, current_origin))
+                chunk = []
+            chunk.append(record)
+            current_slot = slot
+            current_origin = origin
+        if chunk:
+            chunks.append((chunk, current_origin))
+        return chunks
+
 
 def _beat_length(meter: tuple[float, float]) -> float:
     beats, beat_type = meter
     unit = 4.0 / beat_type
-    if beat_type == 8 and beats % 3 == 0:
-        return unit * 3.0
-    if beat_type == 8 and beats == 3:
+    if beat_type in (8, 16) and beats % 3 == 0:
         return unit * 3.0
     return unit
 
 
 def _split_by_beat(run: list[dict], beat_length: float) -> list[list[dict]]:
-    """Split every beam run at the active metre's notated beat boundaries.
-
-    Uniform eighth runs need the same visible beat structure as mixed and sixteenth
-    runs; keeping them whole merely hides the metre over a full measure.
-    """
+    """Split every beam run at the active metre's notated beat boundaries."""
     if not run:
         return [run]
     chunks: list[list[dict]] = []
@@ -225,6 +394,8 @@ def _split_isolated_eighths(run: list[dict]) -> list[list[dict]]:
     note next to a shorter-value note is split out; fully beamed eighth runs (laputa m50) still
     go through the normal rebuild.
     """
+    if not any(record["element"].findall("beam") for record in run):
+        return [run]
     isolated: set[int] = set()
     for index, record in enumerate(run):
         if record["level"] != 1 or record["element"].findall("beam"):
@@ -250,7 +421,16 @@ def _split_isolated_eighths(run: list[dict]) -> list[list[dict]]:
     return chunks
 
 
-def _complete_run(run: list[dict], divisions: float) -> int:
+def _clear_beams(element) -> int:
+    beams = list(element.findall("beam"))
+    if not beams:
+        return 0
+    for beam in beams:
+        element.remove(beam)
+    return 1
+
+
+def _complete_run(run: list[dict], divisions: float, beat_origin: float = 0.0) -> int:
     # Rebuild the whole contiguous run. Keeping the old partial groups is what left the first
     # eighth of laputa m51 on a separate `begin` while the next note also started a group.
     targets = [(0, len(run))]
@@ -259,7 +439,7 @@ def _complete_run(run: list[dict], divisions: float) -> int:
         target = run[start:end]
         if len(target) < 2:
             continue
-        desired = _beam_values(target, divisions)
+        desired = _beam_values(target, divisions, beat_origin)
         for index, record in enumerate(target):
             current = sorted(
                 (beam.get("number") or "1", (beam.text or "").strip())
@@ -301,7 +481,9 @@ def _last_begin(run: list[dict], limit: int) -> int:
     return starts[-1] if starts else limit
 
 
-def _beam_values(target: list[dict], divisions: float) -> dict[int, dict[int, str]]:
+def _beam_values(
+    target: list[dict], divisions: float, beat_origin: float = 0.0
+) -> dict[int, dict[int, str]]:
     values: dict[int, dict[int, str]] = defaultdict(dict)
     max_level = max(record["level"] for record in target)
     for level in range(1, max_level + 1):
@@ -323,11 +505,18 @@ def _beam_values(target: list[dict], divisions: float) -> dict[int, dict[int, st
                 values[subgroup[-1]][level] = "end"
             elif level > 1:
                 index = subgroup[0]
-                next_within_beat = (
-                    index + 1 < len(target)
-                    and target[index + 1]["start"] // (1.0) == target[index]["start"] // 1.0
-                )
-                values[index][level] = "forward hook" if next_within_beat else "backward hook"
+                if index == 0:
+                    values[index][level] = "forward hook"
+                elif index == len(target) - 1:
+                    values[index][level] = "backward hook"
+                else:
+                    scale = target[index].get("tuplet_scale", 1.0)
+                    step = (2.0 / (2**level)) * scale
+                    curr_slot = int(((target[index]["start"] - beat_origin) + 1e-6) // step)
+                    next_slot = int(((target[index + 1]["start"] - beat_origin) + 1e-6) // step)
+                    values[index][level] = (
+                        "forward hook" if curr_slot == next_slot else "backward hook"
+                    )
     return values
 
 
