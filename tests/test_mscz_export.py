@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from scorepipe.core.mscz import MsczArchive
-from scorepipe.core.pass_base import Context, Phase
+from scorepipe.core.pass_base import Context
 from scorepipe.core.pipeline import run_display, run_pipeline
 from scorepipe.mscz_export import export_and_display, find_musescore
 from scorepipe.passes import DISPLAY_PASSES, STRUCTURAL_PASSES

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from xml.etree import ElementTree
-
 from ..core.mscx import MsxcDocument
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
 

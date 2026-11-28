@@ -21,7 +21,7 @@ PART = """
 def note(step, *, beams=None, rest=False):
     beam_tags = "".join(f'<beam number="{number}">{kind}</beam>' for number, kind in (beams or []))
     if rest:
-        return f"<note><rest/><duration>2</duration><voice>1</voice><type>eighth</type></note>"
+        return "<note><rest/><duration>2</duration><voice>1</voice><type>eighth</type></note>"
     return (
         f"<note><pitch><step>{step}</step><octave>4</octave></pitch><duration>2</duration>"
         f"<voice>1</voice><type>eighth</type>{beam_tags}</note>"

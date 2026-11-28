@@ -287,9 +287,6 @@ def _replace_staff(
         measure.append(child)
     for child in rescued_directions:
         measure.append(child)
-    meter = doc.effective_time_signature(measure)
-    bar = meter[0] * 4.0 / meter[1]
-    divisions = doc.divisions()
     blocks = [sequence] + list(extras or []) + other_blocks
     for index, block in enumerate(blocks):
         if index:

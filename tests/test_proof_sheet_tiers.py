@@ -127,8 +127,6 @@ class CombinedSheetPdfTest(unittest.TestCase):
         self.assertEqual(re.findall(rb"/Count (\d+)", data), [b"3"])
 
     def test_cover_page_is_a4_landscape_and_handles_cjk_source(self):
-        from PIL import Image
-
         cover = build_cover_page(
             "Test Score",
             "인터스텔라 - First Step 악보(최종).pdf",

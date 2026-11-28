@@ -7,7 +7,6 @@ import unittest
 from pathlib import Path
 
 from scorepipe.cli import main
-from scorepipe.core.document import Document
 from scorepipe.core.invariants import redundant_time_signatures
 from scorepipe.core.pass_base import Context
 from scorepipe.core.pipeline import run_pipeline

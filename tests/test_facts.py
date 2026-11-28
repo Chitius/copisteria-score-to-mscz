@@ -91,6 +91,7 @@ class ApplyFactsTest(unittest.TestCase):
         )
         run_pipeline(doc, ctx, structural=STRUCTURAL_PASSES, inject=INJECT_PASSES, verifiers=[])
         words = next(w for w in doc.root.iter("words") if w.text == "♩ = 72")
+        self.assertEqual(words.text, "♩ = 72")
         direction = next(d for d in doc.measures()[0].findall("direction") if d.find(".//words") is not None)
         self.assertIsNotNone(direction.find("sound"))
         self.assertEqual(direction.find("sound").get("tempo"), "72")

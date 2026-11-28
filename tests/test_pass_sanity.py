@@ -442,7 +442,9 @@ def test_pass_obeys_contract(name):
     result = factory()
     if isinstance(result, tuple):
         ctx, doc = result
-        factory = lambda: _rebuild(doc)
+
+        def factory():
+            return _rebuild(doc)
     else:
         doc = result
         ctx = Context()

@@ -10,6 +10,13 @@ dependencies = [
     "numpy>=1.24",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "jsonschema>=4.20",
+]
+
 [project.urls]
 Homepage = "https://github.com/Chitius/copisteria-score-to-mscz"
 Repository = "https://github.com/Chitius/copisteria-score-to-mscz"
@@ -25,3 +32,7 @@ include = ["scorepipe*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-p no:cacheprovider"
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501"]

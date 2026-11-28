@@ -103,7 +103,7 @@ def _blocks(measure, shift: float, divisions: float) -> list:
             segment.append(child)
     segments.append(segment)
 
-    first = True
+    previous: list | None = None
     for segment in segments:
         if not any(_is_sounding_note(child) for child in segment):
             continue
@@ -112,14 +112,13 @@ def _blocks(measure, shift: float, divisions: float) -> list:
         forward = ElementTree.Element("forward")
         ElementTree.SubElement(forward, "duration").text = str(int(round(shift * divisions)))
         segment.insert(first_note, forward)
-        if not first:
+        if previous is not None:
             backup = ElementTree.Element("backup")
             ElementTree.SubElement(backup, "duration").text = str(
                 int(round(_segment_end(previous, divisions) * divisions))
             )
             result.append(backup)
         result.extend(segment)
-        first = False
         previous = segment
     return result
 

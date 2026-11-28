@@ -22,7 +22,6 @@ from scorepipe.notation_patches import (
     verify_patches,
 )
 from scorepipe.passes import (
-    INJECT_PARTS,
     INJECT_PASSES,
     NORMALIZE_PERCUSSION,
     STRUCTURAL_PASSES,

@@ -177,7 +177,7 @@ def test_the_origin_of_the_crop_is_taken_into_account():
 def test_compose_puts_both_columns_side_by_side():
     from PIL import Image
 
-    root = workspace("compose")
+    workspace("compose")
     left = Image.new("RGB", (400, 600), (250, 250, 250))
     right = Image.new("RGB", (400, 500), (240, 240, 240))
     canvas = proof_sheet.compose(

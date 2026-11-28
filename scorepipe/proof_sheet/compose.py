@@ -33,10 +33,47 @@ def _needs_cjk(text: str) -> bool:
 #: a Korean face and draws simplified-Chinese characters as ``.notdef`` boxes (measured on
 #: "红莲华", which the cover printed as three boxes), so the Chinese faces must come first for
 #: Han text.
-_LATIN_FONTS = ("DejaVuSans.ttf", "arial.ttf", "segoeui.ttf")
-_HAN_FONTS = ("msyh.ttc", "simsun.ttc", "msyhbd.ttc", "malgun.ttf", "YuGothR.ttc", "msgothic.ttc")
-_HANGUL_FONTS = ("malgun.ttf", "malgunbd.ttf", "msyh.ttc", "simsun.ttc", "YuGothR.ttc")
-_KANA_FONTS = ("YuGothR.ttc", "msgothic.ttc", "msyh.ttc", "malgun.ttf")
+_LATIN_FONTS = (
+    "DejaVuSans.ttf",
+    "arial.ttf",
+    "segoeui.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+)
+_HAN_FONTS = (
+    "msyh.ttc",
+    "simsun.ttc",
+    "msyhbd.ttc",
+    "NotoSansCJK-Regular.ttc",
+    "NotoSansSC-Regular.otf",
+    "wqy-zenhei.ttc",
+    "wqy-microhei.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    "malgun.ttf",
+    "YuGothR.ttc",
+    "msgothic.ttc",
+)
+_HANGUL_FONTS = (
+    "malgun.ttf",
+    "malgunbd.ttf",
+    "NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "msyh.ttc",
+    "simsun.ttc",
+    "YuGothR.ttc",
+)
+_KANA_FONTS = (
+    "YuGothR.ttc",
+    "msgothic.ttc",
+    "NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "msyh.ttc",
+    "malgun.ttf",
+)
 
 _HAN_CHARS = ((0x3400, 0x4DBF), (0x4E00, 0x9FFF), (0xF900, 0xFAFF), (0x2E80, 0x2FFF))
 _HANGUL_CHARS = ((0x1100, 0x11FF), (0xAC00, 0xD7AF))

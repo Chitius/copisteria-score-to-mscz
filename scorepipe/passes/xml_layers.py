@@ -105,7 +105,6 @@ def _rebuild(doc: Document, measure, part=None) -> bool:
                     int(round((onset - slot["end"]) * divisions))
                 )
                 elements.append(forward)
-            first = group[0].element
             for position, event in enumerate(group):
                 element = event.element
                 chord = element.find("chord")
