@@ -41,9 +41,9 @@ def _validate_ottava(
         isinstance(start.get("measure"), int)
         and isinstance(end.get("measure"), int)
         and (end["measure"], float(end.get("beat") or 0))
-        <= (start["measure"], float(start.get("beat") or 0))
+        < (start["measure"], float(start.get("beat") or 0))
     ):
-        problems.append(f"{prefix}: end must be after start")
+        problems.append(f"{prefix}: end must not be before start")
     if not (patch.get("page") or patch.get("bbox") or patch.get("crop")):
         problems.append(f"{prefix}: page/bbox evidence is required")
     return problems
@@ -71,9 +71,24 @@ def _apply_ottava(
     next_number += 1
     start_measure = measures[start["measure"] - 1]
     end_measure = measures[end["measure"] - 1]
+    start_beat = float(start.get("beat") or 0)
+    end_beat = float(end.get("beat") or 0)
+    if start["measure"] == end["measure"] and abs(end_beat - start_beat) <= 1e-6:
+        divisions = doc.effective_divisions(start_measure, part)
+        start_index = _insertion_index(start_measure, start_beat, staff, divisions)
+        stop_index = _chord_end_index(start_measure, start_index, staff)
+        start_measure.insert(
+            stop_index,
+            _octave_direction(staff, "stop", OTTAAVA_SUBTYPES[subtype], number),
+        )
+        start_measure.insert(
+            start_index,
+            _octave_direction(staff, "start", OTTAAVA_SUBTYPES[subtype], number),
+        )
+        return changed + 2, next_number
     _insert_octave(
         start_measure,
-        float(start.get("beat") or 0),
+        start_beat,
         staff,
         "start",
         OTTAAVA_SUBTYPES[subtype],
@@ -82,7 +97,7 @@ def _apply_ottava(
     )
     _insert_octave(
         end_measure,
-        float(end.get("beat") or 0),
+        end_beat,
         staff,
         "stop",
         OTTAAVA_SUBTYPES[subtype],
@@ -104,8 +119,8 @@ def _verify_ottava(doc: Document, patch: dict, prefix: str) -> list[str]:
     start_measure = (patch.get("start") or {}).get("measure")
     end_measure = (patch.get("end") or {}).get("measure")
     starts = [
-        shift
-        for shift in shifts
+        (index, shift)
+        for index, shift in enumerate(shifts)
         if shift["staff"] == staff
         and shift["type"] == expected_type
         and shift["size"] == "8"
@@ -115,13 +130,14 @@ def _verify_ottava(doc: Document, patch: dict, prefix: str) -> list[str]:
         return [f"{prefix}: ottava start missing or has the wrong type/size/measure"]
     if not any(
         any(
-            stop["staff"] == staff
+            stop_index > start_index
+            and stop["staff"] == staff
             and stop["type"] == "stop"
             and stop["number"] == start["number"]
             and stop["measure"] == end_measure
-            for stop in shifts
+            for stop_index, stop in enumerate(shifts)
         )
-        for start in starts
+        for start_index, start in starts
     ):
         return [f"{prefix}: ottava stop missing or does not match its start"]
     return []
@@ -164,9 +180,9 @@ def list_octave_shifts(doc: Document, part_id: str | None = None) -> list[dict]:
     return result
 
 
-def _insert_octave(
-    measure, beat: float, staff: str, kind: str, direction: str, number: str, divisions: float
-) -> None:
+def _octave_direction(
+    staff: str, kind: str, direction: str, number: str
+) -> ElementTree.Element:
     # 8vb is printed under the staff it lowers; keeping it "above" drew the bracket between the
     # staves (measured on the First Step delivery).
     placement = "below" if direction == "down" else "above"
@@ -177,8 +193,31 @@ def _insert_octave(
         attributes["size"] = "8"
     ElementTree.SubElement(direction_type, "octave-shift", attributes)
     ElementTree.SubElement(direction_element, "staff").text = staff
+    return direction_element
+
+
+def _insert_octave(
+    measure, beat: float, staff: str, kind: str, direction: str, number: str, divisions: float
+) -> None:
+    direction_element = _octave_direction(staff, kind, direction, number)
     index = _insertion_index(measure, beat, staff, divisions)
     measure.insert(index, direction_element)
+
+
+def _chord_end_index(measure, start_index: int, staff: str) -> int:
+    """Return the index immediately after the note/chord starting at ``start_index``."""
+    children = list(measure)
+    if start_index >= len(children):
+        return len(children)
+    index = start_index + 1
+    while index < len(children):
+        child = children[index]
+        if child.tag != "note" or child.find("chord") is None:
+            break
+        if (child.findtext("staff") or "1") != staff:
+            break
+        index += 1
+    return index
 
 
 def _insertion_index(measure, beat: float, staff: str, divisions: float) -> int:

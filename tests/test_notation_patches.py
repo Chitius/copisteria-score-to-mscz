@@ -113,9 +113,42 @@ class NotationPatchesTest(unittest.TestCase):
         ]
         self.assertEqual(placements, ["below", "below"])
 
-    def test_end_must_be_after_start(self):
-        bad = patch(start={"measure": 2, "beat": 0}, end={"measure": 2, "beat": 0})
-        self.assertTrue(any("end must be after start" in problem for problem in validate_patches(bad)))
+    def test_end_must_not_be_before_start(self):
+        bad = patch(start={"measure": 2, "beat": 1}, end={"measure": 2, "beat": 0})
+        self.assertTrue(
+            any("end must not be before start" in problem for problem in validate_patches(bad))
+        )
+
+    def test_same_beat_ottava_brackets_a_single_chord(self):
+        doc = make_doc(
+            note_xml("C5", duration=20)
+            + note_xml("E5", duration=20, chord=True)
+            + note_xml("G5", duration=20)
+            + note_xml("A5", duration=20)
+        )
+        single = patch(start={"measure": 1, "beat": 0}, end={"measure": 1, "beat": 0})
+        self.assertEqual(validate_patches(single, doc), [])
+        self.assertEqual(apply_patches(doc, single), 2)
+        self.assertEqual(verify_patches(doc, single), [])
+        measure = doc.measures()[0]
+        tags = []
+        for child in measure:
+            if child.tag == "direction":
+                shift = child.find("direction-type/octave-shift")
+                tags.append(f"shift:{shift.get('type')}")
+            elif child.tag == "note":
+                tags.append(f"note:{child.findtext('pitch/step')}:chord={child.find('chord') is not None}")
+        self.assertEqual(
+            tags,
+            [
+                "shift:up",
+                "note:C:chord=False",
+                "note:E:chord=True",
+                "shift:stop",
+                "note:G:chord=False",
+                "note:A:chord=False",
+            ],
+        )
 
     def test_evidence_is_required(self):
         bad = patch(page=None, bbox=None)
