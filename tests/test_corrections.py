@@ -340,6 +340,81 @@ class CorrectionsScriptsAndReviewTest(unittest.TestCase):
         self.assertFalse(report_bad["ready"])
         self.assertTrue(any(b.startswith("correction:") for b in report_bad["blockers"]))
 
+    def test_review_accepts_external_corrections_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixture = Path(__file__).parent / "fixtures" / "tiny.musicxml"
+            source = root / "score.pdf"
+            source.write_bytes(b"%PDF-1.4\n")
+            pages = root / "pages"
+            pages.mkdir()
+            shutil.copyfile(fixture, pages / "page01.musicxml")
+            facts = root / "facts"
+            facts.mkdir()
+            (facts / "agent-page01.json").write_text(
+                json.dumps(
+                    {
+                        "credits": [],
+                        "marks": [],
+                        "corrections": [_correction(beat=2, status="proposed", **{"from": "C4", "to": "C5"})],
+                        "unresolved": [],
+                        "producer": {"name": "agent-visual", "pages": [1]},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            accepted_file = root / "facts-corrections.accepted.json"
+            accepted_file.write_text(
+                json.dumps([_correction(beat=2, status="accepted", accepted_by="reviewer", **{"from": "C4", "to": "C5"})]),
+                encoding="utf-8",
+            )
+            outdir = root / "out"
+
+            def fake_run(command, cwd):
+                if any("review_sheet.py" in part for part in command):
+                    return 0
+                if "scorepipe.cli" in command:
+                    out = Path(command[command.index("-o") + 1])
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(fixture, out)
+                    Path(command[command.index("--report") + 1]).write_text(
+                        json.dumps({"phases": [{"phase": "structural", "stable": True}], "verifier": []}),
+                        encoding="utf-8",
+                    )
+                    if "--mscz-out" in command:
+                        Path(command[command.index("--mscz-out") + 1]).write_bytes(b"mscz")
+                    return 0
+                Path(command[command.index("-o") + 1]).write_bytes(b"pdf")
+                return 0
+
+            with (
+                patch.object(review_script, "_pdf_pages", return_value=1),
+                patch.object(review_script, "_render_pages", return_value=1),
+                patch.object(review_script, "find_musescore", return_value="musescore"),
+                patch.object(review_script, "_run", side_effect=fake_run),
+            ):
+                code = review_script.main(
+                    [
+                        str(source),
+                        "--pages",
+                        str(pages),
+                        "--facts-dir",
+                        str(facts),
+                        "--corrections",
+                        str(accepted_file),
+                        "--outdir",
+                        str(outdir),
+                        "--musescore",
+                        "musescore",
+                    ]
+                )
+            report = json.loads((outdir / "review-report.json").read_text(encoding="utf-8"))
+            merged_facts = json.loads((outdir / "facts.json").read_text(encoding="utf-8"))
+            self.assertEqual(code, 0)
+            self.assertTrue(report["ready"], report["blockers"])
+            self.assertEqual(report["corrections_summary"], {"proposed": 0, "accepted": 1, "rejected": 0})
+            self.assertEqual(merged_facts["corrections"][0]["status"], "accepted")
+
 
 if __name__ == "__main__":
     unittest.main()

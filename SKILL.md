@@ -107,7 +107,7 @@ python scripts/agent_facts.py merge --parts review/facts/agent-page*.json --page
 ```
 
 `merge --pages N` 检查页覆盖，并另外写出 `facts-corrections.json` 和 `facts-report.json`。
-音高/八度/时值 `corrections` 不会自动应用；人类审阅后可通过 `scripts/notation_patches.py accept --corrections ...` 升级为 `accepted`，再用 `scripts/notation_patches.py apply --corrections ...` 在唯一音符锚点上受控应用并重新渲染（完整协议见 [`references/facts.md`](references/facts.md)）。
+音高/八度/时值 `corrections` 不会自动应用；人类审阅后可通过 `scripts/notation_patches.py accept --corrections ...` 升级为 `accepted`，再传给 `review.py --corrections ...`（或用 `scripts/notation_patches.py apply --corrections ...` 单独应用）在唯一音符锚点上受控应用并重新渲染（完整协议见 [`references/facts.md`](references/facts.md)）。
 
 `ottava`（8va/8vb，含单和弦同拍）、受限 `tuplet`、`clef`、`pedal`、`wedge`（hairpin）和 `dynamic` 使用音符锚点 patch，不用像素范围直接改谱：
 

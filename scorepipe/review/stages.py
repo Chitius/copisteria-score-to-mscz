@@ -12,7 +12,7 @@ from ..agent_facts import (
     validate_agent_facts,
 )
 from ..core.invariants import LENGTH_CODES
-from ..corrections import validate_corrections
+from ..corrections import load_corrections, validate_corrections
 from ..notation_patches import load_patches, validate_patches
 from .helpers import (
     ReviewHooks,
@@ -78,6 +78,11 @@ def prepare_facts_and_gates(
     else:
         facts.setdefault("producer", {})["pdf_sha256"] = pdf_sha256
 
+    corrections_file = getattr(args, "corrections", None)
+    if corrections_file:
+        loaded_corrections, _envelope = load_corrections(corrections_file)
+        facts["corrections"] = loaded_corrections
+
     facts_path = outdir / "facts.json"
     _write(facts_path, facts)
     _write(outdir / "facts-corrections.json", facts.get("corrections") or [])
@@ -129,7 +134,7 @@ def prepare_facts_and_gates(
             blockers.extend(f"correction: {problem}" for problem in correction_problems)
         else:
             findings.append(
-                f"{len(accepted_corrections)} accepted correction(s) queued for controlled apply"
+                f"{len(accepted_corrections)} accepted correction(s) validated for controlled apply"
             )
     if rejected_corrections:
         findings.append(f"{len(rejected_corrections)} rejected correction(s) skipped")

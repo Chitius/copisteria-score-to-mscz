@@ -155,14 +155,16 @@ python scripts/convert.py score.pdf --pages path/to/omr-pages \
 
 Pitch/octave/duration corrections are **never injected automatically**. A correction has `from`, `to`, page,
 bbox and evidence; it starts as `"status": "proposed"`. Review it with a human before applying
-anything. Once accepted, apply it in a controlled step at unique note anchors and re-render:
+anything. Once accepted, pass the accepted file to `review.py --corrections` (so `scorepipe.cli` applies and
+verifies it during the reviewed run) or apply it directly at unique note anchors and re-render:
 
 ```bash
 python scripts/notation_patches.py accept --corrections review/facts/facts-corrections.json \
   --musicxml out/score/score.musicxml --indices 0 --reviewer "reviewer-name" \
   -o review/facts/facts-corrections.accepted.json
-python scripts/notation_patches.py apply --input out/score/score.musicxml \
-  --corrections review/facts/facts-corrections.accepted.json -o out/score/score.corrected.musicxml
+python scripts/review.py score.pdf --pages path/to/omr-pages \
+  --facts-dir review/facts --corrections review/facts/facts-corrections.accepted.json \
+  --outdir review/score
 ```
 
 `--allow-corrections` in `review.py` only records an explicit override and never changes the pitch.

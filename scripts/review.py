@@ -58,6 +58,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--facts-dir", help="directory containing agent-page*.json")
     parser.add_argument("--outdir", required=True)
     parser.add_argument("--patches", help="notation patches JSON")
+    parser.add_argument("--corrections", help="accepted corrections JSON or facts.json")
     parser.add_argument(
         "--env",
         help="env.local.json written by preflight.py (default: ./env.local.json or <repo>/env.local.json)",
