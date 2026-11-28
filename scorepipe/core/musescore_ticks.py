@@ -62,7 +62,9 @@ BASE_WHOLE = {
 
 # MuseScore marks a grace chord with one of these children instead of a duration.
 # ``grace4``/``grace8``/``grace16``/... carry the *appoggiatura* note value; a plain
-# ``<grace>`` is the legacy accent.  None of them advances the voice tick.
+# ``<grace>`` is the legacy accent; a slashed grace is written as ``<acciaccatura/>``
+# (MuseScore 4.6 does this for every acciaccatura, whatever its ``durationType``).
+# None of them advances the voice tick.
 GRACE_TAGS = (
     "grace",
     "grace4",
@@ -72,6 +74,7 @@ GRACE_TAGS = (
     "grace64",
     "grace128",
     "grace256",
+    "acciaccatura",
 )
 
 # Legal note values with zero, one or two dots, smallest first.

@@ -178,6 +178,26 @@ class MuseScoreTicksTest(unittest.TestCase):
             0,
         )
 
+    def test_acciaccatura_is_zero(self):
+        # MuseScore 4.6 writes a slashed grace as <acciaccatura/>, not <grace16/>: it still
+        # emits durationType 16th and <Events><len>0</len>, and the bar must stay 4 beats.
+        body = (
+            chord("eighth") * 7
+            + "<Chord><acciaccatura /><durationType>16th</durationType>"
+            "<Note><pitch>76</pitch></Note></Chord>"
+            + chord("eighth")
+        )
+        timeline = voice_timeline(voice(body), Fraction(1))
+        self.assertEqual(timeline.end, Fraction(1))
+        self.assertFalse(timeline.overlaps)
+        self.assertFalse(timeline.gaps)
+        self.assertEqual(
+            element_ticks(
+                ElementTree.fromstring("<Chord><acciaccatura /><durationType>16th</durationType></Chord>")
+            ),
+            0,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
