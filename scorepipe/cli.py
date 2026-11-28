@@ -150,7 +150,21 @@ def main(argv: list[str] | None = None) -> int:
             "patches": [
                 patch
                 for patch in patches_payload.get("patches") or []
-                if patch.get("op") in ("ottava", "pedal", "wedge", "dynamic")
+                if patch.get("op")
+                in (
+                    "ottava",
+                    "pedal",
+                    "wedge",
+                    "dynamic",
+                    "repeat",
+                    "volta",
+                    "fermata",
+                    "navigation",
+                    "ornament",
+                    "glissando",
+                    "arpeggio",
+                    "parentheses",
+                )
             ]
         }
         clefs_payload = {

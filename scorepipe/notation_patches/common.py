@@ -12,6 +12,40 @@ from ..core.document import Document
 OTTAAVA_SUBTYPES = {"8va": "up", "8vb": "down"}
 CLEF_SIGNS = {"G", "F", "C"}
 WEDGE_SUBTYPES = ("crescendo", "diminuendo")
+REPEAT_DIRECTIONS = ("forward", "backward")
+VOLTA_STOP_TYPES = ("stop", "discontinue")
+FERMATA_TYPES = ("upright", "inverted")
+FERMATA_SHAPES = ("normal", "angled", "square")
+NAVIGATION_MARKS = ("segno", "coda")
+ORNAMENT_KINDS = (
+    "trill",
+    "mordent",
+    "inverted-mordent",
+    "turn",
+    "inverted-turn",
+    "delayed-turn",
+    "tremolo",
+)
+GLISSANDO_LINE_TYPES = ("wavy", "solid", "dashed", "dotted")
+ARPEGGIO_KINDS = ("arpeggiate", "non-arpeggiate")
+ARPEGGIO_DIRECTIONS = ("none", "up", "down")
+PARENTHESES_TARGETS = ("notehead", "accidental", "both")
+SUPPORTED_PATCH_OPS = (
+    "tuplet",
+    "ottava",
+    "clef",
+    "pedal",
+    "wedge",
+    "dynamic",
+    "repeat",
+    "volta",
+    "fermata",
+    "navigation",
+    "ornament",
+    "glissando",
+    "arpeggio",
+    "parentheses",
+)
 DYNAMIC_MARKS = (
     "p",
     "pp",
@@ -207,3 +241,127 @@ def _validate_anchor(anchor, prefix: str, label: str, measure_count: int | None)
     if isinstance(beat, bool) or not isinstance(beat, (int, float)) or beat < 0:
         problems.append(f"{prefix}: {label}.beat must be non-negative")
     return problems
+
+
+_BARLINE_ORDER = {
+    "bar-style": 0,
+    "footnote": 1,
+    "level": 2,
+    "wavy-line": 3,
+    "segno": 4,
+    "coda": 5,
+    "fermata": 6,
+    "ending": 7,
+    "repeat": 8,
+}
+
+_NOTATIONS_ORDER = {
+    "footnote": 0,
+    "level": 1,
+    "tied": 2,
+    "slur": 3,
+    "tuplet": 4,
+    "glissando": 5,
+    "slide": 6,
+    "ornaments": 7,
+    "technical": 8,
+    "articulations": 9,
+    "dynamics": 10,
+    "fermata": 11,
+    "arpeggiate": 12,
+    "non-arpeggiate": 13,
+    "accidental-mark": 14,
+    "other-notation": 15,
+}
+
+
+def _find_barline(measure: ElementTree.Element, location: str) -> ElementTree.Element | None:
+    for child in measure.findall("barline"):
+        loc = child.get("location") or "right"
+        if loc == location:
+            return child
+    return None
+
+
+def _get_or_create_barline(measure: ElementTree.Element, location: str) -> ElementTree.Element:
+    existing = _find_barline(measure, location)
+    if existing is not None:
+        return existing
+    barline = ElementTree.Element("barline", {"location": location})
+    if location == "left":
+        insert_at = 0
+        for index, child in enumerate(list(measure)):
+            if child.tag in ("print", "bookmark", "link"):
+                insert_at = index + 1
+            else:
+                break
+        measure.insert(insert_at, barline)
+    else:
+        measure.append(barline)
+    return barline
+
+
+def _sort_barline_children(barline: ElementTree.Element) -> None:
+    children = list(barline)
+    children.sort(key=lambda el: _BARLINE_ORDER.get(el.tag, 99))
+    for child in list(barline):
+        barline.remove(child)
+    for child in children:
+        barline.append(child)
+
+
+def _prune_empty_barline(measure: ElementTree.Element, barline: ElementTree.Element | None) -> None:
+    if barline is not None and len(barline) == 0:
+        measure.remove(barline)
+
+
+def _ensure_notations(note: ElementTree.Element) -> ElementTree.Element:
+    notations = note.find("notations")
+    if notations is not None:
+        return notations
+    notations = ElementTree.Element("notations")
+    insert_at = len(note)
+    for index, child in enumerate(list(note)):
+        if child.tag in ("lyric", "play", "listen"):
+            insert_at = index
+            break
+    note.insert(insert_at, notations)
+    return notations
+
+
+def _insert_notation_child(note: ElementTree.Element, child: ElementTree.Element) -> ElementTree.Element:
+    notations = _ensure_notations(note)
+    order = _NOTATIONS_ORDER.get(child.tag, 99)
+    insert_at = len(notations)
+    for index, existing in enumerate(list(notations)):
+        if _NOTATIONS_ORDER.get(existing.tag, 99) > order:
+            insert_at = index
+            break
+    notations.insert(insert_at, child)
+    return notations
+
+
+def _find_base_events_at(
+    doc: Document,
+    measure: ElementTree.Element,
+    part: ElementTree.Element,
+    *,
+    staff: str,
+    beat: float,
+    voice: str | None = None,
+    include_rests: bool = False,
+) -> list:
+    divisions = doc.effective_divisions(measure, part)
+    matches = []
+    for event in doc.events(measure, divisions):
+        if event.chord:
+            continue
+        if not include_rests and event.rest:
+            continue
+        if event.staff != staff:
+            continue
+        if voice is not None and event.voice != str(voice):
+            continue
+        if abs(event.onset - beat) <= 1e-3:
+            matches.append(event)
+    return matches

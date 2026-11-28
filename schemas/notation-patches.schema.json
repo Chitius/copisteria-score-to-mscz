@@ -14,6 +14,14 @@
           {"$ref": "#/$defs/pedal-patch"},
           {"$ref": "#/$defs/wedge-patch"},
           {"$ref": "#/$defs/dynamic-patch"},
+          {"$ref": "#/$defs/repeat-patch"},
+          {"$ref": "#/$defs/volta-patch"},
+          {"$ref": "#/$defs/fermata-patch"},
+          {"$ref": "#/$defs/navigation-patch"},
+          {"$ref": "#/$defs/ornament-patch"},
+          {"$ref": "#/$defs/glissando-patch"},
+          {"$ref": "#/$defs/arpeggio-patch"},
+          {"$ref": "#/$defs/parentheses-patch"},
           {"$ref": "#/$defs/tuplet-patch"}
         ]
       }
@@ -157,6 +165,179 @@
                 "sf", "sfp", "sfpp", "fp", "rf", "rfz", "sfz", "sffz", "fz", "n", "pf", "sfzp"
               ]
             }
+          }
+        }
+      ]
+    },
+    "repeat-patch": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["op", "measure", "direction"],
+          "properties": {
+            "op": {"const": "repeat"},
+            "part": {"type": "string", "minLength": 1},
+            "mode": {"enum": ["add", "replace", "remove"]},
+            "measure": {"type": "integer", "minimum": 1},
+            "direction": {"enum": ["forward", "backward"]},
+            "times": {"type": "integer", "minimum": 2}
+          }
+        }
+      ]
+    },
+    "volta-patch": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["op", "start_measure", "end_measure", "number"],
+          "properties": {
+            "op": {"const": "volta"},
+            "part": {"type": "string", "minLength": 1},
+            "mode": {"enum": ["add", "replace", "remove"]},
+            "start_measure": {"type": "integer", "minimum": 1},
+            "end_measure": {"type": "integer", "minimum": 1},
+            "number": {"type": "string", "pattern": "^\\d+(?:\\s*,\\s*\\d+)*$"},
+            "stop_type": {"enum": ["stop", "discontinue"]},
+            "text": {"type": "string"}
+          }
+        }
+      ]
+    },
+    "fermata-patch": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["op", "measure", "beat", "staff"],
+          "properties": {
+            "op": {"const": "fermata"},
+            "part": {"type": "string", "minLength": 1},
+            "mode": {"enum": ["add", "replace", "remove"]},
+            "measure": {"type": "integer", "minimum": 1},
+            "beat": {"type": "number", "minimum": 0},
+            "staff": {"type": "integer", "minimum": 1},
+            "voice": {"type": "string", "minLength": 1},
+            "type": {"enum": ["upright", "inverted"]},
+            "shape": {"enum": ["normal", "angled", "square"]}
+          }
+        }
+      ]
+    },
+    "navigation-patch": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["op", "measure", "beat", "staff", "mark"],
+          "properties": {
+            "op": {"const": "navigation"},
+            "part": {"type": "string", "minLength": 1},
+            "mode": {"enum": ["add", "replace", "remove"]},
+            "measure": {"type": "integer", "minimum": 1},
+            "beat": {"type": "number", "minimum": 0},
+            "staff": {"type": "integer", "minimum": 1},
+            "placement": {"enum": ["above", "below"]},
+            "mark": {"enum": ["segno", "coda"]}
+          }
+        }
+      ]
+    },
+    "ornament-patch": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["op", "measure", "beat", "staff", "kind"],
+          "properties": {
+            "op": {"const": "ornament"},
+            "part": {"type": "string", "minLength": 1},
+            "mode": {"enum": ["add", "replace", "remove"]},
+            "measure": {"type": "integer", "minimum": 1},
+            "beat": {"type": "number", "minimum": 0},
+            "staff": {"type": "integer", "minimum": 1},
+            "voice": {"type": "string", "minLength": 1},
+            "placement": {"enum": ["above", "below"]},
+            "kind": {
+              "enum": [
+                "trill",
+                "mordent",
+                "inverted-mordent",
+                "turn",
+                "inverted-turn",
+                "delayed-turn",
+                "tremolo"
+              ]
+            },
+            "slashes": {"type": "integer", "minimum": 1, "maximum": 5}
+          }
+        }
+      ]
+    },
+    "glissando-patch": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["op", "staff", "start", "end"],
+          "properties": {
+            "op": {"const": "glissando"},
+            "part": {"type": "string", "minLength": 1},
+            "mode": {"enum": ["add", "replace", "remove"]},
+            "staff": {"type": "integer", "minimum": 1},
+            "voice": {"type": "string", "minLength": 1},
+            "line_type": {"enum": ["wavy", "solid", "dashed", "dotted"]},
+            "text": {"type": "string"},
+            "start": {"$ref": "#/$defs/anchor"},
+            "end": {"$ref": "#/$defs/anchor"}
+          }
+        }
+      ]
+    },
+    "arpeggio-patch": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["op", "measure", "beat"],
+          "anyOf": [{"required": ["staff"]}, {"required": ["staves"]}],
+          "properties": {
+            "op": {"const": "arpeggio"},
+            "part": {"type": "string", "minLength": 1},
+            "mode": {"enum": ["add", "replace", "remove"]},
+            "measure": {"type": "integer", "minimum": 1},
+            "beat": {"type": "number", "minimum": 0},
+            "staff": {"type": "integer", "minimum": 1},
+            "staves": {
+              "type": "array",
+              "items": {"type": "integer", "minimum": 1},
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "voice": {"type": "string", "minLength": 1},
+            "kind": {"enum": ["arpeggiate", "non-arpeggiate"]},
+            "direction": {"enum": ["none", "up", "down"]}
+          }
+        }
+      ]
+    },
+    "parentheses-patch": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["op", "measure", "beat", "staff", "pitch"],
+          "properties": {
+            "op": {"const": "parentheses"},
+            "part": {"type": "string", "minLength": 1},
+            "mode": {"enum": ["add", "remove"]},
+            "measure": {"type": "integer", "minimum": 1},
+            "beat": {"type": "number", "minimum": 0},
+            "staff": {"type": "integer", "minimum": 1},
+            "voice": {"type": "string", "minLength": 1},
+            "pitch": {"type": "string", "minLength": 2},
+            "target": {"enum": ["notehead", "accidental", "both"]}
           }
         }
       ]

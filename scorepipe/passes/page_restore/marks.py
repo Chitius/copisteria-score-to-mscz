@@ -196,6 +196,24 @@ class RestorePageArpeggios(PageRestoreMixin):
                     continue
                 notes_at.setdefault((part_id, number, event.staff, round(event.onset, 4)), []).append(event)
 
+        # Unify cross-staff arpeggiate numbers at the same (part, measure, onset) so MuseScore
+        # renders a single grand-staff arpeggio instead of disconnected per-staff strokes.
+        onset_arpeggios: dict[tuple[str, int, float], list[tuple[tuple, ElementTree.Element]]] = {}
+        for key, (mark, _marked_pitches) in page_marks.items():
+            if mark.tag == "arpeggiate":
+                part_id, measure_number, _staff, onset = key
+                onset_arpeggios.setdefault((part_id, measure_number, onset), []).append((key, mark))
+        shared_numbers: dict[tuple, str] = {}
+        for (_part_id, _measure_number, _onset), items in onset_arpeggios.items():
+            if len({key[2] for key, _mark in items}) <= 1:
+                continue
+            chosen = next(
+                (mark.get("number") for _key, mark in items if mark.get("number")),
+                "1",
+            )
+            for key, _mark in items:
+                shared_numbers[key] = chosen
+
         restored = 0
         for key, (mark, marked_pitches) in page_marks.items():
             events = notes_at.get(key)
@@ -214,6 +232,12 @@ class RestorePageArpeggios(PageRestoreMixin):
                         len({_pitch_name(event.element.find("pitch")) for event in group} & marked_pitches),
                     ),
                 )
+            desired_mark = mark
+            shared_number = shared_numbers.get(key)
+            if shared_number is not None and mark.get("number") != shared_number:
+                desired_mark = ElementTree.fromstring(ElementTree.tostring(mark))
+                desired_mark.set("number", shared_number)
+
             if target is None:
                 affected = events
                 desired: list[tuple] = []
@@ -223,7 +247,7 @@ class RestorePageArpeggios(PageRestoreMixin):
                 affected = list(target) + [
                     event for event in events if event.voice not in groups or len(groups[event.voice]) < 2
                 ]
-                desired = [(id(base.element), mark.tag, _mark_attributes(mark))]
+                desired = [(id(base.element), desired_mark.tag, _mark_attributes(desired_mark))]
 
             current = [
                 (id(event.element), child.tag, tuple(sorted(child.attrib.items())))
@@ -237,7 +261,7 @@ class RestorePageArpeggios(PageRestoreMixin):
             for event in affected:
                 _remove_arpeggio_marks(event.element)
             if target is not None:
-                _add_notation(base.element, mark)
+                _add_notation(base.element, desired_mark)
             restored += 1
         return PassResult(changed=restored)
 

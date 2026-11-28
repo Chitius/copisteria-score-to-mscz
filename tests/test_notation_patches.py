@@ -729,6 +729,271 @@ class NotationPatchesTest(unittest.TestCase):
                 ["sfz"],
             )
 
+    def test_repeat_volta_fermata_and_navigation_patches(self):
+        from scorepipe.notation_patches import (
+            list_fermatas,
+            list_navigations,
+            list_repeats,
+            list_voltas,
+        )
+
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<score-partwise version="4.0">'
+            '<part-list><score-part id="P1"><part-name>Test</part-name></score-part></part-list>'
+            '<part id="P1">'
+            '<measure number="1"><attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>'
+            '<note><pitch><step>C</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><type>whole</type><staff>1</staff></note></measure>'
+            '<measure number="2"><note><pitch><step>D</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><type>whole</type><staff>1</staff></note></measure>'
+            '<measure number="3"><note><pitch><step>E</step><octave>5</octave></pitch><duration>16</duration><voice>1</voice><type>whole</type><staff>1</staff></note></measure>'
+            "</part></score-partwise>"
+        )
+        doc = Document(ElementTree.fromstring(xml))
+        payload = {
+            "patches": [
+                {
+                    "op": "repeat",
+                    "measure": 1,
+                    "direction": "forward",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [0, 0, 10, 10],
+                    "evidence": "left repeat on m1",
+                },
+                {
+                    "op": "volta",
+                    "start_measure": 2,
+                    "end_measure": 2,
+                    "number": "1",
+                    "stop_type": "stop",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [0, 0, 10, 10],
+                    "evidence": "1st ending over m2",
+                },
+                {
+                    "op": "repeat",
+                    "measure": 2,
+                    "direction": "backward",
+                    "times": 2,
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [0, 0, 10, 10],
+                    "evidence": "right repeat on m2",
+                },
+                {
+                    "op": "volta",
+                    "start_measure": 3,
+                    "end_measure": 3,
+                    "number": "2",
+                    "stop_type": "discontinue",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [0, 0, 10, 10],
+                    "evidence": "2nd ending over m3",
+                },
+                {
+                    "op": "fermata",
+                    "measure": 3,
+                    "beat": 0,
+                    "staff": 1,
+                    "type": "upright",
+                    "shape": "angled",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [0, 0, 10, 10],
+                    "evidence": "fermata on m3",
+                },
+                {
+                    "op": "navigation",
+                    "measure": 1,
+                    "beat": 0,
+                    "staff": 1,
+                    "mark": "segno",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [0, 0, 10, 10],
+                    "evidence": "segno at m1",
+                },
+            ]
+        }
+        self.assertEqual(validate_patches(payload, doc, require_acceptance=True), [])
+        changed = apply_patches(doc, payload)
+        self.assertGreater(changed, 0)
+        self.assertEqual(verify_patches(doc, payload), [])
+        self.assertEqual(len(list_repeats(doc)), 2)
+        self.assertEqual(len(list_voltas(doc)), 4)
+        self.assertEqual(list_fermatas(doc)[0]["shape"], "angled")
+        self.assertEqual(list_navigations(doc)[0]["mark"], "segno")
+        try:
+            from lxml import etree
+
+            xsd = etree.XMLSchema(
+                etree.parse(str(Path(__file__).parent / "fixtures" / "musicxml" / "sanity_schema.xsd"))
+            )
+            xml_doc = etree.fromstring(ElementTree.tostring(doc.root, encoding="utf-8"))
+            self.assertTrue(xsd.validate(xml_doc), xsd.error_log)
+        except ImportError:
+            pass
+
+        # Removal checks
+        remove_payload = {
+            "patches": [
+                {
+                    "op": "repeat",
+                    "mode": "remove",
+                    "measure": 2,
+                    "direction": "backward",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [0, 0, 10, 10],
+                    "evidence": "remove repeat",
+                },
+                {
+                    "op": "fermata",
+                    "mode": "remove",
+                    "measure": 3,
+                    "beat": 0,
+                    "staff": 1,
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [0, 0, 10, 10],
+                    "evidence": "remove fermata",
+                },
+            ]
+        }
+        apply_patches(doc, remove_payload)
+        self.assertEqual(verify_patches(doc, remove_payload), [])
+        self.assertEqual(len(list_repeats(doc)), 1)
+        self.assertEqual(list_fermatas(doc), [])
+
+    def test_ornament_glissando_arpeggio_and_parentheses_patches(self):
+        from scorepipe.notation_patches import (
+            list_arpeggios,
+            list_glissandos,
+            list_ornaments,
+            list_parentheses,
+        )
+
+        # Build a 2-staff piano measure with chords and accidentals
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<score-partwise version="4.0">'
+            '<part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>'
+            '<part id="P1"><measure number="1">'
+            "<attributes><divisions>4</divisions><key><fifths>0</fifths></key>"
+            "<time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves>"
+            '<clef number="1"><sign>G</sign><line>2</line></clef>'
+            '<clef number="2"><sign>F</sign><line>4</line></clef></attributes>'
+            '<note><pitch><step>C</step><octave>5</octave></pitch>'
+            "<duration>4</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>"
+            '<note><chord/><pitch><step>E</step><octave>5</octave></pitch>'
+            "<duration>4</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>"
+            '<note><pitch><step>G</step><alter>1</alter><octave>5</octave></pitch>'
+            "<duration>4</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>"
+            '<note><pitch><step>A</step><octave>5</octave></pitch>'
+            "<duration>8</duration><voice>1</voice><type>half</type><staff>1</staff></note>"
+            "<backup><duration>16</duration></backup>"
+            '<note><pitch><step>C</step><octave>3</octave></pitch>'
+            "<duration>4</duration><voice>5</voice><type>quarter</type><staff>2</staff></note>"
+            '<note><chord/><pitch><step>G</step><octave>3</octave></pitch>'
+            "<duration>4</duration><voice>5</voice><type>quarter</type><staff>2</staff></note>"
+            '<note><pitch><step>C</step><octave>3</octave></pitch>'
+            "<duration>12</duration><voice>5</voice><type>half</type><dot/><staff>2</staff></note>"
+            "</measure></part></score-partwise>"
+        )
+        doc = Document(ElementTree.fromstring(xml))
+        payload = {
+            "patches": [
+                {
+                    "op": "ornament",
+                    "measure": 1,
+                    "beat": 0,
+                    "staff": 1,
+                    "kind": "trill",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [0, 0, 10, 10],
+                    "evidence": "trill on C5",
+                },
+                {
+                    "op": "ornament",
+                    "measure": 1,
+                    "beat": 2,
+                    "staff": 1,
+                    "kind": "tremolo",
+                    "slashes": 3,
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [0, 0, 10, 10],
+                    "evidence": "3-slash tremolo on A5",
+                },
+                {
+                    "op": "glissando",
+                    "staff": 1,
+                    "start": {"measure": 1, "beat": 0},
+                    "end": {"measure": 1, "beat": 1},
+                    "line_type": "wavy",
+                    "text": "gliss.",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [0, 0, 10, 10],
+                    "evidence": "gliss from C5 to G#5",
+                },
+                {
+                    "op": "arpeggio",
+                    "measure": 1,
+                    "beat": 0,
+                    "staves": [1, 2],
+                    "kind": "arpeggiate",
+                    "direction": "up",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [0, 0, 10, 10],
+                    "evidence": "grand-staff arpeggio",
+                },
+                {
+                    "op": "parentheses",
+                    "measure": 1,
+                    "beat": 1,
+                    "staff": 1,
+                    "pitch": "G#5",
+                    "target": "both",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [0, 0, 10, 10],
+                    "evidence": "cautionary accidental and optional notehead",
+                },
+            ]
+        }
+        self.assertEqual(validate_patches(payload, doc, require_acceptance=True), [])
+        changed = apply_patches(doc, payload)
+        self.assertGreater(changed, 0)
+        self.assertEqual(verify_patches(doc, payload), [])
+
+        ornaments = list_ornaments(doc)
+        self.assertEqual([(item["kind"], item.get("slashes")) for item in ornaments], [("trill", None), ("tremolo", 3)])
+        gliss = list_glissandos(doc)
+        self.assertEqual([item["type"] for item in gliss], ["start", "stop"])
+        arps = list_arpeggios(doc)
+        self.assertEqual(len(arps), 2)
+        self.assertEqual(len({item["number"] for item in arps}), 1)
+        parens = list_parentheses(doc)
+        self.assertEqual(len(parens), 1)
+        self.assertTrue(parens[0]["notehead"] and parens[0]["accidental"])
+
+        # Validate MusicXML XSD compliance if lxml is installed
+        try:
+            from lxml import etree
+
+            xsd = etree.XMLSchema(
+                etree.parse(str(Path(__file__).parent / "fixtures" / "musicxml" / "sanity_schema.xsd"))
+            )
+            xml_doc = etree.fromstring(ElementTree.tostring(doc.root, encoding="utf-8"))
+            self.assertTrue(xsd.validate(xml_doc), xsd.error_log)
+        except ImportError:
+            pass
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -276,6 +276,45 @@ class PageRestoreTest(unittest.TestCase):
                     marked.append((note_element.findtext("pitch/step"), note_element.findtext("voice")))
         self.assertEqual(marked, [("D", "1")])
 
+    def test_cross_staff_arpeggio_shares_number(self):
+        measure = (
+            '<measure number="1"><attributes><divisions>4</divisions>'
+            "<time><beats>4</beats><beat-type>4</beat-type></time>"
+            "<staves>2</staves>"
+            '<clef number="1"><sign>G</sign><line>2</line></clef>'
+            '<clef number="2"><sign>F</sign><line>4</line></clef>'
+            "</attributes>{body}</measure>"
+        )
+        note = (
+            '<note>{chord}<pitch><step>{step}</step><octave>{octave}</octave></pitch>'
+            '<duration>16</duration><voice>{voice}</voice><staff>{staff}</staff>'
+            "<notations><arpeggiate/></notations></note>"
+        )
+        body = (
+            note.format(chord="", step="C", octave=5, voice=1, staff=1)
+            + note.format(chord="<chord/>", step="E", octave=5, voice=1, staff=1)
+            + "<backup><duration>16</duration></backup>"
+            + note.format(chord="", step="C", octave=3, voice=5, staff=2)
+            + note.format(chord="<chord/>", step="G", octave=3, voice=5, staff=2)
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            page = Path(tmp) / "page1.musicxml"
+            page.write_text(
+                '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0">'
+                '<part-list><score-part id="P1"><part-name>t</part-name></score-part></part-list>'
+                '<part id="P1">' + measure.format(body=body) + "</part></score-partwise>",
+                encoding="utf-8",
+            )
+            merged = merge_pages([page])
+            run_pipeline(merged.document, Context(pages=merged), structural=STRUCTURAL_PASSES, verifiers=[])
+        numbers = []
+        for measure_element in merged.document.measures():
+            for arp in measure_element.findall(".//notations/arpeggiate"):
+                numbers.append(arp.get("number"))
+        self.assertEqual(len(numbers), 2)
+        self.assertEqual(len(set(numbers)), 1)
+        self.assertIsNotNone(numbers[0])
+
     def test_slur_signature_uses_musical_position_not_element_identity(self):
         doc, _ctx, _report = run()
         clone = Document(ElementTree.fromstring(ElementTree.tostring(doc.root)))

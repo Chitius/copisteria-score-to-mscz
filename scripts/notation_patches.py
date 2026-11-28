@@ -26,6 +26,7 @@ from scorepipe.corrections import (  # noqa: E402
     verify_corrections,
 )
 from scorepipe.notation_patches import (  # noqa: E402
+    SUPPORTED_PATCH_OPS,
     apply_patches,
     load_patches,
     score_map,
@@ -89,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"patch index out of range: {index}")
                 return 1
             patch = patches[index]
-            if patch.get("op") not in ("tuplet", "ottava", "clef", "pedal", "wedge", "dynamic"):
+            if patch.get("op") not in SUPPORTED_PATCH_OPS:
                 print(f"patches[{index}] has unsupported op {patch.get('op')!r}")
                 return 1
             patch["status"] = "accepted"

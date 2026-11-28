@@ -17,9 +17,19 @@ except ImportError:  # pragma: no cover - optional dependency
 from scorepipe.agent_facts import CREDIT_TYPES, GRADUAL_TYPES, validate_agent_facts
 from scorepipe.instruments import INSTRUMENT_KEYS
 from scorepipe.notation_patches import (
+    ARPEGGIO_DIRECTIONS,
+    ARPEGGIO_KINDS,
     CLEF_SIGNS,
     DYNAMIC_MARKS,
+    FERMATA_SHAPES,
+    FERMATA_TYPES,
+    GLISSANDO_LINE_TYPES,
+    NAVIGATION_MARKS,
+    ORNAMENT_KINDS,
     OTTAAVA_SUBTYPES,
+    PARENTHESES_TARGETS,
+    REPEAT_DIRECTIONS,
+    VOLTA_STOP_TYPES,
     WEDGE_SUBTYPES,
     validate_patches,
 )
@@ -74,6 +84,46 @@ class JsonSchemaContractTest(unittest.TestCase):
         self.assertEqual(
             set(defs["dynamic-patch"]["allOf"][1]["properties"]["mark"]["enum"]),
             set(DYNAMIC_MARKS),
+        )
+        self.assertEqual(
+            set(defs["repeat-patch"]["allOf"][1]["properties"]["direction"]["enum"]),
+            set(REPEAT_DIRECTIONS),
+        )
+        self.assertEqual(
+            set(defs["volta-patch"]["allOf"][1]["properties"]["stop_type"]["enum"]),
+            set(VOLTA_STOP_TYPES),
+        )
+        self.assertEqual(
+            set(defs["fermata-patch"]["allOf"][1]["properties"]["type"]["enum"]),
+            set(FERMATA_TYPES),
+        )
+        self.assertEqual(
+            set(defs["fermata-patch"]["allOf"][1]["properties"]["shape"]["enum"]),
+            set(FERMATA_SHAPES),
+        )
+        self.assertEqual(
+            set(defs["navigation-patch"]["allOf"][1]["properties"]["mark"]["enum"]),
+            set(NAVIGATION_MARKS),
+        )
+        self.assertEqual(
+            set(defs["ornament-patch"]["allOf"][1]["properties"]["kind"]["enum"]),
+            set(ORNAMENT_KINDS),
+        )
+        self.assertEqual(
+            set(defs["glissando-patch"]["allOf"][1]["properties"]["line_type"]["enum"]),
+            set(GLISSANDO_LINE_TYPES),
+        )
+        self.assertEqual(
+            set(defs["arpeggio-patch"]["allOf"][1]["properties"]["kind"]["enum"]),
+            set(ARPEGGIO_KINDS),
+        )
+        self.assertEqual(
+            set(defs["arpeggio-patch"]["allOf"][1]["properties"]["direction"]["enum"]),
+            set(ARPEGGIO_DIRECTIONS),
+        )
+        self.assertEqual(
+            set(defs["parentheses-patch"]["allOf"][1]["properties"]["target"]["enum"]),
+            set(PARENTHESES_TARGETS),
         )
 
     @unittest.skipIf(Draft202012Validator is None, "jsonschema is not installed")
@@ -189,6 +239,97 @@ class JsonSchemaContractTest(unittest.TestCase):
                     "page": 1,
                     "bbox": [10, 20, 40, 40],
                     "evidence": "mf at m1",
+                },
+                {
+                    "op": "repeat",
+                    "measure": 2,
+                    "direction": "backward",
+                    "times": 2,
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 20, 40, 80],
+                    "evidence": "backward repeat at end of m2",
+                },
+                {
+                    "op": "volta",
+                    "start_measure": 2,
+                    "end_measure": 2,
+                    "number": "1",
+                    "stop_type": "stop",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 10, 80, 30],
+                    "evidence": "1st ending bracket over m2",
+                },
+                {
+                    "op": "fermata",
+                    "measure": 3,
+                    "beat": 0,
+                    "staff": 1,
+                    "type": "upright",
+                    "shape": "normal",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 10, 30, 30],
+                    "evidence": "fermata over final note",
+                },
+                {
+                    "op": "navigation",
+                    "measure": 1,
+                    "beat": 0,
+                    "staff": 1,
+                    "mark": "segno",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 10, 30, 30],
+                    "evidence": "segno above m1",
+                },
+                {
+                    "op": "ornament",
+                    "measure": 1,
+                    "beat": 0,
+                    "staff": 1,
+                    "kind": "tremolo",
+                    "slashes": 2,
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 10, 30, 30],
+                    "evidence": "2-slash tremolo on m1 beat 0",
+                },
+                {
+                    "op": "glissando",
+                    "staff": 1,
+                    "start": {"measure": 1, "beat": 0},
+                    "end": {"measure": 1, "beat": 1},
+                    "line_type": "wavy",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 10, 50, 30],
+                    "evidence": "wavy glissando",
+                },
+                {
+                    "op": "arpeggio",
+                    "measure": 1,
+                    "beat": 0,
+                    "staves": [1, 2],
+                    "kind": "arpeggiate",
+                    "direction": "up",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 10, 30, 80],
+                    "evidence": "grand-staff upward arpeggio",
+                },
+                {
+                    "op": "parentheses",
+                    "measure": 1,
+                    "beat": 2,
+                    "staff": 1,
+                    "pitch": "E5",
+                    "target": "both",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 10, 30, 30],
+                    "evidence": "parenthesized optional notehead and accidental",
                 },
                 {
                     "op": "clef",
