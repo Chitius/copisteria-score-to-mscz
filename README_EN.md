@@ -32,7 +32,7 @@ Below is *Sincerely* m16–18, showing the original score, the raw OMR MusicXML,
 
 ![Single-system comparison of the original, raw OMR MusicXML, and repaired MusicXML](docs/images/demo-omr-xml.png)
 
-This excerpt mainly demonstrates **beam-grouping and local layout cleanup** — for example, the left hand in m16 changes from a single beam spanning the whole bar to beams grouped by beat. It is not proof of recognition accuracy; pitch, voice, and other differences between the original and the result still require human verification. Measure durations, ties, and the structure after MuseScore import are checked separately by the reports and review tools.
+This excerpt mainly demonstrates **beam-grouping and local layout cleanup** — for example, the left hand in m16 and m18 is re-beamed by beat, the redundant page-boundary clef at the end of m17 is removed, and the slur over m18 is restored. It is not proof of recognition accuracy; pitch, voice, and other differences between the original and the result still require human verification. Measure durations, ties, and the structure after MuseScore import are checked separately by the reports and review tools.
 
 It **never changes pitches by guesswork**. Titles, tempo marks, and supplementary score information are injected through evidence-backed facts or restricted patches.
 
@@ -137,7 +137,7 @@ python -m scorepipe.cli "out/score/work/copisteria" -o "out/score/score.musicxml
 ## Facts, patches, and AI assistants
 
 - **facts**: inject explicit facts such as title, composer, tempo, rehearsal marks, and multi-part instrument metadata (`parts`: part names, abbreviations, instrument presets, or GM programs); every item must carry a page number and evidence. See [`references/facts.md`](references/facts.md) for preparation and validation.
-- **notation patch**: use note anchors to add well-evidenced 8va/8vb, tuplet, or clef corrections (with optional `part` targeting); when the range is uncertain, leave it unresolved rather than auto-expanding. See [`references/notation-patches.md`](references/notation-patches.md).
+- **notation patch**: use note anchors to add well-evidenced `ottava` (8va/8vb, including single-chord same-beat), `tuplet`, `clef`, `pedal`, `wedge` (hairpin), or `dynamic` corrections (with optional `part` targeting), as well as controlled application of human-accepted pitch/octave/duration `corrections`; when the range is uncertain, leave it unresolved rather than auto-expanding. See [`references/notation-patches.md`](references/notation-patches.md).
 - **AI assistants**: this repo also provides [`SKILL.md`](SKILL.md), which constrains an assistant through environment checks, per-page OMR, evidence collection, review, and delivery. An assistant may propose corrections, but it cannot treat its own proposals as accepted results.
 
 ## Scope and limitations
@@ -145,7 +145,7 @@ python -m scorepipe.cli "out/score/work/copisteria" -o "out/score/score.musicxml
 - Targets **printed staff notation**, with **single-`<part>` scores** (grand-staff piano and solo-line parts) as the primary stable path.
 - **Multi-`<part>` scores (experimental)**: experimental support is available for voice + piano art songs, small ensembles, and band full scores, including multi-part page merging, per-part structural repair and overfull truncation, automatic GM drumset mapping with cymbal `x` noteheads for single-staff percussion parts, and `facts.json` `parts` instrument assignment. Cross-page part alignment, complex drum tuplets, and non-Western instrument labels remain experimental and require visual review via `review-sheets.pdf`. Handwritten scores, numbered notation (jianpu), and tablature are not validated.
 - OMR can still produce octave, ledger-line, voice, rest, and dense-chord errors. Passing structural validation does not mean pitches are correct — **human review is not optional**.
-- Pedals, hairpins, and optional-note brackets cannot be reliably auto-delivered; missing items are recorded explicitly rather than filled in by guesswork.
+- OMR may still miss pedals, hairpins, and optional-note brackets; `pedal`, `wedge` (hairpin), and `dynamic` marks can be added via constrained notation patches, while unsupported items such as optional-note brackets are recorded explicitly rather than filled in by guesswork.
 - 8va/8vb requires a well-evidenced, accepted patch; if the covered range cannot be determined, it stays unresolved.
 - The PDF text layer may be misaligned or garbled; titles, composer, and tempo must be taken from page evidence.
 - One score at a time — no built-in batch processing. Skewed, perspective-distorted, or low-resolution scans significantly degrade recognition quality.

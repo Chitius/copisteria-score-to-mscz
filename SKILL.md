@@ -6,7 +6,7 @@ description: >
   校对 OMR 输出时使用。覆盖环境配置、逐页 OMR、scorepipe 修复、facts 注入、
   视觉复核和交付。
 metadata:
-  version: "0.2.1"
+  version: "0.3.0"
 ---
 
 # Copisteria to MSCZ
@@ -88,7 +88,7 @@ python -m scorepipe.cli path/to/pages -o out/score/score.musicxml \
 
 ### 2. 逐页 OMR 与机械修复
 
-`convert.py` 通过内建 `scorepipe.copisteria` 适配器提取灰度页图并直接调用上游 `python -m copisteria.pipeline`（支持 `--detector 28m|2m`、`--device`、`--range`），再把**逐页目录**交给 scorepipe。页契约见 [`references/omr.md`](references/omr.md)。流水线按 structural → inject → display 运行到不动点，然后执行只读 verifier。
+`convert.py` 通过内建 `scorepipe.copisteria` 适配器提取灰度页图并直接调用上游 `python -m copisteria.pipeline`（支持 `--detector 28m|2m`、`--device`、`--range`、`--truncate-overfull`），再把**逐页目录**交给 scorepipe。页契约见 [`references/omr.md`](references/omr.md)。流水线按 structural（含复拍子/切分连梁分组 `BeamGrouper` 与保留连音组的声部合并）→ inject → display 运行到不动点，然后执行只读 verifier。
 
 检查 `report.json`：所有阶段必须 `stable=true`，交付件的 `verifier` 必须为空；无法解释的
 `measure-length`、hidden-rest 或导入差异都要追查。存在 ground truth 时再运行对应 comparator。
@@ -107,12 +107,14 @@ python scripts/agent_facts.py merge --parts review/facts/agent-page*.json --page
 ```
 
 `merge --pages N` 检查页覆盖，并另外写出 `facts-corrections.json` 和 `facts-report.json`。
-音高/时值 correction 不会自动应用；接受后须通过专门编辑流程修改并重新渲染。
+音高/八度/时值 `corrections` 不会自动应用；人类审阅后可通过 `scripts/notation_patches.py accept --corrections ...` 升级为 `accepted`，再用 `scripts/notation_patches.py apply --corrections ...` 在唯一音符锚点上受控应用并重新渲染（完整协议见 [`references/facts.md`](references/facts.md)）。
 
-8va/8vb、受限 tuplet 和 clef 使用音符锚点 patch，不用像素范围直接改谱：
+`ottava`（8va/8vb，含单和弦同拍）、受限 `tuplet`、`clef`、`pedal`、`wedge`（hairpin）和 `dynamic` 使用音符锚点 patch，不用像素范围直接改谱：
 
 ```bash
 python scripts/notation_patches.py map --input out/score/score.musicxml -o review/score-map.json
+python scripts/notation_patches.py accept --patches review/patches.json \
+  --musicxml out/score/score.musicxml --indices 0 --reviewer "reviewer" -o review/patches.accepted.json
 python -m scorepipe.cli path/to/pages -o out/score/score.musicxml \
   --mscz-out out/score/score.mscz --patches review/patches.accepted.json
 ```
@@ -129,6 +131,7 @@ python scripts/review.py "score.pdf" --pages path/to/omr-pages \
 
 缺页、`unresolved`、proposed correction 或 patch 校验失败会默认阻断 reviewed pipeline。
 `--allow-unresolved` / `--allow-corrections` 只用于临时试跑，覆盖项仍留在报告中。
+若某条 verifier finding 已由人工核对确认属于原谱自身特性或已知可接受尾差，可用 `--accept-verifier <measure:code>[,...]` 与 `--accept-reason "<原因>"` 显式记入 `review-report.json` 的 `accepted_findings`；若末小节所有声部均提前结束，可按需传 `--pad-last-measure`。
 
 review 自动生成两类辅助图：
 
@@ -166,7 +169,7 @@ Agent 是 producer，不是最终改谱者：
 ## 交付前验收
 
 - [ ] 所有阶段 `stable=true`，实际交付件 verifier 为空。
-- [ ] 页覆盖完整；`unresolved`、correction、override 和已知 OMR 缺陷均已说明。
+- [ ] 页覆盖完整；`unresolved`、correction、override、`accepted_findings` 和已知 OMR 缺陷均已说明。
 - [ ] `mechanical/` 与 reviewed 树均保留；发生截断时 `semantic/` 和截断报告齐全。
 - [ ] `score.musicxml`、`.mscz`、`score.pdf`、`review-sheets.pdf` 与报告均存在。
 - [ ] 对照图已打开检查，首尾、至少一个密集页和一个页缝已人工复核。
