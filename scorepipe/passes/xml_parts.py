@@ -93,9 +93,12 @@ def _apply_part_entry(
             score_part.insert(0, part_name)
             part_name.text = name
             changed += 1
-        elif (part_name.text or "").strip() != name:
-            part_name.text = name
-            changed += 1
+        else:
+            if (part_name.text or "").strip() != name:
+                part_name.text = name
+                changed += 1
+            if part_name.attrib.pop("print-object", None) is not None:
+                changed += 1
 
     if abbr:
         part_abbr = score_part.find("part-abbreviation")

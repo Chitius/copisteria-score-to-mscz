@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from xml.etree import ElementTree
 
 from ..core.document import Document
 from ..core.pass_base import Context, Kind, PassResult, PassSpec, Phase
+
+_GENERIC_PART_NAME_RE = re.compile(r"^(?:part(?:\s*\d+)?|music|staff|p\d+)$", re.IGNORECASE)
 
 
 class DedupeTies:
@@ -96,4 +99,38 @@ class UnhideRests:
         return PassResult(changed=changed)
 
 
-STRUCTURAL_PASSES = [DedupeTies(), DropRedundantTimeSignatures(), UnhideRests()]
+class HideGenericSinglePartName:
+    spec = PassSpec(
+        name="hide_generic_single_part_name",
+        phase=Phase.STRUCTURAL,
+        kind=Kind.MECHANICAL,
+        owns=("part-name-visibility",),
+        description="hide synthetic OMR placeholder part-names such as 'Part 1' on single-part scores",
+        measure="visible generic part-name placeholder on single-part score",
+    )
+
+    def run(self, doc: Document, ctx: Context) -> PassResult:
+        part_list = doc.root.find("part-list")
+        if part_list is None:
+            return PassResult(changed=0)
+        score_parts = part_list.findall("score-part")
+        if len(score_parts) != 1:
+            return PassResult(changed=0)
+        part_name = score_parts[0].find("part-name")
+        if part_name is None:
+            return PassResult(changed=0)
+        text = (part_name.text or "").strip()
+        if not text or not _GENERIC_PART_NAME_RE.match(text):
+            return PassResult(changed=0)
+        if part_name.get("print-object") == "no":
+            return PassResult(changed=0)
+        part_name.set("print-object", "no")
+        return PassResult(changed=1)
+
+
+STRUCTURAL_PASSES = [
+    DedupeTies(),
+    DropRedundantTimeSignatures(),
+    UnhideRests(),
+    HideGenericSinglePartName(),
+]

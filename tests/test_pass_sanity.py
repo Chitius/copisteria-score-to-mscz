@@ -354,6 +354,14 @@ FACTORIES = {
     "apply_marks_facts": facts_marks,
     "apply_credits_facts": facts_credits,
     "apply_parts_facts": facts_parts,
+    "hide_generic_single_part_name": lambda: Document(
+        ElementTree.fromstring(
+            "<score-partwise version='4.0'>"
+            "<part-list><score-part id='P1'><part-name>Part 1</part-name></score-part></part-list>"
+            f"<part id='P1'>{measure(1, note('C'))}</part>"
+            "</score-partwise>"
+        )
+    ),
 }
 
 # What each pass may change.  Everything not listed must be preserved; every pass must also be
@@ -421,6 +429,7 @@ CONTRACTS = {
     "apply_marks_facts": PassContract("apply_marks_facts"),
     "apply_credits_facts": PassContract("apply_credits_facts"),
     "apply_parts_facts": PassContract("apply_parts_facts"),
+    "hide_generic_single_part_name": PassContract("hide_generic_single_part_name"),
 }
 
 ALL_PASSES = {**STRUCTURAL, **INJECT}
