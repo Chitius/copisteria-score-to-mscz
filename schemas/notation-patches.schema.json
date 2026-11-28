@@ -11,6 +11,9 @@
         "oneOf": [
           {"$ref": "#/$defs/clef-patch"},
           {"$ref": "#/$defs/ottava-patch"},
+          {"$ref": "#/$defs/pedal-patch"},
+          {"$ref": "#/$defs/wedge-patch"},
+          {"$ref": "#/$defs/dynamic-patch"},
           {"$ref": "#/$defs/tuplet-patch"}
         ]
       }
@@ -85,6 +88,75 @@
             "staff": {"type": "integer", "minimum": 1},
             "start": {"$ref": "#/$defs/anchor"},
             "end": {"$ref": "#/$defs/anchor"}
+          }
+        }
+      ]
+    },
+    "pedal-patch": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["op", "staff", "start", "end"],
+          "properties": {
+            "op": {"const": "pedal"},
+            "part": {"type": "string", "minLength": 1},
+            "mode": {"enum": ["add", "replace", "remove"]},
+            "staff": {"type": "integer", "minimum": 1},
+            "placement": {"enum": ["above", "below"]},
+            "line": {"type": "boolean"},
+            "start": {"$ref": "#/$defs/anchor"},
+            "end": {"$ref": "#/$defs/anchor"},
+            "changes": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/anchor"}
+            }
+          }
+        }
+      ]
+    },
+    "wedge-patch": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["op", "subtype", "staff", "start", "end"],
+          "properties": {
+            "op": {"const": "wedge"},
+            "part": {"type": "string", "minLength": 1},
+            "mode": {"enum": ["add", "replace", "remove"]},
+            "subtype": {"enum": ["crescendo", "diminuendo"]},
+            "staff": {"type": "integer", "minimum": 1},
+            "placement": {"enum": ["above", "below"]},
+            "niente": {"type": "boolean"},
+            "start": {"$ref": "#/$defs/anchor"},
+            "end": {"$ref": "#/$defs/anchor"}
+          }
+        }
+      ]
+    },
+    "dynamic-patch": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["op", "measure", "beat", "staff", "mark"],
+          "properties": {
+            "op": {"const": "dynamic"},
+            "part": {"type": "string", "minLength": 1},
+            "mode": {"enum": ["add", "replace", "remove"]},
+            "measure": {"type": "integer", "minimum": 1},
+            "beat": {"type": "number", "minimum": 0},
+            "staff": {"type": "integer", "minimum": 1},
+            "placement": {"enum": ["above", "below"]},
+            "mark": {
+              "enum": [
+                "p", "pp", "ppp", "pppp", "ppppp", "pppppp",
+                "f", "ff", "fff", "ffff", "fffff", "ffffff",
+                "mp", "mf",
+                "sf", "sfp", "sfpp", "fp", "rf", "rfz", "sfz", "sffz", "fz", "n", "pf", "sfzp"
+              ]
+            }
           }
         }
       ]

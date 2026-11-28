@@ -9,19 +9,37 @@ The agent never has to serialize mscx ids or location fractions.
 from __future__ import annotations
 
 from .clef import list_clefs
-from .common import CLEF_SIGNS, NOTE_TYPE_BEATS, OTTAAVA_SUBTYPES, load_patches, score_map
+from .common import (
+    CLEF_SIGNS,
+    DYNAMIC_MARKS,
+    NOTE_TYPE_BEATS,
+    OTTAAVA_SUBTYPES,
+    WEDGE_SUBTYPES,
+    load_patches,
+    score_map,
+)
 from .compiler import apply_patches, validate_patches, verify_patches
+from .dynamic import list_dynamics
 from .ottava import list_octave_shifts, remove_octave_shifts
+from .pedal import list_pedals, remove_pedals
+from .wedge import list_wedges, remove_wedges
 
 __all__ = [
     "CLEF_SIGNS",
+    "DYNAMIC_MARKS",
     "NOTE_TYPE_BEATS",
     "OTTAAVA_SUBTYPES",
+    "WEDGE_SUBTYPES",
     "apply_patches",
     "list_clefs",
+    "list_dynamics",
     "list_octave_shifts",
+    "list_pedals",
+    "list_wedges",
     "load_patches",
     "remove_octave_shifts",
+    "remove_pedals",
+    "remove_wedges",
     "score_map",
     "validate_patches",
     "verify_patches",

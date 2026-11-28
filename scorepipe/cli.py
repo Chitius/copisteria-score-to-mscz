@@ -134,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"corrections: {problem}")
             return 1
     tuplets_payload = None
-    ottava_payload = None
+    direction_payload = None
     clefs_payload = None
     if args.patches:
         patches_payload = load_patches(args.patches)
@@ -146,8 +146,12 @@ def main(argv: list[str] | None = None) -> int:
         tuplets_payload = {
             "patches": [patch for patch in patches_payload.get("patches") or [] if patch.get("op") == "tuplet"]
         }
-        ottava_payload = {
-            "patches": [patch for patch in patches_payload.get("patches") or [] if patch.get("op") == "ottava"]
+        direction_payload = {
+            "patches": [
+                patch
+                for patch in patches_payload.get("patches") or []
+                if patch.get("op") in ("ottava", "pedal", "wedge", "dynamic")
+            ]
         }
         clefs_payload = {
             "patches": [patch for patch in patches_payload.get("patches") or [] if patch.get("op") == "clef"]
@@ -183,9 +187,9 @@ def main(argv: list[str] | None = None) -> int:
     _print_report(report, args.trace)
     if not args.mscz_out or args.check:
         _write_report(report, args.report)
-    if ottava_payload and ottava_payload["patches"]:
-        changed = apply_patches(doc, ottava_payload)
-        print(f"patches: {changed} octave direction(s)")
+    if direction_payload and direction_payload["patches"]:
+        changed = apply_patches(doc, direction_payload)
+        print(f"patches: {changed} direction change(s)")
     patch_failed = False
     if args.patches:
         patch_problems = verify_patches(doc, patches_payload)

@@ -494,6 +494,241 @@ class NotationPatchesTest(unittest.TestCase):
         self.assert_tuplet_rejected(five_note_doc(12), tuplet_patch())
         self.assert_tuplet_rejected(five_note_doc(), tuplet_patch(span_beats=3))
 
+    def test_pedal_patch_add_change_replace_remove_and_verify(self):
+        doc = Document.load(TINY)
+        payload = {
+            "patches": [
+                {
+                    "op": "pedal",
+                    "staff": 1,
+                    "start": {"measure": 1, "beat": 0},
+                    "changes": [{"measure": 1, "beat": 2}],
+                    "end": {"measure": 2, "beat": 0},
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 20, 40, 40],
+                    "evidence": "sustain pedal across m1-m2",
+                }
+            ]
+        }
+        self.assertEqual(validate_patches(payload, doc, require_acceptance=True), [])
+        self.assertEqual(apply_patches(doc, payload), 3)
+        self.assertEqual(verify_patches(doc, payload), [])
+
+        bad_change = {
+            "patches": [
+                {
+                    **payload["patches"][0],
+                    "changes": [{"measure": 2, "beat": 2}],
+                }
+            ]
+        }
+        self.assertTrue(
+            any("strictly between start and end" in p for p in validate_patches(bad_change, doc))
+        )
+
+        # replace mode updates only that range without dropping an unrelated pedal elsewhere
+        replacement = {
+            "patches": [
+                {
+                    "op": "pedal",
+                    "mode": "replace",
+                    "staff": 1,
+                    "line": False,
+                    "start": {"measure": 1, "beat": 0},
+                    "end": {"measure": 2, "beat": 0},
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 20, 40, 40],
+                    "evidence": "Ped. / * without change",
+                }
+            ]
+        }
+        apply_patches(doc, replacement)
+        self.assertEqual(verify_patches(doc, replacement), [])
+        pedals = list(doc.root.iter("pedal"))
+        self.assertEqual([p.get("type") for p in pedals], ["start", "stop"])
+        self.assertEqual(pedals[0].get("sign"), "yes")
+
+        remove = {
+            "patches": [
+                {
+                    "op": "pedal",
+                    "mode": "remove",
+                    "staff": 1,
+                    "start": {"measure": 1, "beat": 0},
+                    "end": {"measure": 2, "beat": 0},
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 20, 40, 40],
+                    "evidence": "clear spurious pedal",
+                }
+            ]
+        }
+        apply_patches(doc, remove)
+        self.assertEqual(list(doc.root.iter("pedal")), [])
+        self.assertEqual(verify_patches(doc, remove), [])
+
+    def test_wedge_patch_add_replace_remove_and_verify(self):
+        doc = Document.load(TINY)
+        payload = {
+            "patches": [
+                {
+                    "op": "wedge",
+                    "subtype": "crescendo",
+                    "staff": 1,
+                    "niente": True,
+                    "start": {"measure": 1, "beat": 0},
+                    "end": {"measure": 2, "beat": 0},
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 20, 40, 40],
+                    "evidence": "cresc hairpin",
+                }
+            ]
+        }
+        self.assertEqual(validate_patches(payload, doc, require_acceptance=True), [])
+        self.assertEqual(apply_patches(doc, payload), 2)
+        self.assertEqual(verify_patches(doc, payload), [])
+        wedges = list(doc.root.iter("wedge"))
+        self.assertEqual([w.get("type") for w in wedges], ["crescendo", "stop"])
+        self.assertEqual(wedges[0].get("niente"), "yes")
+
+        remove = {
+            "patches": [
+                {
+                    "op": "wedge",
+                    "mode": "remove",
+                    "subtype": "crescendo",
+                    "staff": 1,
+                    "start": {"measure": 1, "beat": 0},
+                    "end": {"measure": 2, "beat": 0},
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 20, 40, 40],
+                    "evidence": "drop hairpin",
+                }
+            ]
+        }
+        apply_patches(doc, remove)
+        self.assertEqual(list(doc.root.iter("wedge")), [])
+        self.assertEqual(verify_patches(doc, remove), [])
+
+    def test_dynamic_patch_add_replace_remove_and_cli_integration(self):
+        import json
+        import tempfile
+        from scripts import notation_patches as patch_script
+        from scorepipe.cli import main as cli_main
+
+        doc = make_doc(note_xml("C4", duration=20) + note_xml("D4", duration=20))
+        payload = {
+            "patches": [
+                {
+                    "op": "dynamic",
+                    "measure": 1,
+                    "beat": 0,
+                    "staff": 1,
+                    "mark": "pp",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 20, 30, 40],
+                    "evidence": "pp at beat 0",
+                },
+                {
+                    "op": "dynamic",
+                    "measure": 1,
+                    "beat": 1,
+                    "staff": 1,
+                    "mark": "ff",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [30, 20, 50, 40],
+                    "evidence": "ff at beat 1",
+                },
+            ]
+        }
+        self.assertEqual(validate_patches(payload, doc, require_acceptance=True), [])
+        self.assertEqual(apply_patches(doc, payload), 2)
+        self.assertEqual(verify_patches(doc, payload), [])
+
+        # Replace beat 0 without disturbing beat 1
+        replace = {
+            "patches": [
+                {
+                    "op": "dynamic",
+                    "mode": "replace",
+                    "measure": 1,
+                    "beat": 0,
+                    "staff": 1,
+                    "mark": "mf",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 20, 30, 40],
+                    "evidence": "mf instead of pp",
+                }
+            ]
+        }
+        apply_patches(doc, replace)
+        self.assertEqual(verify_patches(doc, replace), [])
+        tags = [child.tag for dyn in doc.root.iter("dynamics") for child in dyn]
+        self.assertEqual(tags, ["mf", "ff"])
+
+        # Proposed status can be promoted via scripts/notation_patches.py and applied via scorepipe.cli
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            xml_in = work / "in.musicxml"
+            make_doc(note_xml("C4", duration=80, note_type="whole")).save(xml_in)
+            patches_proposed = work / "proposed.json"
+            patches_proposed.write_text(
+                json.dumps(
+                    {
+                        "patches": [
+                            {
+                                "op": "dynamic",
+                                "measure": 1,
+                                "beat": 0,
+                                "staff": 1,
+                                "mark": "sfz",
+                                "status": "proposed",
+                                "page": 1,
+                                "bbox": [10, 20, 30, 40],
+                                "evidence": "sfz",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            patches_accepted = work / "accepted.json"
+            self.assertEqual(
+                patch_script.main(
+                    [
+                        "accept",
+                        "--patches",
+                        str(patches_proposed),
+                        "--musicxml",
+                        str(xml_in),
+                        "--indices",
+                        "0",
+                        "--reviewer",
+                        "bob",
+                        "-o",
+                        str(patches_accepted),
+                    ]
+                ),
+                0,
+            )
+            xml_out = work / "out.musicxml"
+            self.assertEqual(
+                cli_main([str(xml_in), "--patches", str(patches_accepted), "-o", str(xml_out)]),
+                0,
+            )
+            out_doc = Document.load(xml_out)
+            self.assertEqual(
+                [c.tag for d in out_doc.root.iter("dynamics") for c in d],
+                ["sfz"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

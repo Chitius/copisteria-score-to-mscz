@@ -16,7 +16,13 @@ except ImportError:  # pragma: no cover - optional dependency
 
 from scorepipe.agent_facts import CREDIT_TYPES, GRADUAL_TYPES, validate_agent_facts
 from scorepipe.instruments import INSTRUMENT_KEYS
-from scorepipe.notation_patches import CLEF_SIGNS, OTTAAVA_SUBTYPES, validate_patches
+from scorepipe.notation_patches import (
+    CLEF_SIGNS,
+    DYNAMIC_MARKS,
+    OTTAAVA_SUBTYPES,
+    WEDGE_SUBTYPES,
+    validate_patches,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -60,6 +66,14 @@ class JsonSchemaContractTest(unittest.TestCase):
         self.assertEqual(
             set(defs["clef-patch"]["allOf"][1]["properties"]["clef"]["enum"]),
             CLEF_SIGNS,
+        )
+        self.assertEqual(
+            set(defs["wedge-patch"]["allOf"][1]["properties"]["subtype"]["enum"]),
+            set(WEDGE_SUBTYPES),
+        )
+        self.assertEqual(
+            set(defs["dynamic-patch"]["allOf"][1]["properties"]["mark"]["enum"]),
+            set(DYNAMIC_MARKS),
         )
 
     @unittest.skipIf(Draft202012Validator is None, "jsonschema is not installed")
@@ -141,6 +155,40 @@ class JsonSchemaContractTest(unittest.TestCase):
                     "page": 1,
                     "bbox": [10, 20, 100, 40],
                     "evidence": "8vb bracket under bass",
+                },
+                {
+                    "op": "pedal",
+                    "part": "P2",
+                    "staff": 2,
+                    "start": {"measure": 1, "beat": 0},
+                    "changes": [{"measure": 2, "beat": 0}],
+                    "end": {"measure": 2, "beat": 3},
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 20, 100, 40],
+                    "evidence": "pedal line across m1-m2",
+                },
+                {
+                    "op": "wedge",
+                    "subtype": "crescendo",
+                    "staff": 1,
+                    "start": {"measure": 1, "beat": 1},
+                    "end": {"measure": 2, "beat": 2},
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 20, 100, 40],
+                    "evidence": "cresc hairpin",
+                },
+                {
+                    "op": "dynamic",
+                    "measure": 1,
+                    "beat": 0,
+                    "staff": 1,
+                    "mark": "mf",
+                    "status": "accepted",
+                    "page": 1,
+                    "bbox": [10, 20, 40, 40],
+                    "evidence": "mf at m1",
                 },
                 {
                     "op": "clef",
